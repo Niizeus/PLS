@@ -53,8 +53,19 @@ PLS/
 ├── README.md          ← tu es ici
 ├── CONTRIBUTING.md    ← les règles de contribution (commits, branches)
 ├── docs/              ← toute la documentation
-└── src/               ← le code du jeu (créé à l'étape SETUP)
+├── index.html         ← page hôte (Vite)
+└── src/               ← le code du jeu
+    ├── main.tsx / App.tsx   ← entrée + assemblage de l'écran
+    ├── core/          ← Canvas 3D, lumières, caméra qui suit le joueur
+    ├── entities/      ← personnages (dont le joueur Chibrux)
+    ├── gameplay/      ← entrées clavier/souris, état du jeu (Zustand)
+    ├── world/         ← le monde (playground de test, puis Beauvais)
+    ├── shaders/       ← cell-shading (gradient map toon)
+    ├── ui/            ← interface 2D (HUD, compteur FPS, aide contrôles)
+    └── lib/           ← utilitaires partagés
 ```
+
+(Détail complet et conventions dans [docs/02-ARCHITECTURE.md](docs/02-ARCHITECTURE.md).)
 
 ---
 
@@ -66,3 +77,24 @@ npm run dev
 ```
 
 Puis ouvre l'adresse affichée (souvent `http://localhost:5173`) dans ton navigateur.
+
+---
+
+## 🕹️ Ce qui tourne déjà (prototype jouable)
+
+Une **base jouable** existe pour tester le rendu cartoon et le feeling du personnage :
+un terrain de test en cell-shading (avec ombres douces et contours BD), **Chibrux**
+(placeholder stylisé) contrôlable, une caméra qui le suit, et un HUD avec **compteur FPS**.
+
+**Contrôles :**
+
+| Touche | Action |
+|--------|--------|
+| **ZQSD** | Se déplacer (fonctionne aussi en QWERTY : on lit la position physique des touches) |
+| **Maj** | Courir |
+| **E** | Action / interagir |
+| **Clic gauche** | Attaquer |
+| **Clic droit** | Défendre |
+
+> C'est un **playground de test**, pas encore Beauvais : la vraie ville (OSM) viendra dans une
+> étape dédiée (voir [docs/04-MONDE-BEAUVAIS.md](docs/04-MONDE-BEAUVAIS.md)).

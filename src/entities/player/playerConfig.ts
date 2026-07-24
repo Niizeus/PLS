@@ -12,6 +12,12 @@ export const PLAYER = {
   INTERACT_DURATION: 0.4,
   /** Hauteur du centre du corps au-dessus du sol. */
   BODY_HEIGHT: 1.0,
+  /** Vitesse en marchant accroupi (plus lent). */
+  CROUCH_SPEED: 2.2,
+  /** Vitesse verticale initiale d'un saut. */
+  JUMP_SPEED: 6,
+  /** Gravité appliquée pendant un saut (u/s²). */
+  GRAVITY: 16,
 } as const
 
 /** Palette du personnage Chibrux (placeholder). */

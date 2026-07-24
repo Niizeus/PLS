@@ -15,6 +15,8 @@ export const KEY = {
   RIGHT: 'KeyD', // D
   RUN: 'ShiftLeft', // Maj = courir
   INTERACT: 'KeyE', // E = action / interagir
+  JUMP: 'Space', // Espace = sauter
+  CROUCH: 'ControlLeft', // Ctrl = s'accroupir
 } as const
 
 // Boutons de la souris (event.button) : 0 = gauche, 2 = droit.

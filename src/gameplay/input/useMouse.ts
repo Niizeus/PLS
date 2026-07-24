@@ -26,6 +26,9 @@ export function useMouse() {
     const isLocked = () => document.pointerLockElement === canvas()
 
     const onDown = (e: MouseEvent) => {
+      // On ne réagit QUE si le clic vise le canvas du jeu (le 1er). Sinon (carte
+      // ouverte, HUD...) on laisse le curseur tranquille — il ne doit pas disparaître.
+      if (e.target !== canvas()) return
       // Pas encore capturé : ce clic sert juste à capturer le curseur.
       if (!isLocked()) {
         canvas()?.requestPointerLock?.()

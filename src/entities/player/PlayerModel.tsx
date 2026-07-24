@@ -38,9 +38,11 @@ const ACTION_TO_ANIM: Record<PlayerAction, string> = {
   idle: 'idle',
   walk: 'walk',
   run: 'run',
-  attack: 'jump', // pas d'anim d'attaque fournie → jump en attendant
+  attack: 'idle', // pas d'anim d'attaque fournie
   defense: 'sneak',
   interact: 'idle',
+  jump: 'jump',
+  crouch: 'sneak', // accroupi = anim "sneak" (marche accroupie)
 }
 
 const TARGET_HEIGHT = 1.75 // taille voulue du perso en mètres (échelle auto-calculée)

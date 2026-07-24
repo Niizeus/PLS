@@ -179,12 +179,12 @@ export default function WorldMap() {
       cam.current.cz -= (e.movementY || 0) / s
       if (Math.abs(e.offsetX - drag.x) + Math.abs(e.offsetY - drag.y) > 4) drag.moved = true
     }
-    const onUp = (e: MouseEvent) => {
-      const d = drag
-      drag = null
-      if (!d || d.moved) return // c'était un déplacement, pas un clic
+    const onUp = () => {
+      drag = null // le simple clic/glisser ne sert qu'au déplacement de la carte
+    }
+    // DOUBLE-CLIC = poser (ou éditer) un point de passage.
+    const onDbl = (e: MouseEvent) => {
       const [wx, wz] = toWorld(e.offsetX, e.offsetY)
-      // Clic sur un point existant (à ~20 px) → on l'édite ; sinon → nouveau point.
       const s = ppm()
       const hit = wpsRef.current.find((w) => {
         const dx = (w.x - wx) * s
@@ -197,12 +197,14 @@ export default function WorldMap() {
 
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('mousedown', onDown)
+    canvas.addEventListener('dblclick', onDbl)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
       cancelAnimationFrame(raf)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('mousedown', onDown)
+      canvas.removeEventListener('dblclick', onDbl)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -239,7 +241,7 @@ export default function WorldMap() {
           color: '#e6ecf5', font: '600 13px system-ui', whiteSpace: 'nowrap',
         }}
       >
-        Beauvais — molette : zoom · glisser : déplacer · clic : point de passage · M/Échap : fermer
+        Beauvais — molette : zoom · glisser : déplacer · double-clic : point de passage · M/Échap : fermer
       </div>
 
       {/* Formulaire de point de passage. */}

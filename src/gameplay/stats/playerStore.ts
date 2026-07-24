@@ -13,7 +13,7 @@ import type * as THREE from 'three'
  */
 
 // Les états visuels possibles du personnage.
-export type PlayerAction = 'idle' | 'walk' | 'run' | 'attack' | 'defense' | 'interact'
+export type PlayerAction = 'idle' | 'walk' | 'run' | 'attack' | 'defense' | 'interact' | 'jump' | 'crouch'
 
 interface PlayerState {
   /** Ce que fait Chibrux en ce moment (pour le visuel + le HUD). */

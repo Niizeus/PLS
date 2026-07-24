@@ -60,6 +60,9 @@ export function usePlayerMovement(
   const moveDir = useRef(new THREE.Vector3())
   // Vitesse courante du scooter (scalaire, le long de son orientation).
   const rideSpeed = useRef(0)
+  // Saut : hauteur au-dessus du sol + vitesse verticale.
+  const jumpY = useRef(0)
+  const vy = useRef(0)
 
   useFrame((_, rawDelta) => {
     const group = groupRef.current
@@ -136,7 +139,22 @@ export function usePlayerMovement(
 
     const isMoving = fwd !== 0 || strafe !== 0
     const isDefending = m.defending
-    const running = k.run && isMoving
+    const crouching = k.crouch
+    const running = k.run && isMoving && !crouching
+
+    // --- Saut (physique verticale) ---
+    const grounded = jumpY.current <= 0.001
+    if (k.jumpQueued) {
+      k.jumpQueued = false
+      if (grounded && !crouching && !isDefending) vy.current = PLAYER.JUMP_SPEED
+    }
+    vy.current -= PLAYER.GRAVITY * delta
+    jumpY.current += vy.current * delta
+    if (jumpY.current < 0) {
+      jumpY.current = 0
+      vy.current = 0
+    }
+    const airborne = jumpY.current > 0.05
 
     // --- 3. Déplacement RELATIF À LA CAMÉRA ---
     // Le déplacement suit l'orientation de la caméra : "avant" = là où la caméra
@@ -153,7 +171,7 @@ export function usePlayerMovement(
       moveDir.current.set(dirX, 0, dirZ)
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
-      const speed = running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED
+      const speed = crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED
       // Collisions : on teste chaque axe séparément → on glisse le long des murs.
       const nx = group.position.x + moveDir.current.x * speed * delta
       if (!isBlocked(nx, group.position.z)) group.position.x = nx
@@ -167,13 +185,16 @@ export function usePlayerMovement(
       moveIntensity = running ? 1 : 0.5
     }
 
-    // Le perso reste collé au relief (pas de saut pour l'instant).
-    group.position.y = terrainHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT
+    // Colle le perso au relief, + la hauteur de saut éventuelle.
+    group.position.y =
+      terrainHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT + jumpY.current
 
-    // --- 4. Détermine l'action affichée (priorité : attaque > défense > mouvement) ---
+    // --- 4. Détermine l'action affichée (priorité : attaque > saut > accroupi > ...) ---
     let action: PlayerAction
     if (attackTimer.current > 0) action = 'attack'
+    else if (airborne) action = 'jump'
     else if (interactTimer.current > 0) action = 'interact'
+    else if (crouching) action = 'crouch'
     else if (isDefending) action = 'defense'
     else if (running) action = 'run'
     else if (isMoving) action = 'walk'

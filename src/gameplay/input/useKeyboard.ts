@@ -14,6 +14,8 @@ export interface KeyboardState {
   right: boolean
   run: boolean
   interactQueued: boolean
+  jumpQueued: boolean
+  crouch: boolean
 }
 
 const createEmptyState = (): KeyboardState => ({
@@ -23,6 +25,8 @@ const createEmptyState = (): KeyboardState => ({
   right: false,
   run: false,
   interactQueued: false,
+  jumpQueued: false,
+  crouch: false,
 })
 
 /**
@@ -55,6 +59,13 @@ export function useKeyboard() {
         case KEY.INTERACT:
           // On ne déclenche l'action que sur l'appui (pas en maintenant E).
           if (pressed) k.interactQueued = true
+          break
+        case KEY.JUMP:
+          // Déclencheur : au moment de l'appui sur Espace.
+          if (pressed) k.jumpQueued = true
+          break
+        case KEY.CROUCH:
+          k.crouch = pressed
           break
       }
     }

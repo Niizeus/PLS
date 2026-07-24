@@ -44,7 +44,8 @@ export default function Lights() {
       <ambientLight intensity={0.25} />
       <directionalLight
         ref={light}
-        intensity={2.2}
+        intensity={2.1}
+        color="#fff3e0"
         castShadow
         shadow-mapSize={[2048, 2048]}
         // Zone d'ombre serrée autour du joueur (elle le suit).

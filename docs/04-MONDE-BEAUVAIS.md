@@ -103,7 +103,7 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
-| `src/world/beauvais/Roads.tsx` | Trace les routes en **rubans continus** (raccords propres aux angles), fusionnés. |
+| `src/world/beauvais/Roads.tsx` | Routes soignées : **bordure/trottoir + bitume + ligne centrale** (rubans qui suivent le relief). Filtre les petits chemins piétons. |
 | `src/world/beauvais/Water.tsx` | Trace les plans d'eau (surfaces plates bleues). |
 | `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois, en surfaces vertes (2 teintes). |
 | `src/world/beauvais/Trees.tsx` | Arbres instanciés (OSM + semés dans les bois). |
@@ -177,6 +177,10 @@ jeu fluide :
 - [x] Habillage : verdure/parcs, arbres, lampadaires, murs. *(GreenAreas/Trees/Lamps/Walls)*
 - [x] Cathédrale + églises avec un look distinct (pierre + ardoise). *(Beauvais.tsx via `kind`)*
 - [x] **Relief réel de Beauvais** (heightmap Open-Meteo) — terrain 3D, tout posé dessus. *(Terrain.tsx + `terrainHeight`)*
+- [x] Polish : routes en relief (trottoir + bitume + lignes), lampadaires refaits, ciel en dégradé. *(Roads/Lamps/GradientSky)*
+- [ ] Repères à la main : cathédrale soignée, ancienne prison, etc. (pas dans OSM → modélisation manuelle).
+- [ ] (Option) Ajouter les 9 tours / châteaux d'eau `man_made` d'OSM comme repères.
+- [ ] (Gros) Contours BD (cell-shading) en post-traitement — le vrai look cartoon.
 - [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).

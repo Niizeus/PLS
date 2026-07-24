@@ -4,87 +4,93 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { ROADS, terrainHeight } from './cityData'
 
 /**
- * 🛣️  Les routes de Beauvais (depuis OpenStreetMap).
+ * 🛣️  Les routes de Beauvais (depuis OpenStreetMap), en version soignée.
  *
- * Chaque route est une polyligne + une largeur. On construit un RUBAN CONTINU par
- * route (un seul bandeau qui suit tous les points), avec des raccords propres aux
- * angles (miter) → plus de trous ni de chevauchements moches comme avec des
- * rectangles séparés. Tout est fusionné en une seule géométrie (1 draw call).
+ * Chaque route = un ruban continu (raccords propres aux angles). Pour que ce soit
+ * "plus qu'un plan", on empile 3 couches qui suivent le relief :
+ *   1. une BORDURE claire (trottoir) un peu plus large et plus basse,
+ *   2. le BITUME foncé par-dessus,
+ *   3. une LIGNE centrale claire sur les grandes voies.
+ * On FILTRE aussi les tout petits chemins (piétons) qui encombraient pour rien.
+ * Tout est fusionné → peu de draw calls.
  */
 
-const ROAD_Y = 0.15 // au-dessus du terrain (évite le z-fighting avec le sol)
-const ROAD_COLOR = '#5b5f66' // bitume
+const MIN_WIDTH = 3 // en dessous (chemins/trottoirs OSM) → on n'affiche pas
+const MAJOR_WIDTH = 6.5 // à partir de ça → ligne centrale
 
-/** Ajoute au tableau les triangles du ruban d'une route. */
-function addRibbon(pts: number[][], half: number, out: number[]) {
+const ASPHALT = '#4c5057'
+const KERB = '#9a9c98' // trottoir / bordure
+const LINE = '#d9d2b0' // marquage au sol
+
+const Y_KERB = 0.1
+const Y_ASPHALT = 0.18
+const Y_LINE = 0.2
+
+/** Ajoute au tableau les triangles d'un ruban (miter + suivi du relief). */
+function addRibbon(pts: number[][], half: number, yOff: number, out: number[]) {
   const n = pts.length
   if (n < 2) return
-
-  // Pour chaque sommet, on calcule un décalage perpendiculaire "miter" (moyenne des
-  // perpendiculaires des segments voisins) qui garde une largeur constante.
   const left: [number, number][] = []
   const right: [number, number][] = []
-
   for (let i = 0; i < n; i++) {
     let d0x = 0, d0z = 0, d1x = 0, d1z = 0
     if (i > 0) {
-      d0x = pts[i][0] - pts[i - 1][0]
-      d0z = pts[i][1] - pts[i - 1][1]
-      const l = Math.hypot(d0x, d0z) || 1
-      d0x /= l
-      d0z /= l
+      d0x = pts[i][0] - pts[i - 1][0]; d0z = pts[i][1] - pts[i - 1][1]
+      const l = Math.hypot(d0x, d0z) || 1; d0x /= l; d0z /= l
     }
     if (i < n - 1) {
-      d1x = pts[i + 1][0] - pts[i][0]
-      d1z = pts[i + 1][1] - pts[i][1]
-      const l = Math.hypot(d1x, d1z) || 1
-      d1x /= l
-      d1z /= l
+      d1x = pts[i + 1][0] - pts[i][0]; d1z = pts[i + 1][1] - pts[i][1]
+      const l = Math.hypot(d1x, d1z) || 1; d1x /= l; d1z /= l
     }
-    if (i === 0) { d0x = d1x; d0z = d1z } // extrémités : une seule direction
+    if (i === 0) { d0x = d1x; d0z = d1z }
     if (i === n - 1) { d1x = d0x; d1z = d0z }
-
-    // Perpendiculaires (côté gauche = (-dz, dx)).
-    const n0x = -d0z, n0z = d0x
-    const n1x = -d1z, n1z = d1x
-    let mx = n0x + n1x
-    let mz = n0z + n1z
-    const ml = Math.hypot(mx, mz) || 1
-    mx /= ml
-    mz /= ml
-    // Longueur du miter (bornée pour éviter les pointes dans les angles serrés).
-    const cos = Math.max(0.35, mx * n1x + mz * n1z)
+    let mx = -d0z - d1z
+    let mz = d0x + d1x
+    const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml
+    const cos = Math.max(0.35, mx * -d1z + mz * d1x)
     const off = half / cos
     left.push([pts[i][0] + mx * off, pts[i][1] + mz * off])
     right.push([pts[i][0] - mx * off, pts[i][1] - mz * off])
   }
-
-  const push = (p: [number, number]) => {
-    out.push(p[0], terrainHeight(p[0], p[1]) + ROAD_Y, p[1])
-  }
+  const push = (p: [number, number]) => out.push(p[0], terrainHeight(p[0], p[1]) + yOff, p[1])
   for (let i = 0; i < n - 1; i++) {
-    // 2 triangles entre les sommets i et i+1
     push(left[i]); push(right[i]); push(right[i + 1])
     push(left[i]); push(right[i + 1]); push(left[i + 1])
   }
 }
 
-function buildRoadsGeometry(): THREE.BufferGeometry {
-  const out: number[] = []
-  for (const road of ROADS) addRibbon(road.pts, road.w / 2, out)
-
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3))
-  geo.computeVertexNormals()
-  return geo
+function geoFrom(out: number[]): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3))
+  g.computeVertexNormals()
+  return g
 }
 
 export default function Roads() {
-  const geometry = useMemo(buildRoadsGeometry, [])
+  const { kerb, asphalt, lines } = useMemo(() => {
+    const kerbA: number[] = []
+    const asphaltA: number[] = []
+    const linesA: number[] = []
+    for (const r of ROADS) {
+      if (r.w < MIN_WIDTH) continue // on saute les petits chemins piétons
+      addRibbon(r.pts, r.w / 2 + 0.8, Y_KERB, kerbA) // bordure/trottoir (plus large)
+      addRibbon(r.pts, r.w / 2, Y_ASPHALT, asphaltA) // bitume
+      if (r.w >= MAJOR_WIDTH) addRibbon(r.pts, 0.16, Y_LINE, linesA) // ligne centrale
+    }
+    return { kerb: geoFrom(kerbA), asphalt: geoFrom(asphaltA), lines: geoFrom(linesA) }
+  }, [])
 
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshToonMaterial color={ROAD_COLOR} gradientMap={toonGradient} side={THREE.DoubleSide} />
-    </mesh>
+    <>
+      <mesh geometry={kerb} receiveShadow>
+        <meshToonMaterial color={KERB} gradientMap={toonGradient} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={asphalt} receiveShadow>
+        <meshToonMaterial color={ASPHALT} gradientMap={toonGradient} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={lines}>
+        <meshBasicMaterial color={LINE} side={THREE.DoubleSide} />
+      </mesh>
+    </>
   )
 }

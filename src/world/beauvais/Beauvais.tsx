@@ -68,8 +68,14 @@ function buildOne(b: Building, facade: THREE.Color, roof: THREE.Color): THREE.Bu
   const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
 
-  facade.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
-  roof.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
+  if (b.kind) {
+    // Monuments (cathédrale, églises) : pierre claire + toit ardoise → repères nets.
+    facade.set('#e7e1d2')
+    roof.set('#4d5b66')
+  } else {
+    facade.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
+    roof.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
+  }
 
   const pos = geo.attributes.position
   const colors = new Float32Array(pos.count * 3)

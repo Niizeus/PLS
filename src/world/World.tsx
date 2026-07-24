@@ -1,29 +1,32 @@
 import CityGround from './CityGround'
+import GreenAreas from './beauvais/GreenAreas'
 import Water from './beauvais/Water'
 import Roads from './beauvais/Roads'
+import Walls from './beauvais/Walls'
 import Beauvais from './beauvais/Beauvais'
+import Trees from './beauvais/Trees'
+import Lamps from './beauvais/Lamps'
 
 /**
  * LE MONDE : tout le décor et la map de Beauvais.
  *
  * 👉 Domaine "Monde & rendu" (voir docs/02-ARCHITECTURE.md).
- * Pour ajouter un élément au monde (sol, bâtiments, futur Beauvais...),
- * tu l'ajoutes ICI — pas besoin de toucher GameCanvas.
+ * Pour ajouter un élément au monde, tu l'ajoutes ICI — pas besoin de toucher GameCanvas.
  *
- * Note : le décor de test (TestGround, Obstacles) a été retiré au profit de la
- * vraie ville. Les fichiers existent encore si on veut les remettre.
+ * Ordre = superposition au sol : sol → verdure → eau → routes, puis le relief
+ * (murs, bâtiments) et enfin le mobilier (arbres, lampadaires).
  */
 export default function World() {
   return (
     <>
-      {/* Sol couvrant toute la zone générée. */}
       <CityGround />
-      {/* Les plans d'eau (posés sur le sol). */}
+      <GreenAreas />
       <Water />
-      {/* Les routes (posées sur le sol, sous les bâtiments). */}
       <Roads />
-      {/* La vraie ville de Beauvais générée depuis OpenStreetMap. */}
+      <Walls />
       <Beauvais />
+      <Trees />
+      <Lamps />
     </>
   )
 }

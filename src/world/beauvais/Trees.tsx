@@ -22,11 +22,16 @@ function hash01(x: number, z: number): number {
 
 /** Géométrie d'un arbre (tronc + houppier), colorée par sommet. */
 function treeGeometry(): THREE.BufferGeometry {
-  const trunk = new THREE.CylinderGeometry(0.13, 0.18, 1.4, 6)
-  trunk.translate(0, 0.7, 0)
+  // ⚠️ mergeGeometries refuse de mélanger une géométrie INDEXÉE (cylindre) et une
+  // NON indexée (icosaèdre). On passe donc le tronc en non-indexé pour que les deux
+  // soient compatibles (sinon la fusion renvoie null → écran noir).
+  const trunkIndexed = new THREE.CylinderGeometry(0.13, 0.18, 1.4, 6)
+  trunkIndexed.translate(0, 0.7, 0)
+  const trunk = trunkIndexed.toNonIndexed()
+  trunkIndexed.dispose()
   paint(trunk, new THREE.Color('#6b4a2f'))
 
-  const foliage = new THREE.IcosahedronGeometry(1.15, 0)
+  const foliage = new THREE.IcosahedronGeometry(1.15, 0) // déjà non indexée
   foliage.scale(1, 1.15, 1)
   foliage.translate(0, 2.2, 0)
   paint(foliage, new THREE.Color('#5a8a44'))

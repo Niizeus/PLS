@@ -6,10 +6,10 @@ import { buildingHeightAt } from '../world/beauvais/collision'
 import { useCameraStore } from './cameraStore'
 
 // Distance caméra ↔ joueur, et hauteur du point visé (un peu au-dessus des pieds).
-const DISTANCE = 9
-const LOOK_HEIGHT = 1.2
-const MIN_DISTANCE = 1.8 // on ne colle pas la caméra pile sur le perso
-const CAM_MARGIN = 0.4 // petite marge devant le mur
+const DISTANCE = 13
+const LOOK_HEIGHT = 1.4
+const MIN_DISTANCE = 5 // même contre un mur, on ne colle pas la caméra au perso
+const CAM_MARGIN = 0.5 // petite marge devant le mur
 
 /**
  * Caméra 3e personne ORBITALE : elle tourne autour du joueur selon la souris

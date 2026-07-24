@@ -57,6 +57,8 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | Hache | Corps a corps lourd | Gros degats, attaque lente |
 | Arc | Arme a distance | Silencieux, munitions craftables |
 | Javelot | Distance / corps a corps | Peut etre lance ou utilise en melee |
+| T-bone | Corps a corps absurde | Degats moyens, peut attirer l'attention des ennemis |
+| Ghetto blaster | Arme sonore | Etourdit en zone, bruyant et encombrant |
 
 ## Objets de lancer ponctuel
 
@@ -67,6 +69,7 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | Bouteille d'alcool en tout genre | Degat avec eclats, peut se casser |
 | Cailloux | Faible degat, tres commun |
 | Poudre de perlimpinpin | Effet aleatoire |
+| Bang | Degat sonore ou explosion de surprise, usage unique |
 | Parasol de terrasse | Gros lancer absurde, repousse |
 | Table | Tres lourd, zone d'impact |
 | Chaise | Degat moyen, facile a trouver |
@@ -124,9 +127,13 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | TeHaine du bled | Pieds | Endurance |
 | Gilet par balle | Torse | Defense contre les projectiles |
 | Blouson en cuir | Torse | Defense et style |
+| Veste Hidolf Aterre | Torse | Intimidation absurde, attire aussi les ennuis |
+| Veste de Ronoara Zoro | Torse | Bonus de determination et d'attaque au corps a corps |
 | Camelto | Accessoire | Bonus social ou absurde |
+| Lunette de Jeffrey D. | Accessoire | Bonus d'observation, malus de confiance des PNJ |
 | Croix de Jesus | Accessoire | Chance ou resistance morale |
 | Kippa du seigneur | Tete | Bonus de sagesse ou de foi |
+| Casque VR | Tete | Bonus d'immersion, baisse la perception du danger reel |
 
 ## Vehicules
 

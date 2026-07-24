@@ -1,12 +1,15 @@
 import { create } from 'zustand'
+import type * as THREE from 'three'
 
 /**
  * État du joueur, partagé entre la 3D (Player) et l'UI (HUD).
  * Zustand = store global simple : on lit avec usePlayerStore(s => s.xxx),
  * on écrit avec les actions ci-dessous. Voir docs/02-ARCHITECTURE.md.
  *
- * Pour l'instant on ne garde que "l'action en cours" du perso, ce qui suffit
- * à faire réagir le visuel et à l'afficher dans le HUD.
+ * Ce store sert aussi de POINT DE RENDEZ-VOUS entre modules : plutôt que de
+ * brancher les composants entre eux "à la main" dans GameCanvas (source de
+ * conflits Git), chacun publie/lit ce dont il a besoin ici.
+ * Ex : Player publie son objet 3D, la caméra le lit pour le suivre.
  */
 
 // Les états visuels possibles du personnage.
@@ -17,13 +20,22 @@ interface PlayerState {
   action: PlayerAction
   /** true tant que le clic droit (défense) est maintenu. */
   isDefending: boolean
+  /**
+   * Le groupe 3D du joueur, publié par Player à son montage.
+   * La caméra (FollowCamera) le lit pour suivre le perso, sans que les deux
+   * aient besoin de se connaître ni de passer par GameCanvas.
+   */
+  playerObject: THREE.Object3D | null
   setAction: (action: PlayerAction) => void
   setDefending: (isDefending: boolean) => void
+  setPlayerObject: (object: THREE.Object3D | null) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   action: 'idle',
   isDefending: false,
+  playerObject: null,
   setAction: (action) => set({ action }),
   setDefending: (isDefending) => set({ isDefending }),
+  setPlayerObject: (object) => set({ playerObject: object }),
 }))

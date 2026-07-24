@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
 import type { MouseState } from '../../gameplay/input/useMouse'
 import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerStore'
+import { useCameraStore } from '../../core/cameraStore'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -76,24 +77,31 @@ export function usePlayerMovement(
     if (attackTimer.current > 0) attackTimer.current -= delta
     if (interactTimer.current > 0) interactTimer.current -= delta
 
-    // --- 2. Direction de déplacement depuis ZQSD ---
-    // x : droite(+) / gauche(-) ; z : arrière(+) / avant(-)  (repère Three.js)
-    let ix = 0
-    let iz = 0
-    if (k.forward) iz -= 1
-    if (k.backward) iz += 1
-    if (k.left) ix -= 1
-    if (k.right) ix += 1
+    // --- 2. Intentions de déplacement depuis ZQSD ---
+    // fwd    : avant(+) / arrière(-)
+    // strafe : droite(+) / gauche(-)
+    const fwd = (k.forward ? 1 : 0) - (k.backward ? 1 : 0)
+    const strafe = (k.right ? 1 : 0) - (k.left ? 1 : 0)
 
-    const isMoving = ix !== 0 || iz !== 0
+    const isMoving = fwd !== 0 || strafe !== 0
     const isDefending = m.defending
     const running = k.run && isMoving
 
-    // --- 3. Déplacement ---
+    // --- 3. Déplacement RELATIF À LA CAMÉRA ---
+    // Le déplacement suit l'orientation de la caméra : "avant" = là où la caméra
+    // regarde, quel que soit l'angle choisi à la souris.
     let moveIntensity = 0
     if (isMoving && !isDefending) {
       // En défense on reste planté (bouclier levé) : plus lisible, plus tactique.
-      moveDir.current.set(ix, 0, iz).normalize()
+      const yaw = useCameraStore.getState().yaw
+      const sin = Math.sin(yaw)
+      const cos = Math.cos(yaw)
+      // avant = à l'opposé de la caméra (qui est derrière) ; droite = perpendiculaire.
+      const dirX = -sin * fwd + cos * strafe
+      const dirZ = -cos * fwd - sin * strafe
+      moveDir.current.set(dirX, 0, dirZ)
+      if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
+
       const speed = running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED
       group.position.x += moveDir.current.x * speed * delta
       group.position.z += moveDir.current.z * speed * delta

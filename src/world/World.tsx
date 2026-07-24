@@ -1,5 +1,5 @@
-import TestGround from './TestGround'
-import Obstacles from './Obstacles'
+import CityGround from './CityGround'
+import Beauvais from './beauvais/Beauvais'
 
 /**
  * LE MONDE : tout le décor et la map de Beauvais.
@@ -7,14 +7,17 @@ import Obstacles from './Obstacles'
  * 👉 Domaine "Monde & rendu" (voir docs/02-ARCHITECTURE.md).
  * Pour ajouter un élément au monde (sol, bâtiments, futur Beauvais...),
  * tu l'ajoutes ICI — pas besoin de toucher GameCanvas.
- * Comme ça, celui qui bosse sur le monde et celui qui bosse sur les persos
- * n'éditent jamais le même fichier → pas de conflit Git.
+ *
+ * Note : le décor de test (TestGround, Obstacles) a été retiré au profit de la
+ * vraie ville. Les fichiers existent encore si on veut les remettre.
  */
 export default function World() {
   return (
     <>
-      <TestGround />
-      <Obstacles />
+      {/* Sol couvrant toute la zone générée. */}
+      <CityGround />
+      {/* La vraie ville de Beauvais générée depuis OpenStreetMap. */}
+      <Beauvais />
     </>
   )
 }

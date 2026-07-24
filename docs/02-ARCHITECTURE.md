@@ -61,9 +61,18 @@ se contente d'appeler :
 | un personnage (PNJ, ennemi) | `entities/Characters.tsx` | `GameCanvas`, `world/` |
 
 Les blocs ne se branchent **pas** entre eux à la main dans `GameCanvas` : ils
-communiquent via le **store Zustand** (`gameplay/stats/playerStore.ts`). Exemple :
-`Player` publie son objet 3D dans le store, et `FollowCamera` le lit pour suivre le
-perso. Ni l'un ni l'autre ne connaît GameCanvas → aucun branchement à modifier là-bas.
+communiquent via des **stores Zustand**. Exemples :
+- `playerStore` : `Player` y publie son objet 3D, `FollowCamera` le lit pour suivre le perso.
+- `cameraStore` (`core/`) : la souris y écrit l'orientation de la caméra (yaw/pitch),
+  lue à la fois par `FollowCamera` (où se place la caméra) et par le déplacement du
+  joueur (qui doit être relatif à la caméra).
+
+Ni ces composants ni ces modules ne se connaissent directement → aucun branchement à
+modifier dans GameCanvas.
+
+> ⚡ Les valeurs lues chaque frame (position joueur, yaw/pitch caméra) le sont via
+> `useXxxStore.getState()` **dans `useFrame`**, pas via le hook réactif : on évite ainsi
+> tout re-render React à chaque image / mouvement de souris.
 
 > Règle : si tu te retrouves à devoir éditer `GameCanvas.tsx`, demande-toi d'abord
 > si ça n'irait pas plutôt dans `World.tsx`, `Characters.tsx` ou le store.

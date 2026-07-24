@@ -6,8 +6,9 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { useKeyboard } from '../../gameplay/input/useKeyboard'
 import { useMouse } from '../../gameplay/input/useMouse'
 import { usePlayerMovement } from './usePlayerMovement'
-import { CHIBRUX_COLORS } from './playerConfig'
+import { CHIBRUX_COLORS, PLAYER } from './playerConfig'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
+import { SPAWN } from '../../world/beauvais/cityData'
 
 /**
  * Chibrux (placeholder stylisé, monté en primitives + matériau toon).
@@ -95,7 +96,7 @@ export default function Player() {
   })
 
   return (
-    <group ref={groupRef} position={[0, 1, 0]}>
+    <group ref={groupRef} position={[SPAWN.x, PLAYER.BODY_HEIGHT, SPAWN.z]}>
       <group ref={bodyRef}>
         {/* Torse (veste) */}
         <mesh position={[0, 0.15, 0]} castShadow>

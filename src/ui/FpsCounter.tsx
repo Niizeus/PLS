@@ -34,7 +34,8 @@ export default function FpsCounter() {
     <div
       style={{
         position: 'fixed',
-        top: 12,
+        // Sous la minimap (qui occupe le coin haut-droit).
+        top: 184,
         right: 12,
         padding: '6px 10px',
         borderRadius: 8,

@@ -6,60 +6,75 @@ import { ROADS } from './cityData'
 /**
  * 🛣️  Les routes de Beauvais (depuis OpenStreetMap).
  *
- * Chaque route est une polyligne + une largeur. On transforme chaque segment en
- * un petit rectangle plat posé au sol, et on fusionne TOUT en une seule géométrie
- * (comme les bâtiments) → un seul draw call. Les segments sont légèrement
- * rallongés à leurs extrémités pour combler les jointures dans les virages.
+ * Chaque route est une polyligne + une largeur. On construit un RUBAN CONTINU par
+ * route (un seul bandeau qui suit tous les points), avec des raccords propres aux
+ * angles (miter) → plus de trous ni de chevauchements moches comme avec des
+ * rectangles séparés. Tout est fusionné en une seule géométrie (1 draw call).
  */
 
 const ROAD_Y = 0.03 // posé juste au-dessus du sol (évite le z-fighting)
-const ROAD_COLOR = '#595d63' // bitume
+const ROAD_COLOR = '#5b5f66' // bitume
 
-function buildRoadsGeometry(): THREE.BufferGeometry {
-  let segments = 0
-  for (const r of ROADS) segments += Math.max(0, r.pts.length - 1)
+/** Ajoute au tableau les triangles du ruban d'une route. */
+function addRibbon(pts: number[][], half: number, out: number[]) {
+  const n = pts.length
+  if (n < 2) return
 
-  const positions = new Float32Array(segments * 6 * 3) // 2 triangles = 6 sommets / segment
-  let o = 0
+  // Pour chaque sommet, on calcule un décalage perpendiculaire "miter" (moyenne des
+  // perpendiculaires des segments voisins) qui garde une largeur constante.
+  const left: [number, number][] = []
+  const right: [number, number][] = []
 
-  for (const road of ROADS) {
-    const half = road.w / 2
-    const pts = road.pts
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, az] = pts[i]
-      const [bx, bz] = pts[i + 1]
-      let dx = bx - ax
-      let dz = bz - az
-      const len = Math.hypot(dx, dz) || 1
-      dx /= len
-      dz /= len
-      // perpendiculaire (largeur) et extension aux bouts (jointures)
-      const px = -dz * half
-      const pz = dx * half
-      const ex = dx * half
-      const ez = dz * half
-      const a0x = ax - ex
-      const a0z = az - ez
-      const b0x = bx + ex
-      const b0z = bz + ez
-      const c = [
-        a0x + px, a0z + pz,
-        a0x - px, a0z - pz,
-        b0x - px, b0z - pz,
-        a0x + px, a0z + pz,
-        b0x - px, b0z - pz,
-        b0x + px, b0z + pz,
-      ]
-      for (let k = 0; k < 6; k++) {
-        positions[o++] = c[k * 2]
-        positions[o++] = ROAD_Y
-        positions[o++] = c[k * 2 + 1]
-      }
+  for (let i = 0; i < n; i++) {
+    let d0x = 0, d0z = 0, d1x = 0, d1z = 0
+    if (i > 0) {
+      d0x = pts[i][0] - pts[i - 1][0]
+      d0z = pts[i][1] - pts[i - 1][1]
+      const l = Math.hypot(d0x, d0z) || 1
+      d0x /= l
+      d0z /= l
     }
+    if (i < n - 1) {
+      d1x = pts[i + 1][0] - pts[i][0]
+      d1z = pts[i + 1][1] - pts[i][1]
+      const l = Math.hypot(d1x, d1z) || 1
+      d1x /= l
+      d1z /= l
+    }
+    if (i === 0) { d0x = d1x; d0z = d1z } // extrémités : une seule direction
+    if (i === n - 1) { d1x = d0x; d1z = d0z }
+
+    // Perpendiculaires (côté gauche = (-dz, dx)).
+    const n0x = -d0z, n0z = d0x
+    const n1x = -d1z, n1z = d1x
+    let mx = n0x + n1x
+    let mz = n0z + n1z
+    const ml = Math.hypot(mx, mz) || 1
+    mx /= ml
+    mz /= ml
+    // Longueur du miter (bornée pour éviter les pointes dans les angles serrés).
+    const cos = Math.max(0.35, mx * n1x + mz * n1z)
+    const off = half / cos
+    left.push([pts[i][0] + mx * off, pts[i][1] + mz * off])
+    right.push([pts[i][0] - mx * off, pts[i][1] - mz * off])
   }
 
+  const push = (p: [number, number]) => {
+    out.push(p[0], ROAD_Y, p[1])
+  }
+  for (let i = 0; i < n - 1; i++) {
+    // 2 triangles entre les sommets i et i+1
+    push(left[i]); push(right[i]); push(right[i + 1])
+    push(left[i]); push(right[i + 1]); push(left[i + 1])
+  }
+}
+
+function buildRoadsGeometry(): THREE.BufferGeometry {
+  const out: number[] = []
+  for (const road of ROADS) addRibbon(road.pts, road.w / 2, out)
+
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3))
   geo.computeVertexNormals()
   return geo
 }

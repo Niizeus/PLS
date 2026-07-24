@@ -16,6 +16,8 @@ import rawData from './data/beauvais-buildings.json'
 export interface Building {
   h: number
   pts: number[][]
+  /** Cours intérieures (trous) éventuelles, pour les bâtiments à patio. */
+  holes?: number[][][]
   cx: number
   cz: number
 }
@@ -41,7 +43,7 @@ export interface Bounds {
 interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
-  buildings: { h: number; pts: number[][] }[]
+  buildings: { h: number; pts: number[][]; holes?: number[][][] }[]
   roads: { w: number; pts: number[][] }[]
   waters: { pts: number[][] }[]
 }
@@ -62,7 +64,7 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
     sz += z
   }
   const n = b.pts.length || 1
-  return { h: b.h, pts: b.pts, cx: sx / n, cz: sz / n }
+  return { h: b.h, pts: b.pts, holes: b.holes, cx: sx / n, cz: sz / n }
 })
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */

@@ -99,11 +99,11 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments + routes + eau) via Overpass + convertit en fichier compact. Tourne hors-jeu. |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way` **ET** `relation`/multipolygones, routes, eau) + convertit. Assemble les gros bâtiments et leurs cours intérieures. Tourne hors-jeu. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
-| `src/world/beauvais/Roads.tsx` | Trace les routes (rubans plats fusionnés). |
+| `src/world/beauvais/Roads.tsx` | Trace les routes en **rubans continus** (raccords propres aux angles), fusionnés. |
 | `src/world/beauvais/Water.tsx` | Trace les plans d'eau (surfaces plates bleues). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/CityGround.tsx` | Le sol, dimensionné automatiquement sur les limites de la ville. |
@@ -167,6 +167,10 @@ jeu fluide :
 - [x] Optimisation : streaming des tuiles autour du joueur. *(Beauvais.tsx)*
 - [x] Optimisation : ombres qui suivent le joueur. *(Lights.tsx)*
 - [x] Optimisation : minimap + carte allégées. *(Minimap/WorldMap/mapDraw)*
+- [x] Inclure les bâtiments en relation (multipolygones) + cours intérieures. *(build-beauvais.mjs)*
+- [x] Routes plus propres (rubans continus). *(Roads.tsx)*
+- [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
+- [ ] Habillage (Lot 2) : verdure/parcs, arbres, lampadaires, murs, cathédrale distincte.
 - [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).

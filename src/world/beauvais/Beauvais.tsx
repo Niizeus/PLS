@@ -53,6 +53,18 @@ function buildOne(b: Building, facade: THREE.Color, roof: THREE.Color): THREE.Bu
   for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1])
   shape.closePath()
 
+  // Cours intérieures (patios) : découpées comme des trous dans l'extrusion.
+  if (b.holes) {
+    for (const hole of b.holes) {
+      if (hole.length < 3) continue
+      const path = new THREE.Path()
+      path.moveTo(hole[0][0], -hole[0][1])
+      for (let i = 1; i < hole.length; i++) path.lineTo(hole[i][0], -hole[i][1])
+      path.closePath()
+      shape.holes.push(path)
+    }
+  }
+
   const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
 

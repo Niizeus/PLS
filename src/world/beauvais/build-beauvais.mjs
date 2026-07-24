@@ -105,6 +105,47 @@ function polygonArea(pts) {
   return Math.abs(a) / 2
 }
 
+/** Le point [x,z] est-il dans le polygone (liste de [x,z]) ? (lancer de rayon) */
+function pointInPolygon(pt, poly) {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i]
+    const [xj, zj] = poly[j]
+    if (zi > pt[1] !== zj > pt[1] && pt[0] < ((xj - xi) * (pt[1] - zi)) / (zj - zi) + xi) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * Recolle des tronçons (chacun = suite de {lat,lon}) en anneaux fermés.
+ * Les gros bâtiments OSM (relations/multipolygones) ont leur contour découpé en
+ * plusieurs tronçons qu'il faut rabouter bout à bout.
+ */
+function stitchRings(segments) {
+  const key = (p) => p.lat.toFixed(7) + ',' + p.lon.toFixed(7)
+  const pool = segments.filter((s) => s && s.length >= 2).map((s) => s.slice())
+  const used = new Array(pool.length).fill(false)
+  const rings = []
+  for (let i = 0; i < pool.length; i++) {
+    if (used[i]) continue
+    used[i] = true
+    let ring = pool[i].slice()
+    let extended = true
+    while (extended && key(ring[0]) !== key(ring[ring.length - 1])) {
+      extended = false
+      for (let j = 0; j < pool.length; j++) {
+        if (used[j]) continue
+        const w = pool[j]
+        const end = key(ring[ring.length - 1])
+        if (key(w[0]) === end) { ring = ring.concat(w.slice(1)); used[j] = true; extended = true; break }
+        if (key(w[w.length - 1]) === end) { ring = ring.concat(w.slice().reverse().slice(1)); used[j] = true; extended = true; break }
+      }
+    }
+    rings.push(ring)
+  }
+  return rings
+}
+
 const MIN_HEIGHT = 2.5 // garde-fou : jamais de "bâtiment-crêpe" (donnée OSM parfois aberrante)
 
 function estimateHeight(tags, area, id) {
@@ -168,6 +209,7 @@ async function fetchOsm() {
   const query = `[out:json][timeout:300];
 (
   way["building"](${BBOX.join(',')});
+  relation["building"](${BBOX.join(',')});
   way["highway"](${BBOX.join(',')});
   way["natural"="water"](${BBOX.join(',')});
   relation["natural"="water"](${BBOX.join(',')});
@@ -246,6 +288,32 @@ async function main() {
         if (poly.length < 3) continue
         waters.push({ pts: poly })
         for (const [x, z] of poly) grow(x, z)
+      }
+    } else if (el.type === 'relation' && tags.building) {
+      // BÂTIMENT en relation (multipolygone) : contours "outer" = murs, "inner" = cours.
+      const outerSegs = []
+      const innerSegs = []
+      for (const m of el.members || []) {
+        if (m.type !== 'way' || !m.geometry) continue
+        if (m.role === 'inner') innerSegs.push(m.geometry)
+        else outerSegs.push(m.geometry) // "outer" ou rôle vide
+      }
+      // Anneaux projetés en mètres, sans le point de fermeture répété.
+      const toRing = (r) => {
+        const p = r.map((q) => project(q.lat, q.lon).map(round1))
+        if (p.length >= 2 && p[0][0] === p.at(-1)[0] && p[0][1] === p.at(-1)[1]) p.pop()
+        return p
+      }
+      const outers = stitchRings(outerSegs).map(toRing).filter((r) => r.length >= 3)
+      const inners = stitchRings(innerSegs).map(toRing).filter((r) => r.length >= 3)
+
+      for (const pts of outers) {
+        // Cours intérieures : les anneaux "inner" situés dans ce contour.
+        const holes = inners.filter((h) => pointInPolygon(h[0], pts))
+        const b = { h: estimateHeight(tags, polygonArea(pts), el.id), pts }
+        if (holes.length) b.holes = holes
+        buildings.push(b)
+        for (const [x, z] of pts) grow(x, z)
       }
     }
   }

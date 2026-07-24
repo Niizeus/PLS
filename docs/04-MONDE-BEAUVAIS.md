@@ -111,7 +111,7 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 | `src/world/beauvais/Walls.tsx` | Murs / clôtures (bandes verticales fusionnées). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/Terrain.tsx` | Le **sol avec le relief réel** (maillage depuis la grille d'altitudes ; repli plat si absente). |
-| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et carte plein écran (touche M), via `src/ui/mapDraw.ts`. |
+| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement** et **points de passage** (texte + icône, sauvegardés en local), via `src/ui/mapDraw.ts`. |
 
 ### 🏢 Comment on estime les hauteurs (réalisme)
 

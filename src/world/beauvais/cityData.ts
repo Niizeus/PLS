@@ -53,9 +53,20 @@ export interface Bounds {
   maxZ: number
 }
 
+/** Grille d'altitudes (relief), en mètres relatifs à l'origine. */
+interface Terrain {
+  cols: number
+  x0: number
+  z0: number
+  dx: number
+  dz: number
+  h: number[]
+}
+
 interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
+  terrain: Terrain | null
   buildings: { h: number; pts: number[][]; holes?: number[][][]; kind?: string }[]
   roads: { w: number; pts: number[][] }[]
   waters: { pts: number[][] }[]
@@ -69,6 +80,7 @@ const data = rawData as unknown as RawCity
 
 export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
+export const TERRAIN = data.terrain ?? null
 export const ROADS: Road[] = data.roads ?? []
 export const WATERS: Water[] = data.waters ?? []
 export const GREENS: Green[] = data.greens ?? []
@@ -87,6 +99,31 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
   const n = b.pts.length || 1
   return { h: b.h, pts: b.pts, holes: b.holes, kind: b.kind, cx: sx / n, cz: sz / n }
 })
+
+/**
+ * Altitude du terrain au point monde (x, z), en mètres (0 si pas de relief).
+ * Interpolation bilinéaire sur la grille d'altitudes. TOUT se pose là-dessus :
+ * bâtiments, routes, joueur, arbres, lampadaires...
+ */
+export function terrainHeight(x: number, z: number): number {
+  const t = TERRAIN
+  if (!t) return 0
+  const last = t.cols - 1
+  let fi = (x - t.x0) / t.dx
+  let fj = (z - t.z0) / t.dz
+  fi = Math.min(last, Math.max(0, fi))
+  fj = Math.min(last, Math.max(0, fj))
+  const i0 = Math.floor(fi)
+  const j0 = Math.floor(fj)
+  const i1 = Math.min(i0 + 1, last)
+  const j1 = Math.min(j0 + 1, last)
+  const tx = fi - i0
+  const tz = fj - j0
+  const h = t.h
+  const top = h[j0 * t.cols + i0] * (1 - tx) + h[j0 * t.cols + i1] * tx
+  const bot = h[j1 * t.cols + i0] * (1 - tx) + h[j1 * t.cols + i1] * tx
+  return top * (1 - tz) + bot * tz
+}
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */
 export function pointInFootprint(x: number, z: number, pts: number[][]): boolean {

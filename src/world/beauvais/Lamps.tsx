@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { LAMPS } from './cityData'
+import { LAMPS, terrainHeight } from './cityData'
 
 /**
  * 💡 Lampadaires (OSM `highway=street_lamp`), en INSTANCES (un seul draw call).
@@ -47,7 +47,7 @@ export default function Lamps() {
     if (!ref.current) return
     const dummy = new THREE.Object3D()
     LAMPS.forEach((p, i) => {
-      dummy.position.set(p[0], 0, p[1])
+      dummy.position.set(p[0], terrainHeight(p[0], p[1]), p[1])
       dummy.rotation.set(0, 0, 0)
       dummy.updateMatrix()
       ref.current!.setMatrixAt(i, dummy.matrix)

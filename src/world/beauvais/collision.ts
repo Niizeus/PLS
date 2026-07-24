@@ -1,4 +1,4 @@
-import { BUILDINGS, pointInFootprint, type Building } from './cityData'
+import { BUILDINGS, pointInFootprint, terrainHeight, type Building } from './cityData'
 
 /**
  * 🧱 Collisions avec les bâtiments.
@@ -61,7 +61,8 @@ export function buildingHeightAt(x: number, z: number): number {
   const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
   if (!list) return 0
   for (const i of list) {
-    if (pointInFootprint(x, z, BUILDINGS[i].pts)) return BUILDINGS[i].h
+    // Altitude ABSOLUE du toit (relief + hauteur du bâtiment), pour la caméra.
+    if (pointInFootprint(x, z, BUILDINGS[i].pts)) return terrainHeight(x, z) + BUILDINGS[i].h
   }
   return 0
 }

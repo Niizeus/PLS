@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
-import { WALLS } from './cityData'
+import { WALLS, terrainHeight } from './cityData'
 
 /**
  * 🧱 Murs et clôtures (OSM `barrier=wall/fence/hedge`).
@@ -22,9 +22,11 @@ function buildWallsGeometry(): THREE.BufferGeometry {
     for (let i = 0; i < pts.length - 1; i++) {
       const [ax, az] = pts[i]
       const [bx, bz] = pts[i + 1]
+      const ya = terrainHeight(ax, az)
+      const yb = terrainHeight(bx, bz)
       // Quad vertical : (A sol, B sol, B haut) + (A sol, B haut, A haut)
-      push(ax, 0, az); push(bx, 0, bz); push(bx, WALL_H, bz)
-      push(ax, 0, az); push(bx, WALL_H, bz); push(ax, WALL_H, az)
+      push(ax, ya, az); push(bx, yb, bz); push(bx, yb + WALL_H, bz)
+      push(ax, ya, az); push(bx, yb + WALL_H, bz); push(ax, ya + WALL_H, az)
     }
   }
 

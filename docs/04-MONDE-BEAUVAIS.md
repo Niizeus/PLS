@@ -99,7 +99,7 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way` **ET** `relation`/multipolygones, routes, eau) + convertit. Assemble les gros bâtiments et leurs cours intérieures. Tourne hors-jeu. |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires) **et le relief** (altitudes via Open-Meteo). Tourne hors-jeu. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
@@ -110,7 +110,7 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 | `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (le long des rues). |
 | `src/world/beauvais/Walls.tsx` | Murs / clôtures (bandes verticales fusionnées). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
-| `src/world/CityGround.tsx` | Le sol, dimensionné automatiquement sur les limites de la ville. |
+| `src/world/Terrain.tsx` | Le **sol avec le relief réel** (maillage depuis la grille d'altitudes ; repli plat si absente). |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et carte plein écran (touche M), via `src/ui/mapDraw.ts`. |
 
 ### 🏢 Comment on estime les hauteurs (réalisme)
@@ -176,6 +176,7 @@ jeu fluide :
 - [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
 - [x] Habillage : verdure/parcs, arbres, lampadaires, murs. *(GreenAreas/Trees/Lamps/Walls)*
 - [x] Cathédrale + églises avec un look distinct (pierre + ardoise). *(Beauvais.tsx via `kind`)*
+- [x] **Relief réel de Beauvais** (heightmap Open-Meteo) — terrain 3D, tout posé dessus. *(Terrain.tsx + `terrainHeight`)*
 - [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).

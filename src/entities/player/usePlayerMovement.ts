@@ -8,6 +8,7 @@ import { useCameraStore } from '../../core/cameraStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
 import { isBlocked } from '../../world/beauvais/collision'
+import { terrainHeight } from '../../world/beauvais/cityData'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -80,7 +81,11 @@ export function usePlayerMovement(
         const dz = group.position.z - scooter.parkedZ
         if (dx * dx + dz * dz <= SCOOTER.MOUNT_RANGE * SCOOTER.MOUNT_RANGE) {
           k.interactQueued = false
-          group.position.set(scooter.parkedX, SCOOTER.SEAT_HEIGHT, scooter.parkedZ)
+          group.position.set(
+            scooter.parkedX,
+            terrainHeight(scooter.parkedX, scooter.parkedZ) + SCOOTER.SEAT_HEIGHT,
+            scooter.parkedZ,
+          )
           group.rotation.y = scooter.parkedRot
           rideSpeed.current = 0
           scooter.mount()
@@ -162,8 +167,8 @@ export function usePlayerMovement(
       moveIntensity = running ? 1 : 0.5
     }
 
-    // Le perso reste collé au sol (pas de saut pour l'instant).
-    group.position.y = PLAYER.BODY_HEIGHT
+    // Le perso reste collé au relief (pas de saut pour l'instant).
+    group.position.y = terrainHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT
 
     // --- 4. Détermine l'action affichée (priorité : attaque > défense > mouvement) ---
     let action: PlayerAction
@@ -236,7 +241,7 @@ function driveScooter(
     moved = true
   }
   if (!moved) rideSpeed.current = 0 // on a tapé un mur : on s'arrête
-  group.position.y = SCOOTER.SEAT_HEIGHT
+  group.position.y = terrainHeight(group.position.x, group.position.z) + SCOOTER.SEAT_HEIGHT
 }
 
 /**

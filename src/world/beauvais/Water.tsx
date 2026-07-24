@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { WATERS } from './cityData'
+import { WATERS, terrainHeight } from './cityData'
 
 /**
  * 💧 Les plans d'eau de Beauvais (dont le plan d'eau du Canada), depuis OpenStreetMap.
@@ -22,9 +22,19 @@ function buildWaterGeometry(): THREE.BufferGeometry | null {
     for (let i = 1; i < w.pts.length; i++) shape.lineTo(w.pts[i][0], -w.pts[i][1])
     shape.closePath()
 
+    // Surface plane, posée à l'altitude du centre du plan d'eau.
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of w.pts) {
+      cx += x
+      cz += z
+    }
+    cx /= w.pts.length
+    cz /= w.pts.length
+
     const geo = new THREE.ShapeGeometry(shape)
     geo.rotateX(-Math.PI / 2) // à plat au sol
-    geo.translate(0, WATER_Y, 0)
+    geo.translate(0, terrainHeight(cx, cz) + WATER_Y, 0)
     geometries.push(geo)
   }
   if (geometries.length === 0) return null

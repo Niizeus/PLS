@@ -1,4 +1,4 @@
-import CityGround from './CityGround'
+import Terrain from './Terrain'
 import GreenAreas from './beauvais/GreenAreas'
 import Water from './beauvais/Water'
 import Roads from './beauvais/Roads'
@@ -19,7 +19,7 @@ import Lamps from './beauvais/Lamps'
 export default function World() {
   return (
     <>
-      <CityGround />
+      <Terrain />
       <GreenAreas />
       <Water />
       <Roads />

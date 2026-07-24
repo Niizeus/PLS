@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { GREENS, TREES, pointInFootprint } from './cityData'
+import { GREENS, TREES, pointInFootprint, terrainHeight } from './cityData'
 
 /**
  * 🌲 Arbres, en INSTANCES (un seul draw call pour tous).
@@ -93,7 +93,7 @@ export default function Trees() {
     const dummy = new THREE.Object3D()
     positions.forEach((p, i) => {
       const s = 0.75 + hash01(p[0], p[1]) * 0.7
-      dummy.position.set(p[0], 0, p[1])
+      dummy.position.set(p[0], terrainHeight(p[0], p[1]), p[1])
       dummy.scale.setScalar(s)
       dummy.rotation.y = hash01(p[1], p[0]) * Math.PI * 2
       dummy.updateMatrix()

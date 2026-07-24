@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { BUILDINGS, SPAWN, type Building } from './cityData'
+import { BUILDINGS, SPAWN, terrainHeight, type Building } from './cityData'
 
 /**
  * 🏙️  Beauvais généré depuis OpenStreetMap (le "Temps 3" du pipeline, voir docs/04).
@@ -21,6 +21,7 @@ import { BUILDINGS, SPAWN, type Building } from './cityData'
 
 const TILE = 180 // côté d'une tuile, en mètres
 const REACH = 1 // nombre d'anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
+const BUILDING_SKIRT = 6 // hauteur enterrée sous le terrain (anti-flottement sur pente)
 
 const FACADES = [
   '#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0',
@@ -65,7 +66,10 @@ function buildOne(b: Building, facade: THREE.Color, roof: THREE.Color): THREE.Bu
     }
   }
 
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
+  // On extrude un peu PLUS haut que la hauteur reelle : le surplus (SKIRT) sera
+  // enterre sous le terrain pour que le batiment ne "flotte" pas sur une pente.
+  const depth = b.h + BUILDING_SKIRT
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
 
   if (b.kind) {
@@ -80,12 +84,15 @@ function buildOne(b: Building, facade: THREE.Color, roof: THREE.Color): THREE.Bu
   const pos = geo.attributes.position
   const colors = new Float32Array(pos.count * 3)
   for (let v = 0; v < pos.count; v++) {
-    const c = pos.getY(v) >= b.h - 0.05 ? roof : facade
+    const c = pos.getY(v) >= depth - 0.05 ? roof : facade
     colors[v * 3] = c.r
     colors[v * 3 + 1] = c.g
     colors[v * 3 + 2] = c.b
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
+  // Pose le bâtiment sur le relief (base enterrée de SKIRT, toit à terrain + hauteur).
+  geo.translate(0, terrainHeight(b.cx, b.cz) - BUILDING_SKIRT, 0)
   return geo
 }
 

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
-import { ROADS } from './cityData'
+import { ROADS, terrainHeight } from './cityData'
 
 /**
  * 🛣️  Les routes de Beauvais (depuis OpenStreetMap).
@@ -12,7 +12,7 @@ import { ROADS } from './cityData'
  * rectangles séparés. Tout est fusionné en une seule géométrie (1 draw call).
  */
 
-const ROAD_Y = 0.03 // posé juste au-dessus du sol (évite le z-fighting)
+const ROAD_Y = 0.15 // au-dessus du terrain (évite le z-fighting avec le sol)
 const ROAD_COLOR = '#5b5f66' // bitume
 
 /** Ajoute au tableau les triangles du ruban d'une route. */
@@ -60,7 +60,7 @@ function addRibbon(pts: number[][], half: number, out: number[]) {
   }
 
   const push = (p: [number, number]) => {
-    out.push(p[0], ROAD_Y, p[1])
+    out.push(p[0], terrainHeight(p[0], p[1]) + ROAD_Y, p[1])
   }
   for (let i = 0; i < n - 1; i++) {
     // 2 triangles entre les sommets i et i+1

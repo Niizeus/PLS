@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { GREENS } from './cityData'
+import { GREENS, terrainHeight } from './cityData'
 
 /**
  * 🌳 Espaces verts (parcs, pelouses, bois) depuis OpenStreetMap.
@@ -26,7 +26,11 @@ function mergePolys(filter: (wood: number | undefined) => boolean): THREE.Buffer
     shape.closePath()
     const geo = new THREE.ShapeGeometry(shape)
     geo.rotateX(-Math.PI / 2)
-    geo.translate(0, GREEN_Y, 0)
+    // Drape la surface sur le relief (chaque sommet à l'altitude du terrain).
+    const pos = geo.attributes.position
+    for (let v = 0; v < pos.count; v++) {
+      pos.setY(v, terrainHeight(pos.getX(v), pos.getZ(v)) + GREEN_Y)
+    }
     geos.push(geo)
   }
   if (geos.length === 0) return null

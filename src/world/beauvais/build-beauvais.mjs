@@ -58,6 +58,92 @@ function project(lat, lon) {
   return [x, z]
 }
 
+const rad2deg = (r) => (r * 180) / Math.PI
+
+/** Inverse de project : (x, z) mètres → (lat, lon). Sert à échantillonner l'altitude. */
+function unproject(x, z) {
+  const lat = ORIGIN.lat - rad2deg(z / EARTH_RADIUS)
+  const lon = ORIGIN.lon + rad2deg(x / (EARTH_RADIUS * Math.cos(deg2rad(ORIGIN.lat))))
+  return { lat, lon }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RELIEF : on échantillonne l'altitude réelle de Beauvais (API Open-Meteo,
+// gratuite, sans clé — basée sur le modèle Copernicus ~90 m).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ⚠️ Open-Meteo (gratuit) : GET limité à ~100 points/requête ET quota par minute.
+// On garde donc une grille modeste (le relief de Beauvais est doux) et on espace bien.
+const TERRAIN_COLS = 32 // résolution de la grille d'altitude (COLS × COLS points)
+const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation'
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+async function fetchElevations(lats, lons, tries = 4) {
+  const url = `${ELEVATION_URL}?latitude=${lats.join(',')}&longitude=${lons.join(',')}`
+  for (let t = 0; t < tries; t++) {
+    const res = await fetch(url)
+    if (res.ok) return (await res.json()).elevation
+    if (res.status === 429) {
+      await sleep(65000) // rate-limit : on attend la remise à zéro du quota (1 min)
+      continue
+    }
+    throw new Error(`Open-Meteo a répondu ${res.status}`)
+  }
+  throw new Error('Open-Meteo : trop de 429 (rate limit)')
+}
+
+/**
+ * Construit la grille d'altitudes couvrant la zone (BBOX), en mètres relatifs à
+ * l'origine (la cathédrale = 0). Renvoie de quoi interpoler l'altitude n'importe où.
+ */
+async function fetchTerrain() {
+  // Étendue monde de la BBOX (coins projetés).
+  const [s, w, n, e] = BBOX
+  const [xw] = project(ORIGIN.lat, w)
+  const [xe] = project(ORIGIN.lat, e)
+  const [, zn] = project(n, ORIGIN.lon)
+  const [, zs] = project(s, ORIGIN.lon)
+  const x0 = Math.min(xw, xe)
+  const z0 = Math.min(zn, zs)
+  const dx = (Math.max(xw, xe) - x0) / (TERRAIN_COLS - 1)
+  const dz = (Math.max(zn, zs) - z0) / (TERRAIN_COLS - 1)
+
+  // Liste des points (lat, lon) de la grille.
+  const lats = []
+  const lons = []
+  for (let j = 0; j < TERRAIN_COLS; j++) {
+    for (let i = 0; i < TERRAIN_COLS; i++) {
+      const { lat, lon } = unproject(x0 + i * dx, z0 + j * dz)
+      lats.push(+lat.toFixed(6))
+      lons.push(+lon.toFixed(6))
+    }
+  }
+
+  // Requêtes par paquets de 100 points.
+  console.log(`🗻 Altitudes : ${lats.length} points (Open-Meteo)...`)
+  const elev = []
+  for (let k = 0; k < lats.length; k += 100) {
+    const part = await fetchElevations(lats.slice(k, k + 100), lons.slice(k, k + 100))
+    elev.push(...part)
+    await sleep(4000) // on reste poli avec l'API (évite le rate-limit)
+  }
+
+  // Datum = altitude à l'origine (cathédrale) → le centre-ville est ~0.
+  const [baseElev] = await fetchElevations([ORIGIN.lat], [ORIGIN.lon])
+  const h = elev.map((v) => round1(v - baseElev))
+  const min = Math.min(...h)
+  const max = Math.max(...h)
+  console.log(`   relief : ${min} m à ${max} m (datum cathédrale = 0)`)
+
+  return {
+    cols: TERRAIN_COLS,
+    x0: round1(x0), z0: round1(z0),
+    dx: round1(dx), dz: round1(dz),
+    h,
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ESTIMATION DES HAUTEURS (le cœur du "réalisme")
 //
@@ -267,6 +353,14 @@ out geom;`
 async function main() {
   const osm = await fetchOsm()
 
+  // Relief (facultatif : si l'API échoue, on reste à plat).
+  let terrain = null
+  try {
+    terrain = await fetchTerrain()
+  } catch (err) {
+    console.warn('⚠️  Altitudes indisponibles, terrain plat :', err.message)
+  }
+
   const buildings = []
   const roads = []
   const waters = []
@@ -406,6 +500,7 @@ async function main() {
     count: buildings.length,
     roadCount: roads.length,
     waterCount: waters.length,
+    terrain,
     buildings,
     roads,
     waters,

@@ -7,6 +7,7 @@ import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerSt
 import { useCameraStore } from '../../core/cameraStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
+import { isBlocked } from '../../world/beauvais/collision'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -148,8 +149,11 @@ export function usePlayerMovement(
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
       const speed = running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED
-      group.position.x += moveDir.current.x * speed * delta
-      group.position.z += moveDir.current.z * speed * delta
+      // Collisions : on teste chaque axe séparément → on glisse le long des murs.
+      const nx = group.position.x + moveDir.current.x * speed * delta
+      if (!isBlocked(nx, group.position.z)) group.position.x = nx
+      const nz = group.position.z + moveDir.current.z * speed * delta
+      if (!isBlocked(group.position.x, nz)) group.position.z = nz
 
       // Oriente le perso vers sa direction de marche (rotation douce).
       const targetAngle = Math.atan2(moveDir.current.x, moveDir.current.z)
@@ -219,9 +223,19 @@ function driveScooter(
     group.rotation.y += steer * SCOOTER.STEER * (rideSpeed.current / SCOOTER.MAX_SPEED) * delta
   }
 
-  // Avance dans la direction où pointe le scooter.
-  group.position.x += Math.sin(group.rotation.y) * rideSpeed.current * delta
-  group.position.z += Math.cos(group.rotation.y) * rideSpeed.current * delta
+  // Avance dans la direction où pointe le scooter, avec collisions (axe par axe).
+  const nx = group.position.x + Math.sin(group.rotation.y) * rideSpeed.current * delta
+  const nz = group.position.z + Math.cos(group.rotation.y) * rideSpeed.current * delta
+  let moved = false
+  if (!isBlocked(nx, group.position.z)) {
+    group.position.x = nx
+    moved = true
+  }
+  if (!isBlocked(group.position.x, nz)) {
+    group.position.z = nz
+    moved = true
+  }
+  if (!moved) rideSpeed.current = 0 // on a tapé un mur : on s'arrête
   group.position.y = SCOOTER.SEAT_HEIGHT
 }
 

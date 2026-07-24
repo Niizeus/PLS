@@ -7,21 +7,29 @@ import { BUILDINGS } from './cityData'
 /**
  * 🏙️  Beauvais généré depuis OpenStreetMap (le "Temps 3" du pipeline, voir docs/04).
  *
- * On lit les bâtiments (via cityData), on extrude chaque contour en volume 3D à sa
- * hauteur estimée, puis — POINT CLÉ PERF — on FUSIONNE tout en une seule géométrie :
- * la ville entière tient alors en UN SEUL draw call au lieu de ~1400.
- *
- * Les lieux emblématiques (cathédrale soignée, gare...) seront posés à la main
- * PAR-DESSUS cette base automatique plus tard.
+ * On extrude chaque contour à sa hauteur estimée, on colore les FAÇADES et les
+ * TOITS de teintes variées (couleurs par sommet) pour un rendu bien plus détaillé
+ * qu'un aplat unique, puis — POINT CLÉ PERF — on FUSIONNE tout en une seule
+ * géométrie : la ville entière tient en UN SEUL draw call.
  */
 
-// Couleur unique des façades pour l'instant (look cartoon, cohérent avec le reste).
-const BUILDING_COLOR = '#cfc3b0'
+// Palettes réalistes mais cartoon. Chaque bâtiment pioche une façade + un toit
+// de façon déterministe (selon sa position) → varié mais stable d'une fois sur l'autre.
+const FACADES = [
+  '#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0',
+  '#c9b79a', '#baa98f', '#d6cbb0', '#c2a98c', '#cfc7bd',
+]
+const ROOFS = ['#8a7f72', '#7f7d79', '#9a6b57', '#6f6b64', '#8b6f5e', '#767c7a']
+
+/** Pseudo-aléatoire déterministe à partir d'une position. */
+function hash01(x: number, z: number): number {
+  const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+  return s - Math.floor(s)
+}
 
 /**
- * Aire signée d'un contour. Le signe indique le sens de parcours (horaire/anti-horaire).
- * On s'en sert pour mettre TOUS les bâtiments dans le même sens, sinon certaines
- * façades regarderaient vers l'intérieur et paraîtraient sombres.
+ * Aire signée d'un contour → sert à mettre tous les bâtiments dans le même sens
+ * de parcours, sinon certaines façades regarderaient vers l'intérieur (sombres).
  */
 function signedArea(pts: number[][]): number {
   let a = 0
@@ -36,40 +44,54 @@ function signedArea(pts: number[][]): number {
 /** Construit la géométrie fusionnée de toute la ville (opération lourde → une seule fois). */
 function buildCityGeometry(): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = []
+  const facadeColor = new THREE.Color()
+  const roofColor = new THREE.Color()
 
   for (const b of BUILDINGS) {
     const pts = b.pts
     if (pts.length < 3) continue
 
-    // Uniformise le sens de parcours (anti-horaire) pour des façades bien orientées.
     const ring = signedArea(pts) < 0 ? [...pts].reverse() : pts
 
-    // Forme 2D en repère (x, -z). Après extrusion puis bascule (rotateX), on
-    // retombe exactement sur les coordonnées monde (x, hauteur en y, z).
+    // Forme 2D en repère (x, -z). Après extrusion + bascule, on retombe sur (x, y, z).
     const shape = new THREE.Shape()
     shape.moveTo(ring[0][0], -ring[0][1])
     for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1])
     shape.closePath()
 
     const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
-    geo.rotateX(-Math.PI / 2) // couche la forme : l'épaisseur d'extrusion devient la hauteur (Y)
+    geo.rotateX(-Math.PI / 2) // l'épaisseur d'extrusion devient la hauteur (Y)
+
+    // Couleurs déterministes pour ce bâtiment (façade + toit).
+    facadeColor.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
+    roofColor.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
+
+    // Sommets près du haut = toit ; le reste = façade.
+    const pos = geo.attributes.position
+    const colors = new Float32Array(pos.count * 3)
+    for (let v = 0; v < pos.count; v++) {
+      const c = pos.getY(v) >= b.h - 0.05 ? roofColor : facadeColor
+      colors[v * 3] = c.r
+      colors[v * 3 + 1] = c.g
+      colors[v * 3 + 2] = c.b
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
     geometries.push(geo)
   }
 
   const merged = mergeGeometries(geometries, false)
-  // Les géométries intermédiaires ont été copiées dans "merged" : on les libère.
   geometries.forEach((g) => g.dispose())
   return merged
 }
 
 export default function Beauvais() {
-  // La ville n'est construite qu'une fois, puis gardée en mémoire entre les rendus.
   const geometry = useMemo(buildCityGeometry, [])
 
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
-      {/* DoubleSide = pas de face sombre même si un contour OSM est mal orienté. */}
-      <meshToonMaterial color={BUILDING_COLOR} gradientMap={toonGradient} side={THREE.DoubleSide} />
+      {/* vertexColors = on utilise les couleurs par sommet (façades + toits). */}
+      <meshToonMaterial vertexColors gradientMap={toonGradient} side={THREE.DoubleSide} />
     </mesh>
   )
 }

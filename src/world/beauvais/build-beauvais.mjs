@@ -140,6 +140,23 @@ function estimateHeight(tags, area, id) {
 const round1 = (n) => Math.round(n * 10) / 10 // 0,1 m suffit → fichier plus léger
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ROUTES : largeur (mètres) selon le type de voie OSM (highway=...)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROAD_WIDTH = {
+  motorway: 12, trunk: 10, primary: 9, secondary: 7.5, tertiary: 6.5,
+  residential: 5, unclassified: 5, living_street: 4.5, service: 3.5,
+  pedestrian: 5, footway: 2, path: 1.8, cycleway: 2, steps: 1.6, track: 3,
+}
+// Types de voies qu'on n'affiche pas (pas de vraie surface au sol).
+const ROAD_SKIP = new Set(['proposed', 'construction', 'raceway', 'bus_guideway'])
+
+function roadWidth(tags) {
+  if (ROAD_SKIP.has(tags.highway)) return 0
+  return ROAD_WIDTH[tags.highway] ?? 4 // largeur par défaut si type inconnu
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RÉCUPÉRATION DES DONNÉES OSM
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -148,9 +165,10 @@ async function fetchOsm() {
     console.log('📄 Lecture du brut local :', process.env.RAW_FILE)
     return JSON.parse(readFileSync(process.env.RAW_FILE, 'utf8'))
   }
-  const query = `[out:json][timeout:90];
+  const query = `[out:json][timeout:120];
 (
   way["building"](${BBOX.join(',')});
+  way["highway"](${BBOX.join(',')});
 );
 out geom;`
   console.log('🌐 Requête Overpass en cours...')
@@ -172,30 +190,38 @@ out geom;`
 
 async function main() {
   const osm = await fetchOsm()
-  const ways = osm.elements.filter((e) => e.type === 'way' && e.geometry?.length >= 4)
+  const ways = osm.elements.filter((e) => e.type === 'way' && e.geometry?.length >= 2)
 
   const buildings = []
+  const roads = []
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
+
+  const grow = (x, z) => {
+    if (x < bounds.minX) bounds.minX = x
+    if (x > bounds.maxX) bounds.maxX = x
+    if (z < bounds.minZ) bounds.minZ = z
+    if (z > bounds.maxZ) bounds.maxZ = z
+  }
 
   for (const way of ways) {
     const tags = way.tags || {}
-    // Contour projeté en mètres. OSM ferme le polygone (dernier point = premier) :
-    // on retire ce doublon, la 3D refermera la forme toute seule.
     const pts = way.geometry.map((p) => project(p.lat, p.lon).map(round1))
-    if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) {
-      pts.pop()
-    }
-    if (pts.length < 3) continue // pas un polygone valide
 
-    const area = polygonArea(pts)
-    const h = estimateHeight(tags, area, way.id)
-    buildings.push({ h, pts })
-
-    for (const [x, z] of pts) {
-      if (x < bounds.minX) bounds.minX = x
-      if (x > bounds.maxX) bounds.maxX = x
-      if (z < bounds.minZ) bounds.minZ = z
-      if (z > bounds.maxZ) bounds.maxZ = z
+    if (tags.building) {
+      // BÂTIMENT : polygone fermé. OSM répète le 1er point en dernier → on l'enlève.
+      if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) {
+        pts.pop()
+      }
+      if (pts.length < 3) continue
+      const area = polygonArea(pts)
+      buildings.push({ h: estimateHeight(tags, area, way.id), pts })
+      for (const [x, z] of pts) grow(x, z)
+    } else if (tags.highway) {
+      // ROUTE : polyligne (ouverte). On garde la largeur selon le type.
+      const w = roadWidth(tags)
+      if (w <= 0 || pts.length < 2) continue
+      roads.push({ w, pts })
+      for (const [x, z] of pts) grow(x, z)
     }
   }
 
@@ -213,13 +239,15 @@ async function main() {
     source: 'OpenStreetMap contributors (ODbL)',
     generatedAt: new Date().toISOString(),
     count: buildings.length,
+    roadCount: roads.length,
     buildings,
+    roads,
   }
 
   mkdirSync(dirname(OUT_FILE), { recursive: true })
   writeFileSync(OUT_FILE, JSON.stringify(out))
   const kb = (readFileSync(OUT_FILE).length / 1024).toFixed(0)
-  console.log(`✅ ${buildings.length} bâtiments écrits dans ${OUT_FILE} (${kb} Ko)`)
+  console.log(`✅ ${buildings.length} bâtiments + ${roads.length} routes écrits (${kb} Ko)`)
   console.log(`   hauteurs (m) — min ${heights[0]} / médiane ${q(0.5)} / p90 ${q(0.9)} / max ${heights.at(-1)}`)
 }
 

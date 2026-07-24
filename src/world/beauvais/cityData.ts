@@ -5,8 +5,10 @@ import rawData from './data/beauvais-buildings.json'
  *
  * Ce module lit le fichier compact et le rend exploitable partout :
  *  - la ville 3D (Beauvais.tsx) l'extrude,
+ *  - les routes (Roads.tsx) tracent les voies,
  *  - le sol (CityGround.tsx) se dimensionne dessus,
- *  - la minimap et la carte (ui/) dessinent les empreintes vues du dessus.
+ *  - les collisions (collision.ts) empêchent d'entrer dans les bâtiments,
+ *  - la minimap et la carte (ui/) dessinent tout ça vu du dessus.
  * Tout le monde importe d'ICI → pas de duplication, pas de divergence.
  */
 
@@ -14,8 +16,14 @@ import rawData from './data/beauvais-buildings.json'
 export interface Building {
   h: number
   pts: number[][]
-  cx: number // centre X (sert à la minimap : on ne dessine que ce qui est proche)
-  cz: number // centre Z
+  cx: number
+  cz: number
+}
+
+/** Une route : largeur (m) et polyligne de points [x, z]. */
+export interface Road {
+  w: number
+  pts: number[][]
 }
 
 export interface Bounds {
@@ -29,12 +37,14 @@ interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
   buildings: { h: number; pts: number[][] }[]
+  roads: { w: number; pts: number[][] }[]
 }
 
 const data = rawData as unknown as RawCity
 
 export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
+export const ROADS: Road[] = data.roads ?? []
 
 // On calcule le centre de chaque bâtiment une fois pour toutes.
 export const BUILDINGS: Building[] = data.buildings.map((b) => {
@@ -49,7 +59,7 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
 })
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */
-function pointInFootprint(x: number, z: number, pts: number[][]): boolean {
+export function pointInFootprint(x: number, z: number, pts: number[][]): boolean {
   let inside = false
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const [xi, zi] = pts[i]
@@ -60,49 +70,48 @@ function pointInFootprint(x: number, z: number, pts: number[][]): boolean {
   return inside
 }
 
-/** Distance² au centre du bâtiment le plus proche (rapide, pour jauger le dégagement). */
-function nearestCentroidDist2(x: number, z: number): number {
-  let best = Infinity
-  for (const b of BUILDINGS) {
-    const dx = x - b.cx
-    const dz = z - b.cz
-    const d2 = dx * dx + dz * dz
-    if (d2 < best) best = d2
-  }
-  return best
-}
-
 /**
- * Cherche un point de spawn DÉGAGÉ près du centre (la cathédrale) : le joueur ne
- * doit pas apparaître à l'intérieur d'un bâtiment. On teste des points sur une
- * spirale qui s'éloigne de l'origine et on garde le premier qui est hors des
- * bâtiments et un peu à l'écart.
+ * Cherche un point de spawn DÉGAGÉ devant la cathédrale (à l'origine 0,0).
+ *
+ * On teste des points sur des anneaux autour de la cathédrale, on écarte ceux qui
+ * tombent dans un bâtiment, et on garde celui qui est le PLUS OUVERT (le plus loin
+ * du bâtiment le plus proche) : c'est typiquement le parvis, donc "devant".
  */
 function findSpawn(): { x: number; z: number } {
-  const CLEARANCE = 7 // mètres de dégagement souhaités autour du spawn
-  const clearance2 = CLEARANCE * CLEARANCE
-  for (let r = 0; r <= 160; r += 4) {
-    // plus le rayon est grand, plus on teste d'angles
-    const steps = Math.max(1, Math.round((2 * Math.PI * r) / 5))
+  let best = { x: 0, z: 0 }
+  let bestOpenness = -1
+
+  for (let r = 18; r <= 70; r += 3) {
+    const steps = Math.round((2 * Math.PI * r) / 4)
     for (let s = 0; s < steps; s++) {
       const a = (s / steps) * Math.PI * 2
       const x = Math.cos(a) * r
       const z = Math.sin(a) * r
-      if (nearestCentroidDist2(x, z) < clearance2) continue
-      let insideAny = false
+
+      // Distance au sommet de bâtiment le plus proche + test "dans un bâtiment ?".
+      let nearest = Infinity
+      let inside = false
       for (const b of BUILDINGS) {
-        // pré-filtre : inutile de tester les bâtiments lointains
-        if ((x - b.cx) ** 2 + (z - b.cz) ** 2 > 2500) continue
+        // Pré-filtre : on ignore les bâtiments lointains.
+        if ((x - b.cx) ** 2 + (z - b.cz) ** 2 > 3600) continue
         if (pointInFootprint(x, z, b.pts)) {
-          insideAny = true
+          inside = true
           break
         }
+        for (const [px, pz] of b.pts) {
+          const d2 = (x - px) ** 2 + (z - pz) ** 2
+          if (d2 < nearest) nearest = d2
+        }
       }
-      if (!insideAny) return { x, z }
+      if (inside) continue
+      if (nearest > bestOpenness) {
+        bestOpenness = nearest
+        best = { x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10 }
+      }
     }
   }
-  return { x: 0, z: 0 } // repli (ne devrait pas arriver)
+  return best
 }
 
-/** Point où faire apparaître le joueur, hors des bâtiments. */
+/** Point où faire apparaître le joueur : dégagé, devant la cathédrale. */
 export const SPAWN = findSpawn()

@@ -105,6 +105,10 @@ Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
 | `src/world/beauvais/Roads.tsx` | Trace les routes en **rubans continus** (raccords propres aux angles), fusionnés. |
 | `src/world/beauvais/Water.tsx` | Trace les plans d'eau (surfaces plates bleues). |
+| `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois, en surfaces vertes (2 teintes). |
+| `src/world/beauvais/Trees.tsx` | Arbres instanciés (OSM + semés dans les bois). |
+| `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (le long des rues). |
+| `src/world/beauvais/Walls.tsx` | Murs / clôtures (bandes verticales fusionnées). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/CityGround.tsx` | Le sol, dimensionné automatiquement sur les limites de la ville. |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et carte plein écran (touche M), via `src/ui/mapDraw.ts`. |
@@ -170,7 +174,8 @@ jeu fluide :
 - [x] Inclure les bâtiments en relation (multipolygones) + cours intérieures. *(build-beauvais.mjs)*
 - [x] Routes plus propres (rubans continus). *(Roads.tsx)*
 - [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
-- [ ] Habillage (Lot 2) : verdure/parcs, arbres, lampadaires, murs, cathédrale distincte.
+- [x] Habillage : verdure/parcs, arbres, lampadaires, murs. *(GreenAreas/Trees/Lamps/Walls)*
+- [x] Cathédrale + églises avec un look distinct (pierre + ardoise). *(Beauvais.tsx via `kind`)*
 - [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).

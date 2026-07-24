@@ -18,8 +18,21 @@ export interface Building {
   pts: number[][]
   /** Cours intérieures (trous) éventuelles, pour les bâtiments à patio. */
   holes?: number[][][]
+  /** Monument (cathedral / church / chapel) → look distinct. */
+  kind?: string
   cx: number
   cz: number
+}
+
+/** Un espace vert : contour [x, z] ; `wood` = boisé (on y sème des arbres). */
+export interface Green {
+  pts: number[][]
+  wood?: number
+}
+
+/** Un mur / une clôture : polyligne [x, z]. */
+export interface Wall {
+  pts: number[][]
 }
 
 /** Une route : largeur (m) et polyligne de points [x, z]. */
@@ -43,9 +56,13 @@ export interface Bounds {
 interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
-  buildings: { h: number; pts: number[][]; holes?: number[][][] }[]
+  buildings: { h: number; pts: number[][]; holes?: number[][][]; kind?: string }[]
   roads: { w: number; pts: number[][] }[]
   waters: { pts: number[][] }[]
+  greens: { pts: number[][]; wood?: number }[]
+  walls: { pts: number[][] }[]
+  trees: number[][]
+  lamps: number[][]
 }
 
 const data = rawData as unknown as RawCity
@@ -54,6 +71,10 @@ export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
 export const ROADS: Road[] = data.roads ?? []
 export const WATERS: Water[] = data.waters ?? []
+export const GREENS: Green[] = data.greens ?? []
+export const WALLS: Wall[] = data.walls ?? []
+export const TREES: number[][] = data.trees ?? []
+export const LAMPS: number[][] = data.lamps ?? []
 
 // On calcule le centre de chaque bâtiment une fois pour toutes.
 export const BUILDINGS: Building[] = data.buildings.map((b) => {
@@ -64,7 +85,7 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
     sz += z
   }
   const n = b.pts.length || 1
-  return { h: b.h, pts: b.pts, holes: b.holes, cx: sx / n, cz: sz / n }
+  return { h: b.h, pts: b.pts, holes: b.holes, kind: b.kind, cx: sx / n, cz: sz / n }
 })
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */

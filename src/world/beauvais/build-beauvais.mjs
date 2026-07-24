@@ -198,6 +198,29 @@ function roadWidth(tags) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VERDURE, MONUMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Renvoie 'wood' (boisé, on y sèmera des arbres), 'green' (pelouse/parc), ou null. */
+function greenKind(tags) {
+  if (tags.natural === 'wood' || tags.landuse === 'forest') return 'wood'
+  if (
+    tags.leisure === 'park' ||
+    tags.natural === 'scrub' ||
+    tags.natural === 'grassland' ||
+    ['grass', 'meadow', 'recreation_ground', 'village_green'].includes(tags.landuse)
+  )
+    return 'green'
+  return null
+}
+
+/** Type de monument pour un look distinct (repères), ou undefined. */
+function landmarkKind(tags) {
+  if (['cathedral', 'church', 'chapel'].includes(tags.building)) return tags.building
+  return undefined
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RÉCUPÉRATION DES DONNÉES OSM
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -206,13 +229,22 @@ async function fetchOsm() {
     console.log('📄 Lecture du brut local :', process.env.RAW_FILE)
     return JSON.parse(readFileSync(process.env.RAW_FILE, 'utf8'))
   }
+  const b = BBOX.join(',')
   const query = `[out:json][timeout:300];
 (
-  way["building"](${BBOX.join(',')});
-  relation["building"](${BBOX.join(',')});
-  way["highway"](${BBOX.join(',')});
-  way["natural"="water"](${BBOX.join(',')});
-  relation["natural"="water"](${BBOX.join(',')});
+  way["building"](${b});
+  relation["building"](${b});
+  way["highway"](${b});
+  way["natural"="water"](${b});
+  relation["natural"="water"](${b});
+  way["leisure"="park"](${b});
+  way["landuse"~"grass|forest|meadow|recreation_ground|village_green"](${b});
+  way["natural"~"wood|scrub|grassland"](${b});
+  relation["leisure"="park"](${b});
+  relation["landuse"~"forest|recreation_ground"](${b});
+  way["barrier"~"wall|fence|hedge|city_wall"](${b});
+  node["natural"="tree"](${b});
+  node["highway"="street_lamp"](${b});
 );
 out geom;`
   console.log('🌐 Requête Overpass en cours...')
@@ -238,6 +270,10 @@ async function main() {
   const buildings = []
   const roads = []
   const waters = []
+  const greens = [] // { pts, wood? }
+  const walls = [] // { pts } (polylignes)
+  const trees = [] // [x, z]
+  const lamps = [] // [x, z]
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
 
   const grow = (x, z) => {
@@ -257,6 +293,13 @@ async function main() {
   for (const el of osm.elements) {
     const tags = el.tags || {}
 
+    if (el.type === 'node') {
+      // ARBRES et LAMPADAIRES (points).
+      if (tags.natural === 'tree') trees.push(project(el.lat, el.lon).map(round1))
+      else if (tags.highway === 'street_lamp') lamps.push(project(el.lat, el.lon).map(round1))
+      continue
+    }
+
     if (el.type === 'way' && el.geometry?.length >= 2) {
       const pts = el.geometry.map((p) => project(p.lat, p.lon).map(round1))
 
@@ -264,7 +307,10 @@ async function main() {
         // BÂTIMENT : polygone fermé.
         if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) pts.pop()
         if (pts.length < 3) continue
-        buildings.push({ h: estimateHeight(tags, polygonArea(pts), el.id), pts })
+        const bl = { h: estimateHeight(tags, polygonArea(pts), el.id), pts }
+        const kind = landmarkKind(tags)
+        if (kind) bl.kind = kind
+        buildings.push(bl)
         for (const [x, z] of pts) grow(x, z)
       } else if (tags.highway) {
         // ROUTE : polyligne (ouverte). Largeur selon le type.
@@ -278,6 +324,30 @@ async function main() {
         if (poly.length >= 2 && poly[0][0] === poly.at(-1)[0] && poly[0][1] === poly.at(-1)[1]) poly.pop()
         if (poly.length < 3) continue
         waters.push({ pts: poly })
+        for (const [x, z] of poly) grow(x, z)
+      } else if (tags.barrier) {
+        // MUR / CLÔTURE : polyligne (on la garde telle quelle).
+        if (pts.length >= 2) walls.push({ pts })
+      } else if (greenKind(tags)) {
+        // ESPACE VERT (parc, pelouse, bois) : polygone fermé.
+        const poly = pts.slice()
+        if (poly.length >= 2 && poly[0][0] === poly.at(-1)[0] && poly[0][1] === poly.at(-1)[1]) poly.pop()
+        if (poly.length < 3) continue
+        const g = { pts: poly }
+        if (greenKind(tags) === 'wood') g.wood = 1
+        greens.push(g)
+        for (const [x, z] of poly) grow(x, z)
+      }
+    } else if (el.type === 'relation' && greenKind(tags)) {
+      // ESPACE VERT en relation (multipolygone) : contours "outer".
+      const wood = greenKind(tags) === 'wood'
+      for (const m of el.members || []) {
+        if (m.type !== 'way' || !m.geometry || (m.role && m.role !== 'outer')) continue
+        const poly = toPolygon(m.geometry)
+        if (poly.length < 3) continue
+        const g = { pts: poly }
+        if (wood) g.wood = 1
+        greens.push(g)
         for (const [x, z] of poly) grow(x, z)
       }
     } else if (el.type === 'relation' && tags.natural === 'water') {
@@ -307,11 +377,13 @@ async function main() {
       const outers = stitchRings(outerSegs).map(toRing).filter((r) => r.length >= 3)
       const inners = stitchRings(innerSegs).map(toRing).filter((r) => r.length >= 3)
 
+      const kind = landmarkKind(tags)
       for (const pts of outers) {
         // Cours intérieures : les anneaux "inner" situés dans ce contour.
         const holes = inners.filter((h) => pointInPolygon(h[0], pts))
         const b = { h: estimateHeight(tags, polygonArea(pts), el.id), pts }
         if (holes.length) b.holes = holes
+        if (kind) b.kind = kind
         buildings.push(b)
         for (const [x, z] of pts) grow(x, z)
       }
@@ -337,12 +409,16 @@ async function main() {
     buildings,
     roads,
     waters,
+    greens,
+    walls,
+    trees,
+    lamps,
   }
 
   mkdirSync(dirname(OUT_FILE), { recursive: true })
   writeFileSync(OUT_FILE, JSON.stringify(out))
   const mb = (readFileSync(OUT_FILE).length / 1024 / 1024).toFixed(2)
-  console.log(`✅ ${buildings.length} bâtiments + ${roads.length} routes + ${waters.length} plans d'eau écrits (${mb} Mo)`)
+  console.log(`✅ ${buildings.length} bâtiments, ${roads.length} routes, ${waters.length} eau, ${greens.length} verdure, ${walls.length} murs, ${trees.length} arbres, ${lamps.length} lampadaires (${mb} Mo)`)
   console.log(`   hauteurs (m) — min ${heights[0]} / médiane ${q(0.5)} / p90 ${q(0.9)} / max ${heights.at(-1)}`)
 }
 

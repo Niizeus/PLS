@@ -72,8 +72,11 @@ PLS/
 ## ⚡ Lancer le jeu en local (une fois installé)
 
 **Le plus simple (Windows)** : double-clique sur **`Lancer-PLS.bat`** à la racine du projet.
-Il installe les librairies au premier lancement si besoin, démarre le jeu et ouvre le
-navigateur tout seul. Pour arrêter : ferme la fenêtre noire.
+Il **vérifie et installe tout seul ce qu'il faut** : si **Node.js** manque, il propose de
+l'installer automatiquement (via `winget`) ; il installe les librairies au premier
+lancement ; puis il démarre le jeu et ouvre le navigateur tout seul. Pour arrêter : ferme
+la fenêtre noire.
+(Si `winget` n'existe pas sur le PC, il ouvre la page de téléchargement de Node.js.)
 
 **Ou en ligne de commande :**
 

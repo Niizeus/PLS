@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"Rappel PLS : mets a jour la doc concernee (README / docs / AGENTS.md) dans le meme commit que ton changement. Voir AGENTS.md section 0.\"}'"
+          }
+        ]
+      }
+    ]
+  }
+}

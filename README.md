@@ -6,6 +6,8 @@ dans un monde inspiré de la **vraie ville de Beauvais** (Oise, Hauts-de-France 
 > On développe à **deux, à distance**, chacun avec l'aide d'une IA connectée au dossier,
 > le tout synchronisé via **GitHub** (app GitHub Desktop).
 
+> 🤖 **IA / assistants de code : lisez d'abord [AGENTS.md](AGENTS.md)** (briefing obligatoire).
+
 ---
 
 ## 🚀 Démarrage rapide

@@ -16,6 +16,11 @@
 
 Respecte ça et tu n'auras quasiment **jamais** de conflit.
 
+> 🤖 **Rôle de l'IA vs humain :** l'IA peut écrire du code et faire des **commits en local**
+> (titre + description). Mais c'est **toujours toi (l'humain) qui fais le `Pull` et le `Push`**
+> via **GitHub Desktop**. L'IA ne synchronise jamais avec GitHub. Comme ça, tu gardes le
+> contrôle de ce qui part sur le dépôt partagé.
+
 ---
 
 ## ❓ TA QUESTION : "et si on code le même fichier tous les deux ?"

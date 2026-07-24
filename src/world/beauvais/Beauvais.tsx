@@ -2,19 +2,22 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { BUILDINGS } from './cityData'
+import { BUILDINGS, type Building } from './cityData'
 
 /**
  * 🏙️  Beauvais généré depuis OpenStreetMap (le "Temps 3" du pipeline, voir docs/04).
  *
- * On extrude chaque contour à sa hauteur estimée, on colore les FAÇADES et les
- * TOITS de teintes variées (couleurs par sommet) pour un rendu bien plus détaillé
- * qu'un aplat unique, puis — POINT CLÉ PERF — on FUSIONNE tout en une seule
- * géométrie : la ville entière tient en UN SEUL draw call.
+ * On extrude chaque contour à sa hauteur estimée, on colore FAÇADES et TOITS de
+ * teintes variées (couleurs par sommet), puis on FUSIONNE les bâtiments.
+ *
+ * ⚠️ Toute la ville = ~34 000 bâtiments. Un seul mesh géant saturerait la mémoire,
+ * alors on découpe en TUILES : les bâtiments sont regroupés par carré de TILE mètres,
+ * et chaque tuile devient un mesh. Bonus : Three.js masque tout seul (frustum culling)
+ * les tuiles hors de l'écran → gros gain de perf. C'est la base de l'optimisation.
  */
 
-// Palettes réalistes mais cartoon. Chaque bâtiment pioche une façade + un toit
-// de façon déterministe (selon sa position) → varié mais stable d'une fois sur l'autre.
+const TILE = 400 // côté d'une tuile, en mètres
+
 const FACADES = [
   '#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0',
   '#c9b79a', '#baa98f', '#d6cbb0', '#c2a98c', '#cfc7bd',
@@ -27,10 +30,7 @@ function hash01(x: number, z: number): number {
   return s - Math.floor(s)
 }
 
-/**
- * Aire signée d'un contour → sert à mettre tous les bâtiments dans le même sens
- * de parcours, sinon certaines façades regarderaient vers l'intérieur (sombres).
- */
+/** Aire signée d'un contour → uniformise le sens de parcours (façades bien orientées). */
 function signedArea(pts: number[][]): number {
   let a = 0
   for (let i = 0; i < pts.length; i++) {
@@ -41,57 +41,82 @@ function signedArea(pts: number[][]): number {
   return a / 2
 }
 
-/** Construit la géométrie fusionnée de toute la ville (opération lourde → une seule fois). */
-function buildCityGeometry(): THREE.BufferGeometry {
-  const geometries: THREE.BufferGeometry[] = []
-  const facadeColor = new THREE.Color()
-  const roofColor = new THREE.Color()
+/** Construit la géométrie extrudée + colorée d'un bâtiment. */
+function buildOne(b: Building, facadeColor: THREE.Color, roofColor: THREE.Color): THREE.BufferGeometry | null {
+  const pts = b.pts
+  if (pts.length < 3) return null
+  const ring = signedArea(pts) < 0 ? [...pts].reverse() : pts
 
+  const shape = new THREE.Shape()
+  shape.moveTo(ring[0][0], -ring[0][1])
+  for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1])
+  shape.closePath()
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
+  geo.rotateX(-Math.PI / 2)
+
+  facadeColor.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
+  roofColor.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
+
+  const pos = geo.attributes.position
+  const colors = new Float32Array(pos.count * 3)
+  for (let v = 0; v < pos.count; v++) {
+    const c = pos.getY(v) >= b.h - 0.05 ? roofColor : facadeColor
+    colors[v * 3] = c.r
+    colors[v * 3 + 1] = c.g
+    colors[v * 3 + 2] = c.b
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return geo
+}
+
+/** Construit une géométrie fusionnée par tuile (mémoire maîtrisée : une tuile à la fois). */
+function buildTiles(): THREE.BufferGeometry[] {
+  // 1) Regrouper les bâtiments par tuile (selon leur centre).
+  const groups = new Map<string, Building[]>()
   for (const b of BUILDINGS) {
-    const pts = b.pts
-    if (pts.length < 3) continue
-
-    const ring = signedArea(pts) < 0 ? [...pts].reverse() : pts
-
-    // Forme 2D en repère (x, -z). Après extrusion + bascule, on retombe sur (x, y, z).
-    const shape = new THREE.Shape()
-    shape.moveTo(ring[0][0], -ring[0][1])
-    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1])
-    shape.closePath()
-
-    const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
-    geo.rotateX(-Math.PI / 2) // l'épaisseur d'extrusion devient la hauteur (Y)
-
-    // Couleurs déterministes pour ce bâtiment (façade + toit).
-    facadeColor.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
-    roofColor.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
-
-    // Sommets près du haut = toit ; le reste = façade.
-    const pos = geo.attributes.position
-    const colors = new Float32Array(pos.count * 3)
-    for (let v = 0; v < pos.count; v++) {
-      const c = pos.getY(v) >= b.h - 0.05 ? roofColor : facadeColor
-      colors[v * 3] = c.r
-      colors[v * 3 + 1] = c.g
-      colors[v * 3 + 2] = c.b
-    }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-
-    geometries.push(geo)
+    const key = Math.floor(b.cx / TILE) + ':' + Math.floor(b.cz / TILE)
+    let g = groups.get(key)
+    if (!g) groups.set(key, (g = []))
+    g.push(b)
   }
 
-  const merged = mergeGeometries(geometries, false)
-  geometries.forEach((g) => g.dispose())
-  return merged
+  // 2) Fusionner chaque tuile, puis libérer les géométries intermédiaires.
+  const tiles: THREE.BufferGeometry[] = []
+  const facadeColor = new THREE.Color()
+  const roofColor = new THREE.Color()
+  for (const group of groups.values()) {
+    const geos: THREE.BufferGeometry[] = []
+    for (const b of group) {
+      const geo = buildOne(b, facadeColor, roofColor)
+      if (geo) geos.push(geo)
+    }
+    if (geos.length === 0) continue
+    const merged = mergeGeometries(geos, false)
+    geos.forEach((g) => g.dispose())
+    tiles.push(merged)
+  }
+  return tiles
 }
 
 export default function Beauvais() {
-  const geometry = useMemo(buildCityGeometry, [])
+  const tiles = useMemo(buildTiles, [])
+  // Un seul matériau partagé par toutes les tuiles (couleurs par sommet).
+  const material = useMemo(
+    () =>
+      new THREE.MeshToonMaterial({
+        vertexColors: true,
+        gradientMap: toonGradient,
+        side: THREE.DoubleSide,
+      }),
+    [],
+  )
 
   return (
-    <mesh geometry={geometry} castShadow receiveShadow>
-      {/* vertexColors = on utilise les couleurs par sommet (façades + toits). */}
-      <meshToonMaterial vertexColors gradientMap={toonGradient} side={THREE.DoubleSide} />
-    </mesh>
+    <>
+      {tiles.map((geo, i) => (
+        <mesh key={i} geometry={geo} material={material} castShadow receiveShadow />
+      ))}
+    </>
   )
 }

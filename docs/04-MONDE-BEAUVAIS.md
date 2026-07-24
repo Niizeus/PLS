@@ -92,18 +92,19 @@ L'idée générale, étape par étape :
 
 > On garde ces données dans `src/world/beauvais/` (le GeoJSON + le code qui le transforme).
 
-### 📂 État actuel du pipeline (centre de Beauvais)
+### 📂 État actuel du pipeline (TOUTE la commune de Beauvais)
 
-Le pipeline est en place et couvre le centre élargi (~1,5 km autour de la cathédrale,
-**~6000 bâtiments + ~1100 routes réelles**). Les fichiers :
+Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
+**~34 000 bâtiments + ~7 000 routes + les plans d'eau** (dont le plan d'eau du Canada). Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments + routes) via Overpass + convertit en fichier compact. Tourne hors-jeu. |
-| `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, limites). |
-| `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, limites, point de spawn dégagé. |
-| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) et **fusionne** en 1 draw call. |
-| `src/world/beauvais/Roads.tsx` | Trace les routes (rubans plats fusionnés en 1 draw call). |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments + routes + eau) via Overpass + convertit en fichier compact. Tourne hors-jeu. |
+| `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
+| `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
+| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
+| `src/world/beauvais/Roads.tsx` | Trace les routes (rubans plats fusionnés). |
+| `src/world/beauvais/Water.tsx` | Trace les plans d'eau (surfaces plates bleues). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/CityGround.tsx` | Le sol, dimensionné automatiquement sur les limites de la ville. |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et carte plein écran (touche M), via `src/ui/mapDraw.ts`. |
@@ -126,9 +127,11 @@ donc dans `build-beauvais.mjs`, par ordre de fiabilité :
 2. Lance : `node src/world/beauvais/build-beauvais.mjs` (retélécharge depuis OSM).
 3. Le fichier compact est réécrit ; le jeu le prend au prochain lancement.
 
-> ⚠️ Le fichier compact est aujourd'hui **importé** (embarqué dans le bundle). Quand on
-> passera à toute la ville, il faudra le charger en **asset** (fetch) + découper en
-> **tuiles** avec gestion de distance (LOD). Le code de génération, lui, ne changera pas.
+> ⚠️ **Perf / à optimiser ensuite** : le fichier compact (~4,8 Mo) est pour l'instant
+> **importé** (embarqué dans le bundle → gros JS). Prochaine étape d'opti : le charger en
+> **asset** (fetch au démarrage) plutôt que l'embarquer. Le découpage en **tuiles** est
+> déjà fait (Beauvais.tsx) ; il reste à ajouter un **LOD** (afficher moins de détail au
+> loin) et à limiter le dessin des cartes (minimap/carte) qui parcourent tous les bâtiments.
 
 ### Stratégie retenue
 
@@ -146,7 +149,9 @@ donc dans `build-beauvais.mjs`, par ordre de fiabilité :
 - [x] Faire un premier export de test depuis Overpass. *(fait : quartier cathédrale)*
 - [x] Écrire le convertisseur GPS → scène 3D dans `src/world/beauvais/`. *(build-beauvais.mjs)*
 - [x] Prototype : afficher les bâtiments extrudés d'un quartier. *(Beauvais.tsx)*
-- [x] Étendre au centre élargi (~1,5 km, ~6000 bâtiments). *(BBOX dans build-beauvais.mjs)*
+- [x] Étendre à TOUTE la commune (~7,5 km, ~34 000 bâtiments). *(BBOX dans build-beauvais.mjs)*
+- [x] Plans d'eau (dont le plan d'eau du Canada). *(Water.tsx)*
+- [x] Découpage en tuiles (base de l'optimisation). *(Beauvais.tsx)*
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
 - [x] Spawn dégagé DEVANT la cathédrale (point le plus ouvert). *(cityData.SPAWN)*
 - [x] Hauteurs réalistes (type + surface + variation). *(build-beauvais.mjs)*

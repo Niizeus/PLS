@@ -33,9 +33,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // monde 3D. Tous les bâtiments sont positionnés en mètres par rapport à lui.
 const ORIGIN = { lat: 49.4326, lon: 2.081 }
 
-// Zone récupérée (centre de Beauvais élargi, ~1,5 km de côté) : [sud, ouest, nord, est].
-// Pour agrandir encore : élargis ces bornes (attention aux perfs : plus de bâtiments).
-const BBOX = [49.4256, 2.071, 49.4396, 2.091]
+// Zone récupérée : TOUTE la commune de Beauvais (~7,5 km de côté) : [sud, ouest, nord, est].
+// Couvre l'ensemble des bâtiments + le plan d'eau du Canada au nord.
+const BBOX = [49.398, 2.03, 49.472, 2.145]
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OUT_FILE = join(__dirname, 'data', 'beauvais-buildings.json')
@@ -165,10 +165,12 @@ async function fetchOsm() {
     console.log('📄 Lecture du brut local :', process.env.RAW_FILE)
     return JSON.parse(readFileSync(process.env.RAW_FILE, 'utf8'))
   }
-  const query = `[out:json][timeout:120];
+  const query = `[out:json][timeout:300];
 (
   way["building"](${BBOX.join(',')});
   way["highway"](${BBOX.join(',')});
+  way["natural"="water"](${BBOX.join(',')});
+  relation["natural"="water"](${BBOX.join(',')});
 );
 out geom;`
   console.log('🌐 Requête Overpass en cours...')
@@ -190,10 +192,10 @@ out geom;`
 
 async function main() {
   const osm = await fetchOsm()
-  const ways = osm.elements.filter((e) => e.type === 'way' && e.geometry?.length >= 2)
 
   const buildings = []
   const roads = []
+  const waters = []
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }
 
   const grow = (x, z) => {
@@ -203,25 +205,48 @@ async function main() {
     if (z > bounds.maxZ) bounds.maxZ = z
   }
 
-  for (const way of ways) {
-    const tags = way.tags || {}
-    const pts = way.geometry.map((p) => project(p.lat, p.lon).map(round1))
+  // Projette une géométrie OSM en polygone fermé (on retire le point répété final).
+  const toPolygon = (geometry) => {
+    const pts = geometry.map((p) => project(p.lat, p.lon).map(round1))
+    if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) pts.pop()
+    return pts
+  }
 
-    if (tags.building) {
-      // BÂTIMENT : polygone fermé. OSM répète le 1er point en dernier → on l'enlève.
-      if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) {
-        pts.pop()
+  for (const el of osm.elements) {
+    const tags = el.tags || {}
+
+    if (el.type === 'way' && el.geometry?.length >= 2) {
+      const pts = el.geometry.map((p) => project(p.lat, p.lon).map(round1))
+
+      if (tags.building) {
+        // BÂTIMENT : polygone fermé.
+        if (pts.length >= 2 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1]) pts.pop()
+        if (pts.length < 3) continue
+        buildings.push({ h: estimateHeight(tags, polygonArea(pts), el.id), pts })
+        for (const [x, z] of pts) grow(x, z)
+      } else if (tags.highway) {
+        // ROUTE : polyligne (ouverte). Largeur selon le type.
+        const w = roadWidth(tags)
+        if (w <= 0 || pts.length < 2) continue
+        roads.push({ w, pts })
+        for (const [x, z] of pts) grow(x, z)
+      } else if (tags.natural === 'water') {
+        // PLAN D'EAU (way fermé).
+        const poly = pts.slice()
+        if (poly.length >= 2 && poly[0][0] === poly.at(-1)[0] && poly[0][1] === poly.at(-1)[1]) poly.pop()
+        if (poly.length < 3) continue
+        waters.push({ pts: poly })
+        for (const [x, z] of poly) grow(x, z)
       }
-      if (pts.length < 3) continue
-      const area = polygonArea(pts)
-      buildings.push({ h: estimateHeight(tags, area, way.id), pts })
-      for (const [x, z] of pts) grow(x, z)
-    } else if (tags.highway) {
-      // ROUTE : polyligne (ouverte). On garde la largeur selon le type.
-      const w = roadWidth(tags)
-      if (w <= 0 || pts.length < 2) continue
-      roads.push({ w, pts })
-      for (const [x, z] of pts) grow(x, z)
+    } else if (el.type === 'relation' && tags.natural === 'water') {
+      // PLAN D'EAU en relation (multipolygone) : on garde chaque contour "outer".
+      for (const m of el.members || []) {
+        if (m.type !== 'way' || !m.geometry || (m.role && m.role !== 'outer')) continue
+        const poly = toPolygon(m.geometry)
+        if (poly.length < 3) continue
+        waters.push({ pts: poly })
+        for (const [x, z] of poly) grow(x, z)
+      }
     }
   }
 
@@ -240,14 +265,16 @@ async function main() {
     generatedAt: new Date().toISOString(),
     count: buildings.length,
     roadCount: roads.length,
+    waterCount: waters.length,
     buildings,
     roads,
+    waters,
   }
 
   mkdirSync(dirname(OUT_FILE), { recursive: true })
   writeFileSync(OUT_FILE, JSON.stringify(out))
-  const kb = (readFileSync(OUT_FILE).length / 1024).toFixed(0)
-  console.log(`✅ ${buildings.length} bâtiments + ${roads.length} routes écrits (${kb} Ko)`)
+  const mb = (readFileSync(OUT_FILE).length / 1024 / 1024).toFixed(2)
+  console.log(`✅ ${buildings.length} bâtiments + ${roads.length} routes + ${waters.length} plans d'eau écrits (${mb} Mo)`)
   console.log(`   hauteurs (m) — min ${heights[0]} / médiane ${q(0.5)} / p90 ${q(0.9)} / max ${heights.at(-1)}`)
 }
 

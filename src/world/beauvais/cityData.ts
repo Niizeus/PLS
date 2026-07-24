@@ -26,6 +26,11 @@ export interface Road {
   pts: number[][]
 }
 
+/** Un plan d'eau : contour [x, z]. */
+export interface Water {
+  pts: number[][]
+}
+
 export interface Bounds {
   minX: number
   maxX: number
@@ -38,6 +43,7 @@ interface RawCity {
   bounds: Bounds
   buildings: { h: number; pts: number[][] }[]
   roads: { w: number; pts: number[][] }[]
+  waters: { pts: number[][] }[]
 }
 
 const data = rawData as unknown as RawCity
@@ -45,6 +51,7 @@ const data = rawData as unknown as RawCity
 export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
 export const ROADS: Road[] = data.roads ?? []
+export const WATERS: Water[] = data.waters ?? []
 
 // On calcule le centre de chaque bâtiment une fois pour toutes.
 export const BUILDINGS: Building[] = data.buildings.map((b) => {

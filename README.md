@@ -71,6 +71,12 @@ PLS/
 
 ## ⚡ Lancer le jeu en local (une fois installé)
 
+**Le plus simple (Windows)** : double-clique sur **`Lancer-PLS.bat`** à la racine du projet.
+Il installe les librairies au premier lancement si besoin, démarre le jeu et ouvre le
+navigateur tout seul. Pour arrêter : ferme la fenêtre noire.
+
+**Ou en ligne de commande :**
+
 ```bash
 npm install
 npm run dev

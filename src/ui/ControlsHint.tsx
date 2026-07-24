@@ -1,10 +1,13 @@
 /** Rappel des touches, affiché en bas à gauche. Purement informatif. */
 const CONTROLS: { keys: string; label: string }[] = [
+  { keys: 'Souris', label: 'Tourner la caméra' },
   { keys: 'ZQSD', label: 'Se déplacer' },
   { keys: 'Maj', label: 'Courir' },
-  { keys: 'E', label: 'Action / interagir' },
+  { keys: 'E', label: 'Interagir / monter sur le scooter' },
   { keys: 'Clic G.', label: 'Attaquer' },
   { keys: 'Clic D.', label: 'Défendre' },
+  { keys: 'M', label: 'Carte' },
+  { keys: 'Échap', label: 'Libérer la souris' },
 ]
 
 export default function ControlsHint() {

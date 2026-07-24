@@ -1,10 +1,11 @@
 import Player from './player/Player'
+import Scooter from './vehicles/Scooter'
 
 /**
- * LES PERSONNAGES : le joueur (Chibrux) et, plus tard, les PNJ.
+ * LES PERSONNAGES & VÉHICULES : le joueur (Chibrux), le scooter, et plus tard les PNJ.
  *
  * 👉 Domaine "Entités" (voir docs/02-ARCHITECTURE.md).
- * Pour ajouter un personnage (un PNJ, un ennemi...), tu l'ajoutes ICI —
+ * Pour ajouter un personnage/véhicule, tu l'ajoutes ICI —
  * pas besoin de toucher GameCanvas.
  * Comme ça, celui qui bosse sur les persos et celui qui bosse sur le monde
  * n'éditent jamais le même fichier → pas de conflit Git.
@@ -13,6 +14,7 @@ export default function Characters() {
   return (
     <>
       <Player />
+      <Scooter />
     </>
   )
 }

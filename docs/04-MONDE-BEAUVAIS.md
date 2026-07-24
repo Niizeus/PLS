@@ -92,6 +92,42 @@ L'idée générale, étape par étape :
 
 > On garde ces données dans `src/world/beauvais/` (le GeoJSON + le code qui le transforme).
 
+### 📂 État actuel du pipeline (centre de Beauvais)
+
+Le pipeline est en place et couvre le centre élargi (~1,5 km autour de la cathédrale,
+**~6000 bâtiments réels**). Les fichiers :
+
+| Fichier | Rôle |
+|---------|------|
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (Overpass) + convertit en fichier compact. Tourne hors-jeu. |
+| `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (contours en mètres + hauteurs + limites). |
+| `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, limites, centroïdes, point de spawn dégagé. |
+| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments et **fusionne** tout en 1 seul draw call. |
+| `src/world/CityGround.tsx` | Le sol, dimensionné automatiquement sur les limites de la ville. |
+| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et carte plein écran (touche M), via `src/ui/mapDraw.ts`. |
+
+### 🏢 Comment on estime les hauteurs (réalisme)
+
+À Beauvais, ~99 % des bâtiments OSM n'ont **aucune** hauteur renseignée. On estime
+donc dans `build-beauvais.mjs`, par ordre de fiabilité :
+1. **vraie donnée OSM** si présente (`height`, `building:levels`) ;
+2. **type de bâtiment** (`cathedral` → 45 m, `church` → 22 m, `garage` → 3 m, `apartments` plus haut...) ;
+3. sinon, **surface au sol** (une grande emprise = souvent plus haut : de ~3 m pour une
+   annexe à ~15 m pour un gros immeuble), **+ une variation déterministe** (±2 m) pour
+   éviter que tous les toits soient à la même hauteur.
+
+> Le résultat vise une silhouette crédible (médiane ~6 m, cathédrale dominante), pas une
+> hauteur exacte au mètre près. Pour plus de précision un jour : **BD TOPO® de l'IGN**.
+
+**Régénérer / agrandir la zone :**
+1. Ouvre `build-beauvais.mjs`, change `BBOX` (et au besoin `ORIGIN`).
+2. Lance : `node src/world/beauvais/build-beauvais.mjs` (retélécharge depuis OSM).
+3. Le fichier compact est réécrit ; le jeu le prend au prochain lancement.
+
+> ⚠️ Le fichier compact est aujourd'hui **importé** (embarqué dans le bundle). Quand on
+> passera à toute la ville, il faudra le charger en **asset** (fetch) + découper en
+> **tuiles** avec gestion de distance (LOD). Le code de génération, lui, ne changera pas.
+
 ### Stratégie retenue
 
 - **Base fidèle et automatique** : générer la ville depuis OSM pour garder la vraie topologie,
@@ -105,10 +141,17 @@ L'idée générale, étape par étape :
 
 ## ✅ Prochaines actions concrètes (map)
 - [ ] Définir le périmètre exact de Beauvais jouable à échelle 1:1.
-- [ ] Faire un premier export GeoJSON de test depuis overpass-turbo.
-- [ ] Écrire le convertisseur GPS → scène 3D dans `src/world/beauvais/`.
-- [ ] Prototype : afficher les bâtiments extrudés d'un quartier.
-- [ ] Placer la cathédrale comme repère central.
+- [x] Faire un premier export de test depuis Overpass. *(fait : quartier cathédrale)*
+- [x] Écrire le convertisseur GPS → scène 3D dans `src/world/beauvais/`. *(build-beauvais.mjs)*
+- [x] Prototype : afficher les bâtiments extrudés d'un quartier. *(Beauvais.tsx)*
+- [x] Étendre au centre élargi (~1,5 km, ~6000 bâtiments). *(BBOX dans build-beauvais.mjs)*
+- [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
+- [x] Déplacer le spawn du joueur hors des bâtiments (place dégagée). *(cityData.SPAWN)*
+- [x] Hauteurs réalistes (type + surface + variation). *(build-beauvais.mjs)*
+- [x] Sol couvrant toute la zone générée. *(CityGround)*
+- [x] Minimap ronde + carte (M). *(ui/Minimap, ui/WorldMap)*
+- [ ] Ajouter les routes (`highway`) au générateur.
+- [ ] Collisions (empêcher de traverser les bâtiments).
 - [ ] Placer les premières zones utiles : appartement Saint-Lucien, gare, mairie, commissariat,
   lieu de travail.
 - [ ] Bloquer les sorties routières avec des zones de travaux.

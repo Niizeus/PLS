@@ -1,6 +1,8 @@
 import { usePlayerStore, type PlayerAction } from '../gameplay/stats/playerStore'
 import ControlsHint from './ControlsHint'
 import FpsCounter from './FpsCounter'
+import Minimap from './Minimap'
+import WorldMap from './WorldMap'
 
 // Libellés lisibles pour l'état affiché en haut à gauche.
 const ACTION_LABEL: Record<PlayerAction, string> = {
@@ -42,8 +44,12 @@ export default function Hud() {
         </div>
       </div>
 
+      <Minimap />
       <FpsCounter />
       <ControlsHint />
+
+      {/* Grande carte (touche M) : gère elle-même son ouverture/fermeture. */}
+      <WorldMap />
     </div>
   )
 }

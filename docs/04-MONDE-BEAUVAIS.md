@@ -1,7 +1,12 @@
 # 🗺️ 04 — Le monde : Beauvais pour de vrai
 
-On veut que la map soit **vraiment Beauvais** : on part des **vraies données de la ville**
-pour placer les bâtiments, les rues, et pour l'ambiance/le climat.
+On veut que la map soit **vraiment Beauvais**, à **échelle 1:1 complète** : on part des
+**vraies données de la ville** pour placer les bâtiments, les rues, les lieux importants et
+l'ambiance/le climat.
+
+Le but gameplay de la carte est simple : Beauvais est le piège dont Chibrux doit sortir.
+Les sorties routières sont bloquées par des travaux partout, donc la ville doit être à la fois
+reconnaissable, explorable et frustrante à quitter.
 
 ---
 
@@ -18,7 +23,33 @@ pour placer les bâtiments, les rues, et pour l'ambiance/le climat.
   monument inratable, jamais totalement achevée : un super repère central.
 - ✈️ **Aéroport de Beauvais-Tillé (BVA)** — hub low-cost, potentiel comique.
 - 🏛️ Centre-ville, halles, rues piétonnes, l'Église Saint-Étienne, les bords du Thérain.
-- *(à compléter avec les lieux liés à la vie du pote)*
+- 🚉 **Gare SNCF** et **gare routière** — lieux importants pour les routes de fuite, les dealers,
+  les PNJ et les galères de transport.
+- 🚓 **Commissariat** — point central du système de police / niveau de recherche.
+- *(à compléter avec les lieux liés à la vie de Chibrux)*
+
+### Lieux de gameplay déjà prévus
+
+- Appartement de Chibrux au quartier Saint-Lucien
+- Tabac
+- Market de proximité
+- Grand magasin
+- Mairie
+- 2-3 bars
+- Kébabs
+- Coiffeurs / barbiers
+- Magasins de vêtements
+- Armurier
+- Rachat d'or
+- Parc
+- Lieu de travail
+- Plan d'eau
+- CBD shop
+- Repaire des SDF sous le pont de Paris de Beauvais
+- Dealers de la gare routière
+- Aéroport
+- Gare SNCF
+- Commissariat
 
 > ⚠️ Vérifiez toujours les détails sur la vraie carte (voir sources ci-dessous) plutôt que de
 > se fier à la mémoire.
@@ -47,7 +78,8 @@ OSM contient les **contours des bâtiments**, les **rues**, les **points d'inté
 
 L'idée générale, étape par étape :
 
-1. **Choisir la zone** (ex : centre-ville de Beauvais autour de la cathédrale) sur overpass-turbo.
+1. **Récupérer Beauvais à grande échelle** depuis OpenStreetMap / Overpass, avec une priorité sur
+   les quartiers et lieux utiles au gameplay.
 2. **Exporter en GeoJSON** les bâtiments (`building`) et les routes (`highway`).
 3. **Convertir les coordonnées GPS** (latitude/longitude) en **coordonnées de la scène 3D**
    (x, z), en prenant un point de Beauvais comme "origine" (0,0) — par ex. la cathédrale.
@@ -60,21 +92,26 @@ L'idée générale, étape par étape :
 
 > On garde ces données dans `src/world/beauvais/` (le GeoJSON + le code qui le transforme).
 
-### Deux stratégies possibles (à choisir ensemble)
-- **A — Fidèle & auto** : on génère toute la ville depuis OSM (beaucoup de bâtiments génériques,
-  vraie topologie des rues). Rapide à peupler, look "vrai Beauvais".
-- **B — Fait main & ciblé** : on ne reconstruit à la main que les quartiers utiles au gameplay,
-  en s'inspirant de la vraie carte. Plus de contrôle artistique, plus de boulot.
-- 👉 Recommandé : **B pour les lieux importants**, **A pour remplir le décor autour**.
+### Stratégie retenue
+
+- **Base fidèle et automatique** : générer la ville depuis OSM pour garder la vraie topologie,
+  les routes, les bâtiments et l'échelle 1:1.
+- **Lieux importants faits main** : retravailler à la main les endroits utiles au gameplay
+  (appartement, mairie, commissariat, gare, aéroport, travail, bars, pont de Paris, etc.).
+- **Travaux comme barrière de jeu** : les sorties routières doivent être bloquées par des travaux,
+  ce qui justifie que le joueur ne puisse pas quitter Beauvais en voiture malgré la carte ouverte.
 
 ---
 
 ## ✅ Prochaines actions concrètes (map)
-- [ ] Délimiter la zone jouable de Beauvais (quels quartiers ?).
+- [ ] Définir le périmètre exact de Beauvais jouable à échelle 1:1.
 - [ ] Faire un premier export GeoJSON de test depuis overpass-turbo.
 - [ ] Écrire le convertisseur GPS → scène 3D dans `src/world/beauvais/`.
 - [ ] Prototype : afficher les bâtiments extrudés d'un quartier.
 - [ ] Placer la cathédrale comme repère central.
+- [ ] Placer les premières zones utiles : appartement Saint-Lucien, gare, mairie, commissariat,
+  lieu de travail.
+- [ ] Bloquer les sorties routières avec des zones de travaux.
 
 ---
 

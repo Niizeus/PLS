@@ -27,12 +27,15 @@ cause de mon changement ? »* Si oui → mets-le à jour.
 
 ## 1. Le projet en bref
 
-- **Nom** : PLS — un jeu vidéo **3D, cartoon / BD, cell-shading**, fun et déjanté.
-- **Sujet** : la vie d'un pote (missions qui font référence à sa vraie vie, humour, private jokes).
+- **Nom** : PLS — un jeu vidéo **3D sandbox, cartoon / BD, cell-shading**, fun et déjanté.
+- **Sujet** : Chibrux, le pote réel, caricaturé à fond dans une version jouable et absurde.
+- **Objectif principal** : quitter Beauvais coûte que coûte, avec des fins émergentes selon les
+  actions du joueur (argent, train, avion, égouts, politique, monde psychique, routine, chaos...).
 - **Ton** : humour, second degré ; des « actions parfois mauvaises » mais **cartoon et bon enfant**,
   jamais glauque ni offensant. Le but est de faire **rire**.
 - **Monde** : la **vraie ville de Beauvais** (Oise, Hauts-de-France / Picardie), reconstruite à
-  partir de vraies données (OpenStreetMap). Voir [`docs/04-MONDE-BEAUVAIS.md`](docs/04-MONDE-BEAUVAIS.md).
+  échelle 1:1 à partir de vraies données (OpenStreetMap). Les sorties routières sont bloquées par
+  des travaux. Voir [`docs/04-MONDE-BEAUVAIS.md`](docs/04-MONDE-BEAUVAIS.md).
 
 Détails complets : [`docs/03-GAME-DESIGN.md`](docs/03-GAME-DESIGN.md).
 

@@ -1,7 +1,12 @@
 # PLS — Le jeu 🎮
 
-Un jeu vidéo **3D, style cartoon / BD cell-shading**, fun et déjanté, basé sur la vie de notre pote,
-dans un monde inspiré de la **vraie ville de Beauvais** (Oise, Hauts-de-France / Picardie).
+Un jeu vidéo **3D sandbox, style cartoon / BD cell-shading**, fun et déjanté, où l'on incarne
+**Chibrux**, notre pote caricaturé à fond, coincé dans la **vraie ville de Beauvais**
+(Oise, Hauts-de-France / Picardie).
+
+Objectif principal : **quitter Beauvais coûte que coûte**. Les routes sont bloquées par des travaux,
+donc il faut trouver une autre sortie : argent, train, avion, égouts, politique, monde psychique ou
+dérapage total.
 
 > On développe à **deux, à distance**, chacun avec l'aide d'une IA connectée au dossier,
 > le tout synchronisé via **GitHub** (app GitHub Desktop).

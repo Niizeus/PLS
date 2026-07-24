@@ -46,6 +46,30 @@ Pour ne pas se marcher dessus, on se répartit les **domaines**. Proposition de 
 
 ---
 
+## 🎬 Le point d'assemblage (pour ne pas se marcher dessus)
+
+`core/GameCanvas.tsx` est le fichier qui monte la scène 3D. **On veut qu'il reste
+stable** : s'il fallait l'éditer à chaque nouveau bâtiment ou chaque nouveau PNJ,
+les deux devs se marcheraient dessus en permanence dans ce fichier.
+
+Du coup, chaque domaine a **son propre fichier de composition** que `GameCanvas`
+se contente d'appeler :
+
+| Tu ajoutes... | Tu édites... | Sans toucher à... |
+|---------------|--------------|-------------------|
+| un élément du monde (décor, bâtiment, Beauvais) | `world/World.tsx` | `GameCanvas`, `entities/` |
+| un personnage (PNJ, ennemi) | `entities/Characters.tsx` | `GameCanvas`, `world/` |
+
+Les blocs ne se branchent **pas** entre eux à la main dans `GameCanvas` : ils
+communiquent via le **store Zustand** (`gameplay/stats/playerStore.ts`). Exemple :
+`Player` publie son objet 3D dans le store, et `FollowCamera` le lit pour suivre le
+perso. Ni l'un ni l'autre ne connaît GameCanvas → aucun branchement à modifier là-bas.
+
+> Règle : si tu te retrouves à devoir éditer `GameCanvas.tsx`, demande-toi d'abord
+> si ça n'irait pas plutôt dans `World.tsx`, `Characters.tsx` ou le store.
+
+---
+
 ## 🧩 Les principes qui évitent les conflits
 
 1. **Un fichier = une responsabilité.** Un fichier qui fait 1 chose est court → rarement modifié à deux.
@@ -71,10 +95,10 @@ Pour ne pas se marcher dessus, on se répartit les **domaines**. Proposition de 
 
 | Je veux ajouter... | Je vais dans... |
 |--------------------|-----------------|
-| Un nouveau bâtiment de Beauvais | `world/beauvais/` |
+| Un nouveau bâtiment de Beauvais | `world/beauvais/`, puis je le monte dans `world/World.tsx` |
 | Une nouvelle quête / mission | `data/quests.json` (+ logique dans `gameplay/`) |
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
-| Un personnage (le pote, un PNJ) | `entities/` |
+| Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un effet visuel cartoon | `shaders/` |
 | Une référence à la vie du pote | `data/` (texte/JSON) |

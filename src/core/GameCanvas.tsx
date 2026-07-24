@@ -1,14 +1,19 @@
 import { Canvas } from '@react-three/fiber'
-import { useRef } from 'react'
-import * as THREE from 'three'
 import Lights from './Lights'
 import FollowCamera from './FollowCamera'
-import TestGround from '../world/TestGround'
-import Obstacles from '../world/Obstacles'
-import Player from '../entities/player/Player'
+import World from '../world/World'
+import Characters from '../entities/Characters'
 
 /**
  * La scène 3D complète.
+ *
+ * Ce fichier est volontairement STABLE : il ne fait qu'assembler quelques gros
+ * blocs (le monde, les persos, la lumière, la caméra). On y touche presque
+ * jamais → c'est ce qui évite que tout le monde se marche dessus ici.
+ *  - Pour ajouter au MONDE  → src/world/World.tsx
+ *  - Pour ajouter un PERSO  → src/entities/Characters.tsx
+ * Les blocs communiquent via le store (ex : la caméra suit le joueur sans
+ * qu'on ait à les brancher ici). Voir docs/02-ARCHITECTURE.md.
  *
  * Choix perf (voir recherche/plan) pour viser 60 FPS mini :
  *  - dpr borné [1, 2] : évite de rendre en 3x sur écrans très denses.
@@ -17,9 +22,6 @@ import Player from '../entities/player/Player'
  *  - fog : donne de la profondeur ET évite d'afficher trop loin.
  */
 export default function GameCanvas() {
-  // Réf du joueur, partagée entre Player (qui la remplit) et FollowCamera (qui la suit).
-  const playerRef = useRef<THREE.Group>(null)
-
   return (
     <Canvas
       shadows
@@ -33,11 +35,10 @@ export default function GameCanvas() {
 
       <Lights />
 
-      <TestGround />
-      <Obstacles />
-      <Player groupRef={playerRef} />
+      <World />
+      <Characters />
 
-      <FollowCamera targetRef={playerRef} />
+      <FollowCamera />
     </Canvas>
   )
 }

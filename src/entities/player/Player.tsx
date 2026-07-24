@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useRef, type RefObject } from 'react'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { Outlines } from '@react-three/drei'
 import { toonGradient } from '../../shaders/toonGradient'
@@ -7,11 +7,7 @@ import { useKeyboard } from '../../gameplay/input/useKeyboard'
 import { useMouse } from '../../gameplay/input/useMouse'
 import { usePlayerMovement } from './usePlayerMovement'
 import { CHIBRUX_COLORS } from './playerConfig'
-
-interface PlayerProps {
-  /** Réf du groupe racine : partagée avec la caméra qui suit le perso. */
-  groupRef: RefObject<THREE.Group>
-}
+import { usePlayerStore } from '../../gameplay/stats/playerStore'
 
 /**
  * Chibrux (placeholder stylisé, monté en primitives + matériau toon).
@@ -19,8 +15,22 @@ interface PlayerProps {
  *
  * Structure : un groupe racine (déplacé par la logique) contenant un "corps"
  * visuel qu'on anime (balancement, bras d'attaque/défense).
+ *
+ * Ce composant est autonome : il gère sa propre réf et la PUBLIE dans le store
+ * pour que la caméra puisse le suivre, sans dépendre de GameCanvas.
  */
-export default function Player({ groupRef }: PlayerProps) {
+export default function Player() {
+  // Réf du groupe racine du perso (déplacé par la logique, suivi par la caméra).
+  const groupRef = useRef<THREE.Group>(null)
+
+  // Publie le perso dans le store à son montage (et le retire au démontage),
+  // pour que FollowCamera puisse le suivre sans branchement manuel.
+  const setPlayerObject = usePlayerStore((s) => s.setPlayerObject)
+  useEffect(() => {
+    setPlayerObject(groupRef.current)
+    return () => setPlayerObject(null)
+  }, [setPlayerObject])
+
   // Branche les entrées et la logique de déplacement/combat.
   const keys = useKeyboard()
   const mouse = useMouse()

@@ -247,6 +247,10 @@ Le joueur peut utiliser ou voler :
 Même si les sorties routières sont bloquées par les travaux, les véhicules restent essentiels pour
 circuler, fuir la police, faire des missions ou provoquer le chaos.
 
+**Déjà en place :** un **scooter** conduisible (`src/entities/vehicles/`). On s'en approche et on
+monte/descend avec **E** ; conduite à ZQSD (accélère, freine/recule, braque), plus rapide qu'à pied.
+Base réutilisable pour les autres véhicules (voiture, vélo, kart...).
+
 ---
 
 ## 🧩 Activités et mini-jeux

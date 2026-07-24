@@ -33,8 +33,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // monde 3D. Tous les bâtiments sont positionnés en mètres par rapport à lui.
 const ORIGIN = { lat: 49.4326, lon: 2.081 }
 
-// Zone récupérée (quartier cathédrale, ~650 m de côté) : [sud, ouest, nord, est].
-const BBOX = [49.4297, 2.0765, 49.4357, 2.0855]
+// Zone récupérée (centre de Beauvais élargi, ~1,5 km de côté) : [sud, ouest, nord, est].
+// Pour agrandir encore : élargis ces bornes (attention aux perfs : plus de bâtiments).
+const BBOX = [49.4256, 2.071, 49.4396, 2.091]
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OUT_FILE = join(__dirname, 'data', 'beauvais-buildings.json')

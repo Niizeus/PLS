@@ -5,6 +5,8 @@ import type { KeyboardState } from '../../gameplay/input/useKeyboard'
 import type { MouseState } from '../../gameplay/input/useMouse'
 import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { useCameraStore } from '../../core/cameraStore'
+import { useScooterStore } from '../vehicles/scooterStore'
+import { SCOOTER } from '../vehicles/scooterConfig'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -54,6 +56,8 @@ export function usePlayerMovement(
 
   // Vecteurs réutilisés chaque frame (on évite d'en allouer dans la boucle).
   const moveDir = useRef(new THREE.Vector3())
+  // Vitesse courante du scooter (scalaire, le long de son orientation).
+  const rideSpeed = useRef(0)
 
   useFrame((_, rawDelta) => {
     const group = groupRef.current
@@ -63,6 +67,47 @@ export function usePlayerMovement(
 
     // On borne le delta : si l'onglet a "laggé", on évite un saut géant.
     const delta = Math.min(rawDelta, 0.1)
+
+    // --- 0. Scooter : monter / descendre (E), puis conduire si on roule ---
+    const scooter = useScooterStore.getState()
+    let riding = scooter.riding
+
+    if (k.interactQueued) {
+      if (!riding) {
+        // Monter si on est assez près du scooter garé.
+        const dx = group.position.x - scooter.parkedX
+        const dz = group.position.z - scooter.parkedZ
+        if (dx * dx + dz * dz <= SCOOTER.MOUNT_RANGE * SCOOTER.MOUNT_RANGE) {
+          k.interactQueued = false
+          group.position.set(scooter.parkedX, SCOOTER.SEAT_HEIGHT, scooter.parkedZ)
+          group.rotation.y = scooter.parkedRot
+          rideSpeed.current = 0
+          scooter.mount()
+          riding = true
+        }
+      } else {
+        // Descendre : garer le scooter ici, et poser le joueur juste à côté.
+        k.interactQueued = false
+        const rot = group.rotation.y
+        scooter.parkAt(group.position.x, group.position.z, rot)
+        group.position.x += Math.cos(rot) * 1.2
+        group.position.z += -Math.sin(rot) * 1.2
+        rideSpeed.current = 0
+        riding = false
+      }
+    }
+
+    if (riding) {
+      driveScooter(group, k, rideSpeed, delta)
+      const vis = motion.current
+      vis.action = Math.abs(rideSpeed.current) > 0.2 ? 'run' : 'idle'
+      vis.attackProgress = 0
+      vis.interactProgress = 0
+      vis.moveIntensity = 0 // pas d'animation de marche quand on roule
+      if (usePlayerStore.getState().action !== vis.action) setAction(vis.action)
+      if (usePlayerStore.getState().isDefending) setDefending(false)
+      return
+    }
 
     // --- 1. Déclencheurs consommés (attaque / interaction) ---
     if (m.attackQueued) {
@@ -139,6 +184,45 @@ export function usePlayerMovement(
   })
 
   return motion
+}
+
+/**
+ * Physique simple du scooter : accélère/freine (Z/S), braque (Q/D) d'autant plus
+ * qu'on va vite, et avance dans la direction où il pointe. La marche arrière
+ * inverse le braquage, comme un vrai véhicule.
+ */
+function driveScooter(
+  group: THREE.Group,
+  k: KeyboardState,
+  rideSpeed: { current: number },
+  delta: number,
+) {
+  // Accélération / frein / frein moteur
+  if (k.forward) rideSpeed.current += SCOOTER.ACCEL * delta
+  else if (k.backward) rideSpeed.current -= SCOOTER.BRAKE * delta
+  else {
+    const f = SCOOTER.FRICTION * delta
+    rideSpeed.current =
+      rideSpeed.current > 0
+        ? Math.max(0, rideSpeed.current - f)
+        : Math.min(0, rideSpeed.current + f)
+  }
+  // Borne la vitesse (avant / arrière)
+  rideSpeed.current = Math.max(
+    -SCOOTER.REVERSE_SPEED,
+    Math.min(SCOOTER.MAX_SPEED, rideSpeed.current),
+  )
+
+  // Braquage : proportionnel à la vitesse (on ne tourne pas à l'arrêt).
+  const steer = (k.left ? 1 : 0) - (k.right ? 1 : 0)
+  if (steer !== 0) {
+    group.rotation.y += steer * SCOOTER.STEER * (rideSpeed.current / SCOOTER.MAX_SPEED) * delta
+  }
+
+  // Avance dans la direction où pointe le scooter.
+  group.position.x += Math.sin(group.rotation.y) * rideSpeed.current * delta
+  group.position.z += Math.cos(group.rotation.y) * rideSpeed.current * delta
+  group.position.y = SCOOTER.SEAT_HEIGHT
 }
 
 /**

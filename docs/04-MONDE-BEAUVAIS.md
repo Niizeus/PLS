@@ -92,10 +92,10 @@ L'idée générale, étape par étape :
 
 > On garde ces données dans `src/world/beauvais/` (le GeoJSON + le code qui le transforme).
 
-### 📂 État actuel du pipeline (quartier cathédrale)
+### 📂 État actuel du pipeline (centre de Beauvais)
 
-Le pipeline est en place et fonctionne sur un premier quartier (~650 m autour de la
-cathédrale, **1388 bâtiments réels**). Les fichiers :
+Le pipeline est en place et couvre le centre élargi (~1,5 km autour de la cathédrale,
+**~6000 bâtiments réels**). Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
@@ -143,7 +143,8 @@ donc dans `build-beauvais.mjs`, par ordre de fiabilité :
 - [ ] Définir le périmètre exact de Beauvais jouable à échelle 1:1.
 - [x] Faire un premier export de test depuis Overpass. *(fait : quartier cathédrale)*
 - [x] Écrire le convertisseur GPS → scène 3D dans `src/world/beauvais/`. *(build-beauvais.mjs)*
-- [x] Prototype : afficher les bâtiments extrudés d'un quartier. *(Beauvais.tsx, 1388 bâtiments)*
+- [x] Prototype : afficher les bâtiments extrudés d'un quartier. *(Beauvais.tsx)*
+- [x] Étendre au centre élargi (~1,5 km, ~6000 bâtiments). *(BBOX dans build-beauvais.mjs)*
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
 - [x] Déplacer le spawn du joueur hors des bâtiments (place dégagée). *(cityData.SPAWN)*
 - [x] Hauteurs réalistes (type + surface + variation). *(build-beauvais.mjs)*

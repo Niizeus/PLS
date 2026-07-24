@@ -24,6 +24,9 @@ interface CameraState {
 }
 
 const SENSITIVITY = 0.0025 // radians par pixel de souris
+// Axe vertical inversé : souris vers le haut → la vue baisse (façon pilotage d'avion).
+// Passe à false pour revenir à l'autre sens.
+const INVERT_Y = true
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -33,6 +36,6 @@ export const useCameraStore = create<CameraState>((set) => ({
   rotate: (dx, dy) =>
     set((s) => ({
       yaw: s.yaw - dx * SENSITIVITY, // souris à droite → la vue tourne à droite
-      pitch: clamp(s.pitch - dy * SENSITIVITY, PITCH_MIN, PITCH_MAX), // souris vers le haut → on lève la vue
+      pitch: clamp(s.pitch + (INVERT_Y ? 1 : -1) * dy * SENSITIVITY, PITCH_MIN, PITCH_MAX),
     })),
 }))

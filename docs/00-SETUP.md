@@ -62,9 +62,9 @@ npm run dev
 Ouvre l'adresse affichée (souvent `http://localhost:5173`) dans ton navigateur.
 Pour arrêter : reviens dans le terminal et fais `Ctrl + C`.
 
-> 📌 Si le projet n'a pas encore de code (`npm run dev` ne marche pas), c'est que la base Vite
-> n'a pas encore été créée. Voir la section "Prochaine étape" du chat, ou demande à ton IA
-> de **"scaffolder le projet Vite + React + TypeScript + React Three Fiber"**.
+> ✅ La base du jeu existe : tu dois voir un **terrain de test cartoon** avec **Chibrux**
+> déplaçable (ZQSD), une caméra qui le suit et un compteur FPS. La liste des contrôles est
+> dans le [README](../README.md#-ce-qui-tourne-déjà-prototype-jouable).
 
 ---
 

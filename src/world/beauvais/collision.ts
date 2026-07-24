@@ -53,6 +53,20 @@ export function isBlocked(x: number, z: number): boolean {
 }
 
 /**
+ * Hauteur du bâtiment au point (x, z), ou 0 s'il n'y en a pas.
+ * Sert à la caméra : elle ne se rapproche que si un bâtiment lui bouche vraiment
+ * la vue (et pas quand elle passe au-dessus d'un petit toit).
+ */
+export function buildingHeightAt(x: number, z: number): number {
+  const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
+  if (!list) return 0
+  for (const i of list) {
+    if (pointInFootprint(x, z, BUILDINGS[i].pts)) return BUILDINGS[i].h
+  }
+  return 0
+}
+
+/**
  * Renvoie les bâtiments proches de (x, z) dans un rayon donné, via la grille.
  * Sert à la minimap pour ne PAS parcourir les ~34 000 bâtiments à chaque image.
  */

@@ -1,4 +1,4 @@
-import { BUILDINGS, pointInFootprint } from './cityData'
+import { BUILDINGS, pointInFootprint, type Building } from './cityData'
 
 /**
  * 🧱 Collisions avec les bâtiments.
@@ -50,4 +50,29 @@ export function isBlocked(x: number, z: number): boolean {
     if (pointInFootprint(x, z, BUILDINGS[i].pts)) return true
   }
   return false
+}
+
+/**
+ * Renvoie les bâtiments proches de (x, z) dans un rayon donné, via la grille.
+ * Sert à la minimap pour ne PAS parcourir les ~34 000 bâtiments à chaque image.
+ */
+export function buildingsNear(x: number, z: number, radius: number): Building[] {
+  const r = Math.ceil(radius / CELL)
+  const cx = Math.floor(x / CELL)
+  const cz = Math.floor(z / CELL)
+  const seen = new Set<number>()
+  const out: Building[] = []
+  for (let dx = -r; dx <= r; dx++) {
+    for (let dz = -r; dz <= r; dz++) {
+      const list = grid.get(keyOf(cx + dx, cz + dz))
+      if (!list) continue
+      for (const i of list) {
+        if (!seen.has(i)) {
+          seen.add(i)
+          out.push(BUILDINGS[i])
+        }
+      }
+    }
+  }
+  return out
 }

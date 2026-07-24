@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { BOUNDS, SPAWN } from '../world/beauvais/cityData'
-import { drawBuildings, drawPlayer, type MapView } from './mapDraw'
+import { drawBuildings, drawPlayer, drawRoads, drawWater, type MapView } from './mapDraw'
 
 /**
  * Grande carte de la ville, ouverte/fermée avec la touche M (ou Échap pour fermer).
@@ -16,6 +16,26 @@ import { drawBuildings, drawPlayer, type MapView } from './mapDraw'
 
 const RES = 1000 // résolution interne du canvas (px) ; le CSS l'adapte à l'écran
 const PAD = 40 // marge autour de la ville
+
+// La ville est STATIQUE : on la dessine une seule fois dans ce canvas hors-écran
+// (~34 000 bâtiments), puis chaque image on ne fait que le recopier. Ouverture
+// instantanée et fluide, au lieu de tout redessiner 60 fois par seconde.
+let staticMap: HTMLCanvasElement | null = null
+
+function getStaticMap(view: MapView): HTMLCanvasElement {
+  if (staticMap) return staticMap
+  const c = document.createElement('canvas')
+  c.width = RES
+  c.height = RES
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#5f6553'
+  ctx.fillRect(0, 0, RES, RES)
+  drawWater(ctx, view, '#3f79a8')
+  drawRoads(ctx, view, '#3f4247')
+  drawBuildings(ctx, view, '#d8cdb8')
+  staticMap = c
+  return c
+}
 
 export default function WorldMap() {
   const [open, setOpen] = useState(false)
@@ -54,6 +74,9 @@ export default function WorldMap() {
       h: RES,
     }
 
+    // La ville (statique) est pré-rendue une fois ; on la recopie chaque image.
+    const city = getStaticMap(view)
+
     let raf = 0
     const render = () => {
       const player = usePlayerStore.getState().playerObject
@@ -61,9 +84,7 @@ export default function WorldMap() {
       const pz = player ? player.position.z : SPAWN.z
       const angle = player ? player.rotation.y : 0
 
-      ctx.fillStyle = '#5f6553'
-      ctx.fillRect(0, 0, RES, RES)
-      drawBuildings(ctx, view, { fill: '#d8cdb8' })
+      ctx.drawImage(city, 0, 0)
       drawPlayer(ctx, view, px, pz, angle, 12)
 
       raf = requestAnimationFrame(render)

@@ -127,11 +127,24 @@ donc dans `build-beauvais.mjs`, par ordre de fiabilité :
 2. Lance : `node src/world/beauvais/build-beauvais.mjs` (retélécharge depuis OSM).
 3. Le fichier compact est réécrit ; le jeu le prend au prochain lancement.
 
-> ⚠️ **Perf / à optimiser ensuite** : le fichier compact (~4,8 Mo) est pour l'instant
-> **importé** (embarqué dans le bundle → gros JS). Prochaine étape d'opti : le charger en
-> **asset** (fetch au démarrage) plutôt que l'embarquer. Le découpage en **tuiles** est
-> déjà fait (Beauvais.tsx) ; il reste à ajouter un **LOD** (afficher moins de détail au
-> loin) et à limiter le dessin des cartes (minimap/carte) qui parcourent tous les bâtiments.
+### ⚡ Optimisations en place
+
+À l'échelle de toute la ville (~34 000 bâtiments), plusieurs optimisations rendent le
+jeu fluide :
+
+- **Streaming des tuiles** (`Beauvais.tsx`) : on ne construit et n'affiche QUE les tuiles
+  autour du joueur (le brouillard masque déjà au-delà de ~110 m). Elles se montent/démontent
+  quand le joueur se déplace → chargement quasi instantané, peu de géométrie à l'écran.
+- **Ombres qui suivent le joueur** (`Lights.tsx`) : la zone d'ombre reste petite (~70 m
+  autour du perso) au lieu de couvrir toute la ville.
+- **Minimap** (`Minimap.tsx`) : ne dessine que les bâtiments proches, récupérés via la grille
+  spatiale (`collision.buildingsNear`), au lieu de parcourir les 34 000.
+- **Grande carte M** (`WorldMap.tsx`) : la ville (statique) est pré-rendue **une seule fois**
+  dans un canvas hors-écran, puis recopiée chaque image → ouverture instantanée.
+
+> ⏳ **Reste à faire** (opti secondaire) : le fichier compact (~4,8 Mo) est encore **embarqué
+> dans le bundle**. Le charger en **asset** (fetch au démarrage) allègerait le JS. Un vrai
+> **LOD** (silhouettes simplifiées au loin) serait le prochain gain si on agrandit encore.
 
 ### Stratégie retenue
 
@@ -151,7 +164,11 @@ donc dans `build-beauvais.mjs`, par ordre de fiabilité :
 - [x] Prototype : afficher les bâtiments extrudés d'un quartier. *(Beauvais.tsx)*
 - [x] Étendre à TOUTE la commune (~7,5 km, ~34 000 bâtiments). *(BBOX dans build-beauvais.mjs)*
 - [x] Plans d'eau (dont le plan d'eau du Canada). *(Water.tsx)*
-- [x] Découpage en tuiles (base de l'optimisation). *(Beauvais.tsx)*
+- [x] Optimisation : streaming des tuiles autour du joueur. *(Beauvais.tsx)*
+- [x] Optimisation : ombres qui suivent le joueur. *(Lights.tsx)*
+- [x] Optimisation : minimap + carte allégées. *(Minimap/WorldMap/mapDraw)*
+- [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
+- [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
 - [x] Spawn dégagé DEVANT la cathédrale (point le plus ouvert). *(cityData.SPAWN)*
 - [x] Hauteurs réalistes (type + surface + variation). *(build-beauvais.mjs)*

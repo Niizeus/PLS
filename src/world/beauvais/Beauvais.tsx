@@ -1,22 +1,26 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { BUILDINGS, type Building } from './cityData'
+import { usePlayerStore } from '../../gameplay/stats/playerStore'
+import { BUILDINGS, SPAWN, type Building } from './cityData'
 
 /**
  * 🏙️  Beauvais généré depuis OpenStreetMap (le "Temps 3" du pipeline, voir docs/04).
  *
- * On extrude chaque contour à sa hauteur estimée, on colore FAÇADES et TOITS de
- * teintes variées (couleurs par sommet), puis on FUSIONNE les bâtiments.
- *
- * ⚠️ Toute la ville = ~34 000 bâtiments. Un seul mesh géant saturerait la mémoire,
- * alors on découpe en TUILES : les bâtiments sont regroupés par carré de TILE mètres,
- * et chaque tuile devient un mesh. Bonus : Three.js masque tout seul (frustum culling)
- * les tuiles hors de l'écran → gros gain de perf. C'est la base de l'optimisation.
+ * ⚠️ Toute la ville = ~34 000 bâtiments : impossible de tout afficher. Or le
+ * brouillard (voir GameCanvas) masque déjà tout au-delà de ~110 m. On ne construit
+ * donc et n'affiche QUE les TUILES proches du joueur (streaming) :
+ *  - les bâtiments sont regroupés par tuile de TILE mètres (calcul léger, sans 3D) ;
+ *  - à chaque fois que le joueur change de tuile, on monte les tuiles voisines et on
+ *    démonte les autres. La géométrie d'une tuile n'est construite qu'à son montage,
+ *    et libérée à son démontage.
+ * → chargement quasi instantané et rendu léger, quelle que soit la taille de la ville.
  */
 
-const TILE = 400 // côté d'une tuile, en mètres
+const TILE = 180 // côté d'une tuile, en mètres
+const REACH = 1 // nombre d'anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
 
 const FACADES = [
   '#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0',
@@ -24,13 +28,11 @@ const FACADES = [
 ]
 const ROOFS = ['#8a7f72', '#7f7d79', '#9a6b57', '#6f6b64', '#8b6f5e', '#767c7a']
 
-/** Pseudo-aléatoire déterministe à partir d'une position. */
 function hash01(x: number, z: number): number {
   const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453
   return s - Math.floor(s)
 }
 
-/** Aire signée d'un contour → uniformise le sens de parcours (façades bien orientées). */
 function signedArea(pts: number[][]): number {
   let a = 0
   for (let i = 0; i < pts.length; i++) {
@@ -41,11 +43,10 @@ function signedArea(pts: number[][]): number {
   return a / 2
 }
 
-/** Construit la géométrie extrudée + colorée d'un bâtiment. */
-function buildOne(b: Building, facadeColor: THREE.Color, roofColor: THREE.Color): THREE.BufferGeometry | null {
-  const pts = b.pts
-  if (pts.length < 3) return null
-  const ring = signedArea(pts) < 0 ? [...pts].reverse() : pts
+/** Extrude + colore un bâtiment (façade + toit). */
+function buildOne(b: Building, facade: THREE.Color, roof: THREE.Color): THREE.BufferGeometry | null {
+  if (b.pts.length < 3) return null
+  const ring = signedArea(b.pts) < 0 ? [...b.pts].reverse() : b.pts
 
   const shape = new THREE.Shape()
   shape.moveTo(ring[0][0], -ring[0][1])
@@ -55,13 +56,13 @@ function buildOne(b: Building, facadeColor: THREE.Color, roofColor: THREE.Color)
   const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
 
-  facadeColor.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
-  roofColor.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
+  facade.set(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
+  roof.set(ROOFS[Math.floor(hash01(b.cz, b.cx) * ROOFS.length)])
 
   const pos = geo.attributes.position
   const colors = new Float32Array(pos.count * 3)
   for (let v = 0; v < pos.count; v++) {
-    const c = pos.getY(v) >= b.h - 0.05 ? roofColor : facadeColor
+    const c = pos.getY(v) >= b.h - 0.05 ? roof : facade
     colors[v * 3] = c.r
     colors[v * 3 + 1] = c.g
     colors[v * 3 + 2] = c.b
@@ -70,38 +71,54 @@ function buildOne(b: Building, facadeColor: THREE.Color, roofColor: THREE.Color)
   return geo
 }
 
-/** Construit une géométrie fusionnée par tuile (mémoire maîtrisée : une tuile à la fois). */
-function buildTiles(): THREE.BufferGeometry[] {
-  // 1) Regrouper les bâtiments par tuile (selon leur centre).
-  const groups = new Map<string, Building[]>()
+/** Regroupe les bâtiments par tuile (léger : pas de géométrie ici). */
+function groupByTile(): Map<string, Building[]> {
+  const map = new Map<string, Building[]>()
   for (const b of BUILDINGS) {
     const key = Math.floor(b.cx / TILE) + ':' + Math.floor(b.cz / TILE)
-    let g = groups.get(key)
-    if (!g) groups.set(key, (g = []))
+    let g = map.get(key)
+    if (!g) map.set(key, (g = []))
     g.push(b)
   }
+  return map
+}
 
-  // 2) Fusionner chaque tuile, puis libérer les géométries intermédiaires.
-  const tiles: THREE.BufferGeometry[] = []
-  const facadeColor = new THREE.Color()
-  const roofColor = new THREE.Color()
-  for (const group of groups.values()) {
-    const geos: THREE.BufferGeometry[] = []
-    for (const b of group) {
-      const geo = buildOne(b, facadeColor, roofColor)
-      if (geo) geos.push(geo)
+/** Clés des tuiles existantes autour d'une position monde. */
+function tilesAround(px: number, pz: number, tiles: Map<string, Building[]>): string[] {
+  const tx = Math.floor(px / TILE)
+  const tz = Math.floor(pz / TILE)
+  const out: string[] = []
+  for (let dx = -REACH; dx <= REACH; dx++) {
+    for (let dz = -REACH; dz <= REACH; dz++) {
+      const k = tx + dx + ':' + (tz + dz)
+      if (tiles.has(k)) out.push(k)
     }
-    if (geos.length === 0) continue
+  }
+  return out
+}
+
+/** Une tuile : construit sa géométrie fusionnée à son montage, la libère au démontage. */
+function BuildingTile({ buildings, material }: { buildings: Building[]; material: THREE.Material }) {
+  const geometry = useMemo(() => {
+    const facade = new THREE.Color()
+    const roof = new THREE.Color()
+    const geos: THREE.BufferGeometry[] = []
+    for (const b of buildings) {
+      const g = buildOne(b, facade, roof)
+      if (g) geos.push(g)
+    }
     const merged = mergeGeometries(geos, false)
     geos.forEach((g) => g.dispose())
-    tiles.push(merged)
-  }
-  return tiles
+    return merged
+  }, [buildings])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return <mesh geometry={geometry} material={material} castShadow receiveShadow />
 }
 
 export default function Beauvais() {
-  const tiles = useMemo(buildTiles, [])
-  // Un seul matériau partagé par toutes les tuiles (couleurs par sommet).
+  const tiles = useMemo(groupByTile, [])
   const material = useMemo(
     () =>
       new THREE.MeshToonMaterial({
@@ -112,10 +129,25 @@ export default function Beauvais() {
     [],
   )
 
+  // On sème les tuiles autour du spawn dès le départ (rendu immédiat, pas de trou).
+  const [active, setActive] = useState<string[]>(() => tilesAround(SPAWN.x, SPAWN.z, tiles))
+  const lastKey = useRef(Math.floor(SPAWN.x / TILE) + ':' + Math.floor(SPAWN.z / TILE))
+
+  useFrame(() => {
+    const p = usePlayerStore.getState().playerObject
+    const px = p ? p.position.x : SPAWN.x
+    const pz = p ? p.position.z : SPAWN.z
+    const key = Math.floor(px / TILE) + ':' + Math.floor(pz / TILE)
+    // On ne recalcule la liste que quand le joueur CHANGE de tuile (rare).
+    if (key === lastKey.current) return
+    lastKey.current = key
+    setActive(tilesAround(px, pz, tiles))
+  })
+
   return (
     <>
-      {tiles.map((geo, i) => (
-        <mesh key={i} geometry={geo} material={material} castShadow receiveShadow />
+      {active.map((key) => (
+        <BuildingTile key={key} buildings={tiles.get(key)!} material={material} />
       ))}
     </>
   )

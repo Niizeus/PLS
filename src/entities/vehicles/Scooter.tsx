@@ -40,6 +40,8 @@ export default function Scooter() {
 
   return (
     <group ref={group}>
+      {/* Groupe interne pivoté de 180° : met le guidon À L'AVANT (sens de la marche). */}
+      <group rotation={[0, Math.PI, 0]}>
       {/* Plateau / marchepied */}
       <mesh position={[0, 0.32, 0.05]} castShadow>
         <boxGeometry args={[0.34, 0.12, 1.15]} />
@@ -86,6 +88,7 @@ export default function Scooter() {
         <cylinderGeometry args={[0.24, 0.24, 0.12, 18]} />
         <meshToonMaterial color={SCOOTER_COLORS.wheel} gradientMap={toonGradient} />
       </mesh>
+      </group>
     </group>
   )
 }

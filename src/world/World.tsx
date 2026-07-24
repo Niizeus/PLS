@@ -1,4 +1,6 @@
 import CityGround from './CityGround'
+import Water from './beauvais/Water'
+import Roads from './beauvais/Roads'
 import Beauvais from './beauvais/Beauvais'
 
 /**
@@ -16,6 +18,10 @@ export default function World() {
     <>
       {/* Sol couvrant toute la zone générée. */}
       <CityGround />
+      {/* Les plans d'eau (posés sur le sol). */}
+      <Water />
+      {/* Les routes (posées sur le sol, sous les bâtiments). */}
+      <Roads />
       {/* La vraie ville de Beauvais générée depuis OpenStreetMap. */}
       <Beauvais />
     </>

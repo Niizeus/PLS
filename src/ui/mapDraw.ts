@@ -1,11 +1,11 @@
-import { BUILDINGS } from '../world/beauvais/cityData'
+import { BUILDINGS, ROADS, WATERS, type Building } from '../world/beauvais/cityData'
 
 /**
  * Outils de dessin 2D "vue du dessus" partagés par la minimap et la grande carte.
  *
- * On dessine les empreintes des bâtiments (les mêmes données que la 3D) sur un
- * canvas 2D. Convention : l'axe Z du monde (sud) va vers le BAS de l'écran → le
- * nord est en haut, comme une vraie carte.
+ * On dessine les empreintes (les mêmes données que la 3D) sur un canvas 2D.
+ * Convention : l'axe Z du monde (sud) va vers le BAS de l'écran → le nord est en
+ * haut, comme une vraie carte.
  */
 
 export interface MapView {
@@ -16,36 +16,55 @@ export interface MapView {
   h: number // hauteur du canvas (px)
 }
 
-function worldToScreenX(view: MapView, x: number): number {
-  return view.w / 2 + (x - view.centerX) * view.scale
-}
-function worldToScreenY(view: MapView, z: number): number {
-  return view.h / 2 + (z - view.centerZ) * view.scale
+const sx = (view: MapView, x: number) => view.w / 2 + (x - view.centerX) * view.scale
+const sy = (view: MapView, z: number) => view.h / 2 + (z - view.centerZ) * view.scale
+
+/** Dessine les plans d'eau (remplis). */
+export function drawWater(ctx: CanvasRenderingContext2D, view: MapView, fill: string) {
+  ctx.fillStyle = fill
+  for (const w of WATERS) {
+    const pts = w.pts
+    ctx.beginPath()
+    ctx.moveTo(sx(view, pts[0][0]), sy(view, pts[0][1]))
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(sx(view, pts[i][0]), sy(view, pts[i][1]))
+    ctx.closePath()
+    ctx.fill()
+  }
 }
 
-interface BuildingStyle {
-  fill: string
-  /** Ne dessine que les bâtiments dont le centre est à moins de N mètres du centre. */
-  cullRadius?: number
+/** Dessine les routes (traits épais selon leur largeur). */
+export function drawRoads(ctx: CanvasRenderingContext2D, view: MapView, color: string) {
+  ctx.strokeStyle = color
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const r of ROADS) {
+    const pts = r.pts
+    if (pts.length < 2) continue
+    ctx.lineWidth = Math.max(0.6, r.w * view.scale)
+    ctx.beginPath()
+    ctx.moveTo(sx(view, pts[0][0]), sy(view, pts[0][1]))
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(sx(view, pts[i][0]), sy(view, pts[i][1]))
+    ctx.stroke()
+  }
 }
 
-/** Dessine les empreintes des bâtiments sur le contexte 2D. */
-export function drawBuildings(ctx: CanvasRenderingContext2D, view: MapView, style: BuildingStyle) {
-  ctx.fillStyle = style.fill
-  const cull2 = style.cullRadius ? style.cullRadius * style.cullRadius : Infinity
-
-  for (const b of BUILDINGS) {
-    if (style.cullRadius) {
-      const dx = b.cx - view.centerX
-      const dz = b.cz - view.centerZ
-      if (dx * dx + dz * dz > cull2) continue
-    }
+/**
+ * Dessine les empreintes des bâtiments. Par défaut TOUS ; passe une liste
+ * réduite (ex : les bâtiments proches, via collision.buildingsNear) pour aller
+ * beaucoup plus vite sur la minimap.
+ */
+export function drawBuildings(
+  ctx: CanvasRenderingContext2D,
+  view: MapView,
+  fill: string,
+  buildings: Building[] = BUILDINGS,
+) {
+  ctx.fillStyle = fill
+  for (const b of buildings) {
     const pts = b.pts
     ctx.beginPath()
-    ctx.moveTo(worldToScreenX(view, pts[0][0]), worldToScreenY(view, pts[0][1]))
-    for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(worldToScreenX(view, pts[i][0]), worldToScreenY(view, pts[i][1]))
-    }
+    ctx.moveTo(sx(view, pts[0][0]), sy(view, pts[0][1]))
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(sx(view, pts[i][0]), sy(view, pts[i][1]))
     ctx.closePath()
     ctx.fill()
   }
@@ -64,18 +83,15 @@ export function drawPlayer(
   size = 7,
   color = '#ff5a4d',
 ) {
-  const px = worldToScreenX(view, worldX)
-  const py = worldToScreenY(view, worldZ)
-
-  // Direction "avant" du perso à l'écran (x droite, y bas).
+  const px = sx(view, worldX)
+  const py = sy(view, worldZ)
   const fx = Math.sin(angle)
   const fy = Math.cos(angle)
-  // Perpendiculaire (côté droit).
   const rx = -fy
   const ry = fx
 
   ctx.beginPath()
-  ctx.moveTo(px + fx * size, py + fy * size) // pointe
+  ctx.moveTo(px + fx * size, py + fy * size)
   ctx.lineTo(px - fx * size * 0.6 + rx * size * 0.6, py - fy * size * 0.6 + ry * size * 0.6)
   ctx.lineTo(px - fx * size * 0.6 - rx * size * 0.6, py - fy * size * 0.6 - ry * size * 0.6)
   ctx.closePath()

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { SPAWN } from '../world/beauvais/cityData'
+import { buildingsNear } from '../world/beauvais/collision'
 import { drawBuildings, drawPlayer, type MapView } from './mapDraw'
 
 /**
@@ -39,8 +40,9 @@ export default function Minimap() {
       // Fond (le sol de la ville).
       ctx.fillStyle = '#6f7563'
       ctx.fillRect(0, 0, SIZE, SIZE)
-      // Bâtiments proches uniquement (perf) + un peu de marge sur le rayon.
-      drawBuildings(ctx, view, { fill: '#d8cdb8', cullRadius: VIEW_RADIUS + 30 })
+      // Bâtiments proches uniquement, récupérés via la grille spatiale (rapide).
+      const near = buildingsNear(px, pz, VIEW_RADIUS + 30)
+      drawBuildings(ctx, view, '#d8cdb8', near)
       // Le joueur, au centre.
       drawPlayer(ctx, view, px, pz, angle, 6)
 

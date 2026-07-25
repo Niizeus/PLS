@@ -1,0 +1,35 @@
+{
+  "_comment": "Quartiers de Beauvais. Chaque zone = un polygone (contour [x,z] en mètres monde, origine = cathédrale). PREMIÈRE ÉBAUCHE volontairement grossière : les contours seront redessinés précisément dans l'éditeur de carte (touche M). L'ordre compte : zoneAt() renvoie la PREMIÈRE zone qui contient le point → le centre-ville (petit, prioritaire) est en tête.",
+  "zones": [
+    {
+      "id": "centre-ville",
+      "name": "Centre-ville",
+      "color": "#e8b84b",
+      "pts": [[-550, -550], [550, -550], [550, 550], [-550, 550]]
+    },
+    {
+      "id": "saint-jean",
+      "name": "Quartier Saint-Jean",
+      "color": "#5aa66a",
+      "pts": [[100, 100], [2400, 100], [2400, 2400], [100, 2400]]
+    },
+    {
+      "id": "soie-vauban",
+      "name": "Quartier Soie-Vauban",
+      "color": "#c96f5a",
+      "pts": [[-2400, 100], [-100, 100], [-100, 2400], [-2400, 2400]]
+    },
+    {
+      "id": "saint-just-des-marais",
+      "name": "Saint-Just-des-Marais",
+      "color": "#5a86c9",
+      "pts": [[-2900, -2400], [-100, -2400], [-100, -100], [-2900, -100]]
+    },
+    {
+      "id": "argentine",
+      "name": "Quartier Argentine",
+      "color": "#9a6fc9",
+      "pts": [[100, -2700], [2400, -2700], [2400, -100], [100, -100]]
+    }
+  ]
+}

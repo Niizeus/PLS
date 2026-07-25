@@ -56,6 +56,28 @@ reconnaissable, explorable et frustrante à quitter.
 
 ---
 
+## 🧩 Quartiers (zones de la ville)
+
+Pour travailler la ville **zone par zone** (densité de décor, palette, ambiance, gameplay), la
+ville est découpée en **quartiers**. Chaque quartier est un **polygone** (contour `[x, z]` en
+mètres monde) défini dans **`src/data/zones.json`** :
+
+| Quartier | Fichier / usage |
+|----------|-----------------|
+| Données (contours, couleur, nom) | `src/data/zones.json` |
+| Chargement + « dans quel quartier ce point ? » | `src/world/beauvais/zones.ts` (`ZONES`, `zoneAt(x, z)`) |
+| Affichage du quartier courant (HUD) | `usePlayerMovement` → `playerStore.zoneName` → `Hud.tsx` |
+| Visualisation sur la grande carte (M) | `mapDraw.drawZones` |
+
+Quartiers actuels : **Centre-ville, Saint-Jean, Soie-Vauban, Saint-Just-des-Marais, Argentine**.
+
+> ⚠️ Les contours de `zones.json` sont une **première ébauche grossière** (rectangles autour de
+> la cathédrale, orientés selon la vraie géographie). Ils seront **redessinés précisément dans
+> l'éditeur de carte** (prochaine étape de l'outil touche **M**). `zoneAt()` renvoie la
+> **première** zone qui contient le point → le centre-ville, plus petit, est prioritaire.
+
+---
+
 ## 🧭 D'où viennent les données de la vraie ville
 
 ### Source principale : OpenStreetMap (OSM) — gratuit et libre
@@ -177,6 +199,13 @@ jeu fluide :
 - [x] Habillage : verdure/parcs, arbres, lampadaires, murs. *(GreenAreas/Trees/Lamps/Walls)*
 - [x] Cathédrale + églises avec un look distinct (pierre + ardoise). *(Beauvais.tsx via `kind`)*
 - [x] **Relief réel de Beauvais** (heightmap Open-Meteo) — terrain 3D, tout posé dessus. *(Terrain.tsx + `terrainHeight`)*
+- [x] **Fix « sous le sol »** : `terrainHeight()` échantillonne le MÊME triangle que le sol affiché (barycentrique) au lieu d'une bilinéaire courbée → routes et joueur ne s'enfoncent plus dans les pentes. *(cityData.ts)*
+- [x] **Découpage en quartiers** (zones) : `zones.json` + `zoneAt()` + nom du quartier au HUD + contours sur la carte. *(zones.ts, Hud, mapDraw)*
+- [x] **Routes qui épousent le sol** : offsets Y minimes + `polygonOffset` → le perso ne « traverse » plus la route (avant l'asphalte était 18 cm au-dessus de ses pieds). *(Roads.tsx)*
+- [x] **Plans d'eau creusés** : le bassin des grands lacs est abaissé dans la grille de relief (partagée) et la surface se pose sous la berge → vrai plan d'eau, plus un patch bleu posé. *(cityData `carveWater`/`WATER_INFO` + Water.tsx)*
+- [~] **Relief plus fin** : re-génération de la grille d'altitude (32→110 pts/côté, ~268→~115 m) couvrant toute la ville, via `refine-terrain.mjs`. *(en cours de génération)*
+- [ ] **Pont de Paris = vrai pont** : tablier au-dessus de l'eau (repose sur le creusement du cours d'eau). *(prochain)*
+- [ ] **🏔️ Cap graphique — terrain LiDAR HD + bâtiments BD TOPO** : abandon d'Open-Meteo/OSM pour des données IGN précises. **Plan détaillé → [`06-CAP-GRAPHIQUE-IGN.md`](06-CAP-GRAPHIQUE-IGN.md)** (preuve faite sur le centre-ville).
 - [x] Polish : routes en relief (trottoir + bitume + lignes), lampadaires refaits, ciel en dégradé. *(Roads/Lamps/GradientSky)*
 - [ ] Repères à la main : cathédrale soignée, ancienne prison, etc. (pas dans OSM → modélisation manuelle).
 - [ ] (Option) Ajouter les 9 tours / châteaux d'eau `man_made` d'OSM comme repères.

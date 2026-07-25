@@ -1,4 +1,5 @@
 import { BUILDINGS, ROADS, WATERS, type Building } from '../world/beauvais/cityData'
+import { ZONES } from '../world/beauvais/zones'
 
 /**
  * Outils de dessin 2D "vue du dessus" partagés par la minimap et la grande carte.
@@ -68,6 +69,47 @@ export function drawBuildings(
     ctx.closePath()
     ctx.fill()
   }
+}
+
+/**
+ * Dessine les quartiers : contour teinté + remplissage léger + nom au centre.
+ * Sert à visualiser (et bientôt éditer) le découpage de la ville.
+ */
+export function drawZones(ctx: CanvasRenderingContext2D, view: MapView) {
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (const zone of ZONES) {
+    const pts = zone.pts
+    if (pts.length < 3) continue
+    ctx.beginPath()
+    ctx.moveTo(sx(view, pts[0][0]), sy(view, pts[0][1]))
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(sx(view, pts[i][0]), sy(view, pts[i][1]))
+    ctx.closePath()
+    ctx.fillStyle = zone.color + '22' // ~13% d'opacité (teinte discrète)
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = zone.color
+    ctx.stroke()
+
+    // Nom du quartier au centre (moyenne des points).
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of pts) {
+      cx += x
+      cz += z
+    }
+    cx /= pts.length
+    cz /= pts.length
+    const [lx, ly] = [sx(view, cx), sy(view, cz)]
+    ctx.font = '700 13px system-ui'
+    ctx.lineWidth = 3
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+    ctx.fillStyle = zone.color
+    ctx.strokeText(zone.name, lx, ly)
+    ctx.fillText(zone.name, lx, ly)
+  }
+  ctx.restore()
 }
 
 /**

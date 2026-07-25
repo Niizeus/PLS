@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { BOUNDS, SPAWN } from '../world/beauvais/cityData'
-import { drawBuildings, drawPlayer, drawRoads, drawWater, type MapView } from './mapDraw'
+import { drawBuildings, drawPlayer, drawRoads, drawWater, drawZones, type MapView } from './mapDraw'
 
 /**
  * Grande carte de la ville (touche M) : plein écran, avec ZOOM (molette),
@@ -130,6 +130,10 @@ export default function WorldMap() {
       const oz = boundsCenter.z - CITY_RES / 2 / cityScale
       const [dx, dy] = toScreen(ox, oz)
       ctx.drawImage(city, dx, dy, CITY_RES * imgScale, CITY_RES * imgScale)
+
+      // Quartiers (contours + noms) par-dessus la ville.
+      const zoneView: MapView = { centerX: cam.current.cx, centerZ: cam.current.cz, scale: ppm(), w: W, h: H }
+      drawZones(ctx, zoneView)
 
       // Points de passage.
       ctx.textAlign = 'center'

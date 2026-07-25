@@ -20,6 +20,8 @@ interface PlayerState {
   action: PlayerAction
   /** true tant que le clic droit (défense) est maintenu. */
   isDefending: boolean
+  /** Nom du quartier où se trouve le joueur (null = hors zones connues). */
+  zoneName: string | null
   /**
    * Le groupe 3D du joueur, publié par Player à son montage.
    * La caméra (FollowCamera) le lit pour suivre le perso, sans que les deux
@@ -29,13 +31,16 @@ interface PlayerState {
   setAction: (action: PlayerAction) => void
   setDefending: (isDefending: boolean) => void
   setPlayerObject: (object: THREE.Object3D | null) => void
+  setZoneName: (zoneName: string | null) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   action: 'idle',
   isDefending: false,
+  zoneName: null,
   playerObject: null,
   setAction: (action) => set({ action }),
   setDefending: (isDefending) => set({ isDefending }),
   setPlayerObject: (object) => set({ playerObject: object }),
+  setZoneName: (zoneName) => set({ zoneName }),
 }))

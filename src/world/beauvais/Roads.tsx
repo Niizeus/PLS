@@ -22,9 +22,14 @@ const ASPHALT = '#4c5057'
 const KERB = '#9a9c98' // trottoir / bordure
 const LINE = '#d9d2b0' // marquage au sol
 
-const Y_KERB = 0.1
-const Y_ASPHALT = 0.18
-const Y_LINE = 0.2
+// Les routes ÉPOUSENT le sol (offsets minimes) : avant, l'asphalte à +0.18 m
+// passait au-dessus des pieds du perso (posés au sol) → il semblait « traverser »
+// la route. On garde des offsets minuscules pour l'ordre des 3 couches, et on
+// s'appuie sur `polygonOffset` (biais de profondeur) pour éviter le z-fighting
+// avec le terrain sans avoir à surélever la géométrie.
+const Y_KERB = 0.02
+const Y_ASPHALT = 0.04
+const Y_LINE = 0.06
 
 /** Ajoute au tableau les triangles d'un ruban (miter + suivi du relief). */
 function addRibbon(pts: number[][], half: number, yOff: number, out: number[]) {
@@ -82,14 +87,37 @@ export default function Roads() {
 
   return (
     <>
+      {/* polygonOffset (négatif = tiré vers la caméra) : chaque couche se dessine
+          au-dessus du terrain puis les unes des autres (trottoir < bitume < ligne),
+          même quasi coplanaires — plus de scintillement (z-fighting). */}
       <mesh geometry={kerb} receiveShadow>
-        <meshToonMaterial color={KERB} gradientMap={toonGradient} side={THREE.DoubleSide} />
+        <meshToonMaterial
+          color={KERB}
+          gradientMap={toonGradient}
+          side={THREE.DoubleSide}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
       </mesh>
       <mesh geometry={asphalt} receiveShadow>
-        <meshToonMaterial color={ASPHALT} gradientMap={toonGradient} side={THREE.DoubleSide} />
+        <meshToonMaterial
+          color={ASPHALT}
+          gradientMap={toonGradient}
+          side={THREE.DoubleSide}
+          polygonOffset
+          polygonOffsetFactor={-2}
+          polygonOffsetUnits={-2}
+        />
       </mesh>
       <mesh geometry={lines}>
-        <meshBasicMaterial color={LINE} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          color={LINE}
+          side={THREE.DoubleSide}
+          polygonOffset
+          polygonOffsetFactor={-3}
+          polygonOffsetUnits={-3}
+        />
       </mesh>
     </>
   )

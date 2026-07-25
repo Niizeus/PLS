@@ -27,6 +27,7 @@ const ACTION_LABEL: Record<PlayerAction, string> = {
  */
 export default function Hud() {
   const action = usePlayerStore((s) => s.action)
+  const zoneName = usePlayerStore((s) => s.zoneName)
 
   return (
     <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}>
@@ -47,6 +48,9 @@ export default function Hud() {
         </div>
         <div style={{ marginTop: 4, font: '13px system-ui, sans-serif', opacity: 0.85 }}>
           Chibrux : <strong>{ACTION_LABEL[action]}</strong>
+        </div>
+        <div style={{ marginTop: 2, font: '12px system-ui, sans-serif', opacity: 0.7 }}>
+          📍 {zoneName ?? 'Beauvais'}
         </div>
       </div>
 

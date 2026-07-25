@@ -12,6 +12,7 @@ import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
 import { isBlocked } from '../../world/beauvais/collision'
 import { terrainHeight } from '../../world/beauvais/cityData'
+import { zoneAt } from '../../world/beauvais/zones'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -46,6 +47,10 @@ export function usePlayerMovement(
 ) {
   const setAction = usePlayerStore((s) => s.setAction)
   const setDefending = usePlayerStore((s) => s.setDefending)
+  const setZoneName = usePlayerStore((s) => s.setZoneName)
+
+  // Dernier quartier détecté : on ne met à jour le store que quand il CHANGE.
+  const lastZoneId = useRef<string | null>('__init__')
 
   // Minuteurs internes (en secondes restantes).
   const attackTimer = useRef(0)
@@ -72,6 +77,14 @@ export function usePlayerMovement(
     const k = keys.current
     const m = mouse.current
     if (!group || !k || !m) return
+
+    // Quartier courant (marche ou scooter) : ne pousse au store que si ça change.
+    const zone = zoneAt(group.position.x, group.position.z)
+    const zoneId = zone ? zone.id : null
+    if (zoneId !== lastZoneId.current) {
+      lastZoneId.current = zoneId
+      setZoneName(zone ? zone.name : null)
+    }
 
     // On borne le delta : si l'onglet a "laggé", on évite un saut géant.
     const delta = Math.min(rawDelta, 0.1)

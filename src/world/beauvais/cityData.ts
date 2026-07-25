@@ -1,4 +1,5 @@
 import rawData from './data/beauvais-buildings.json'
+import { lidarHeight } from './lidarTerrain'
 
 /**
  * 🗃️  Source unique des données de Beauvais (chargée une seule fois).
@@ -102,10 +103,24 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
 
 /**
  * Altitude du terrain au point monde (x, z), en mètres (0 si pas de relief).
- * Interpolation bilinéaire sur la grille d'altitudes. TOUT se pose là-dessus :
- * bâtiments, routes, joueur, arbres, lampadaires...
+ *
+ * ⚠️ IMPORTANT : cette fonction doit renvoyer EXACTEMENT la même surface que le
+ * sol affiché (Terrain.tsx). Or ce sol est fait de TRIANGLES plats (chaque case
+ * de la grille est coupée en deux). On échantillonne donc le BON triangle
+ * (interpolation barycentrique), et surtout PAS une interpolation bilinéaire
+ * (surface courbée) qui, elle, passe au-dessus/en dessous des triangles → c'est
+ * ce qui faisait "plonger" les routes et le joueur SOUS le sol dans les pentes.
+ *
+ * Découpage identique à Terrain.tsx : triangles (a,c,b) puis (b,c,d), avec
+ *   a = (i0,j0)  b = (i1,j0)  c = (i0,j1)  d = (i1,j1)
+ * La diagonale partagée relie b et c → tx+tz ≤ 1 : triangle a,b,c ; sinon b,c,d.
+ *
+ * TOUT se pose là-dessus : bâtiments, routes, joueur, arbres, lampadaires...
  */
 export function terrainHeight(x: number, z: number): number {
+  // Priorité au terrain LiDAR HD s'il est chargé et couvre le point (repère commun).
+  const lh = lidarHeight(x, z)
+  if (lh !== undefined) return lh
   const t = TERRAIN
   if (!t) return 0
   const last = t.cols - 1
@@ -117,12 +132,16 @@ export function terrainHeight(x: number, z: number): number {
   const j0 = Math.floor(fj)
   const i1 = Math.min(i0 + 1, last)
   const j1 = Math.min(j0 + 1, last)
-  const tx = fi - i0
-  const tz = fj - j0
+  const tx = fi - i0 // position dans la case, sens X (0 → i0, 1 → i1)
+  const tz = fj - j0 // position dans la case, sens Z (0 → j0, 1 → j1)
   const h = t.h
-  const top = h[j0 * t.cols + i0] * (1 - tx) + h[j0 * t.cols + i1] * tx
-  const bot = h[j1 * t.cols + i0] * (1 - tx) + h[j1 * t.cols + i1] * tx
-  return top * (1 - tz) + bot * tz
+  const hA = h[j0 * t.cols + i0] // coin (i0, j0)
+  const hB = h[j0 * t.cols + i1] // coin (i1, j0)
+  const hC = h[j1 * t.cols + i0] // coin (i0, j1)
+  const hD = h[j1 * t.cols + i1] // coin (i1, j1)
+  // Plan du triangle qui contient (tx, tz) — même diagonale que le sol affiché.
+  if (tx + tz <= 1) return hA + (hB - hA) * tx + (hC - hA) * tz
+  return hD + (hB - hD) * (1 - tz) + (hC - hD) * (1 - tx)
 }
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */
@@ -136,6 +155,77 @@ export function pointInFootprint(x: number, z: number, pts: number[][]): boolean
   }
   return inside
 }
+
+/**
+ * 💧 Creusement des plans d'eau.
+ *
+ * Avant, l'eau était un polygone plat POSÉ sur le sol → un lac « peint ». Ici on
+ * CREUSE réellement le bassin : on abaisse les sommets de la grille de relief
+ * situés à l'intérieur d'un plan d'eau. Comme on modifie la grille PARTAGÉE
+ * (TERRAIN.h), le sol affiché (Terrain.tsx) ET `terrainHeight()` restent d'accord
+ * → pas de nouveau décalage « sous le sol ». La surface d'eau (Water.tsx) est
+ * ensuite posée un peu SOUS la berge grâce à `WATER_INFO`.
+ *
+ * Note : à la résolution de la grille, seuls les GRANDS plans d'eau (plan d'eau
+ * du Canada) contiennent des sommets → eux sont vraiment creusés ; les fins
+ * cours d'eau restent posés (bassin trop étroit pour la grille).
+ */
+export interface WaterInfo {
+  /** Altitude (m) de la surface d'eau de ce plan d'eau. */
+  surfaceY: number
+  /** true si le bassin a réellement été creusé dans la grille. */
+  carved: boolean
+}
+export const WATER_INFO: WaterInfo[] = []
+const WATER_DEPTH = 4 // profondeur du bassin sous la berge (m)
+const WATER_DROP = 0.4 // la surface d'eau se pose un peu sous la berge (m)
+
+;(function carveWater() {
+  if (!TERRAIN || WATERS.length === 0) {
+    for (let i = 0; i < WATERS.length; i++) WATER_INFO.push({ surfaceY: 0, carved: false })
+    return
+  }
+  const t = TERRAIN
+  // 1) Boîte englobante + niveau de berge (médiane du contour, AVANT creusement).
+  const boxes = WATERS.map((w) => {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    const hs: number[] = []
+    for (const [x, z] of w.pts) {
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (z < minZ) minZ = z
+      if (z > maxZ) maxZ = z
+      hs.push(terrainHeight(x, z))
+    }
+    hs.sort((a, b) => a - b)
+    return { minX, maxX, minZ, maxZ, shore: hs[hs.length >> 1] ?? 0 }
+  })
+  // 2) Creuse chaque sommet de grille situé DANS un plan d'eau (avec pré-filtre bbox).
+  const carved = new Array(WATERS.length).fill(false)
+  for (let j = 0; j < t.cols; j++) {
+    for (let i = 0; i < t.cols; i++) {
+      const x = t.x0 + i * t.dx
+      const z = t.z0 + j * t.dz
+      for (let w = 0; w < WATERS.length; w++) {
+        const b = boxes[w]
+        if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue
+        if (pointInFootprint(x, z, WATERS[w].pts)) {
+          const idx = j * t.cols + i
+          const floor = b.shore - WATER_DEPTH
+          if (t.h[idx] > floor) t.h[idx] = floor
+          carved[w] = true
+        }
+      }
+    }
+  }
+  // 3) Niveau de surface : sous la berge si creusé, sinon juste au-dessus du sol.
+  for (let w = 0; w < WATERS.length; w++) {
+    WATER_INFO.push({
+      surfaceY: carved[w] ? boxes[w].shore - WATER_DROP : boxes[w].shore + 0.05,
+      carved: carved[w],
+    })
+  }
+})()
 
 /**
  * Cherche un point de spawn DÉGAGÉ devant la cathédrale (à l'origine 0,0).

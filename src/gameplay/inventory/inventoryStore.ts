@@ -171,7 +171,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   useItem: (itemId) => {
     const item = ITEMS_BY_ID[itemId]
     if (!item || !item.consumable || !hasItem(get().items, itemId)) return
-    if (item.effects) useCharacterStatsStore.getState().applyConsumableEffects(item.name, item.effects, item.effectDurationMs)
+    if (item.effects) useCharacterStatsStore.getState().applyConsumableEffects(item.name, item.effects, item.effectDurationMs, item.id)
 
     set((state) => {
       const nextItems = state.items

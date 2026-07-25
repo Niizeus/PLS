@@ -4,6 +4,7 @@ import type { ItemEffectKey } from '../../data/items'
 export type CharacterStats = Record<ItemEffectKey, number>
 export interface ActiveStatusEffect {
   id: string
+  sourceItemId?: string
   label: string
   effects: Partial<Record<ItemEffectKey, number>>
   expiresAt: number
@@ -12,7 +13,12 @@ export interface ActiveStatusEffect {
 interface CharacterStatsState extends CharacterStats {
   activeEffects: ActiveStatusEffect[]
   applyEffects: (effects: Partial<Record<ItemEffectKey, number>>) => void
-  applyConsumableEffects: (label: string, effects: Partial<Record<ItemEffectKey, number>>, durationMs?: number) => void
+  applyConsumableEffects: (
+    label: string,
+    effects: Partial<Record<ItemEffectKey, number>>,
+    durationMs?: number,
+    sourceItemId?: string,
+  ) => void
   decayNeeds: () => void
   purgeExpiredEffects: () => void
 }
@@ -61,6 +67,7 @@ const sanitizeActiveEffects = (effects: ActiveStatusEffect[] = []): ActiveStatus
     .filter((effect) => effect.expiresAt > now && effect.label && effect.effects)
     .map((effect) => ({
       id: effect.id || `effect-${effect.expiresAt}`,
+      sourceItemId: effect.sourceItemId,
       label: effect.label,
       effects: Object.fromEntries(
         Object.entries(effect.effects)
@@ -129,7 +136,7 @@ export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
       return clean
     }),
 
-  applyConsumableEffects: (label, effects, durationMs = 30_000) =>
+  applyConsumableEffects: (label, effects, durationMs = 30_000, sourceItemId) =>
     set((state) => {
       const instantEffects: Partial<Record<ItemEffectKey, number>> = {}
       const timedEffects: Partial<Record<ItemEffectKey, number>> = {}
@@ -147,10 +154,15 @@ export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
       const clean = sanitizeStats(next)
 
       const now = Date.now()
-      const activeEffects = state.activeEffects.filter((effect) => effect.expiresAt > now)
+      const activeEffects = state.activeEffects.filter(
+        (effect) =>
+          effect.expiresAt > now &&
+          (sourceItemId ? effect.sourceItemId !== sourceItemId : effect.label !== label),
+      )
       if (Object.keys(timedEffects).length > 0) {
         activeEffects.push({
           id: `effect-${now}-${Math.random().toString(36).slice(2)}`,
+          sourceItemId,
           label,
           effects: timedEffects,
           expiresAt: now + durationMs,

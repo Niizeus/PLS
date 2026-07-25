@@ -18,9 +18,9 @@ import { ROADS, terrainHeight } from './cityData'
 const MIN_WIDTH = 3 // en dessous (chemins/trottoirs OSM) → on n'affiche pas
 const MAJOR_WIDTH = 6.5 // à partir de ça → ligne centrale
 
-const ASPHALT = '#4c5057'
-const KERB = '#9a9c98' // trottoir / bordure
-const LINE = '#d9d2b0' // marquage au sol
+const ASPHALT = '#3f444b'
+const KERB = '#b4b0a7' // trottoir / bordure
+const LINE = '#eee7d4' // marquage au sol
 
 // Les routes ÉPOUSENT le sol (offsets minimes) : avant, l'asphalte à +0.18 m
 // passait au-dessus des pieds du perso (posés au sol) → il semblait « traverser »

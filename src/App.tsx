@@ -1,4 +1,5 @@
 import GameCanvas from './core/GameCanvas'
+import GameTimeTicker from './gameplay/time/GameTimeTicker'
 import NeedsTicker from './gameplay/stats/NeedsTicker'
 import Hud from './ui/Hud'
 
@@ -7,6 +8,7 @@ import Hud from './ui/Hud'
 export default function App() {
   return (
     <>
+      <GameTimeTicker />
       <NeedsTicker />
       <GameCanvas />
       <Hud />

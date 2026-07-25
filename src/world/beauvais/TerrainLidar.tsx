@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
+import { terrainHeight } from './cityData'
 import { getGlobalMap, loadLidarTerrain } from './lidarTerrain'
 
 /**
@@ -50,9 +51,9 @@ function buildChunks(): THREE.BufferGeometry[] {
         for (let ii = 0; ii < nx; ii++) {
           const i = Math.min(w - 1, (cx + ii) * STEP)
           const j = Math.min(h - 1, (cz + jj) * STEP)
-          const y = heights[j * w + i]
           const x = Emin + i * res - E0
           const z = N0 - (Nmax - j * res)
+          const y = terrainHeight(x, z)
           const idx = (jj * nx + ii) * 3
           positions[idx] = x
           positions[idx + 1] = y

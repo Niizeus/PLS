@@ -1,6 +1,7 @@
 import { usePlayerStore, type PlayerAction } from '../gameplay/stats/playerStore'
 import ControlsHint from './ControlsHint'
 import FpsCounter from './FpsCounter'
+import GameClock from './GameClock'
 import InventoryPanel from './InventoryPanel'
 import Minimap from './Minimap'
 import PickupPrompt from './PickupPrompt'
@@ -55,6 +56,7 @@ export default function Hud() {
       </div>
 
       <Minimap />
+      <GameClock />
       <StatsPanel />
       <FpsCounter />
       <ControlsHint />

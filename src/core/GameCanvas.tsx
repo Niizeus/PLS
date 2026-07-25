@@ -1,7 +1,8 @@
 import { Canvas } from '@react-three/fiber'
 import Lights from './Lights'
 import FollowCamera from './FollowCamera'
-import GradientSky, { HORIZON_COLOR } from './GradientSky'
+import GradientSky from './GradientSky'
+import TimeFog from './TimeFog'
 import World from '../world/World'
 import Characters from '../entities/Characters'
 
@@ -32,7 +33,7 @@ export default function GameCanvas() {
     >
       {/* Ciel en dégradé + brouillard assorti à l'horizon (climat océanique, cf docs/04). */}
       <GradientSky />
-      <fog attach="fog" args={[HORIZON_COLOR, 65, 150]} />
+      <TimeFog />
 
       <Lights />
 

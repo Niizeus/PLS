@@ -47,6 +47,30 @@ export interface Water {
   pts: number[][]
 }
 
+export interface BridgeDeck {
+  id: string
+  name: string
+  x: number
+  z: number
+  rot: number
+  length: number
+  width: number
+  ramp: number
+  clearance: number
+}
+
+export interface UnderpassCut {
+  id: string
+  name: string
+  x: number
+  z: number
+  rot: number
+  length: number
+  width: number
+  ramp: number
+  drop: number
+}
+
 export interface Bounds {
   minX: number
   maxX: number
@@ -89,6 +113,42 @@ export const WALLS: Wall[] = data.walls ?? []
 export const TREES: number[][] = data.trees ?? []
 export const LAMPS: number[][] = data.lamps ?? []
 
+export const BRIDGE_DECKS: BridgeDeck[] = [
+  {
+    id: 'pont-de-paris',
+    name: 'Pont de Paris',
+    x: 16.6,
+    z: 719.5,
+    rot: 1.32,
+    length: 42,
+    width: 12.4,
+    ramp: 26,
+    clearance: 1.05,
+  },
+]
+
+export const PLACE_MARECHAUX = {
+  x: 634.2,
+  z: -191.5,
+  rot: 0.18,
+  halfX: 74,
+  halfZ: 46,
+}
+
+export const UNDERPASS_CUTS: UnderpassCut[] = [
+  {
+    id: 'jean-moulin-underpass',
+    name: 'Passage Jean-Moulin',
+    x: 765,
+    z: -472,
+    rot: -1.34,
+    length: 135,
+    width: 31,
+    ramp: 74,
+    drop: 3.4,
+  },
+]
+
 // On calcule le centre de chaque bâtiment une fois pour toutes.
 export const BUILDINGS: Building[] = data.buildings.map((b) => {
   let sx = 0
@@ -117,7 +177,7 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
  *
  * TOUT se pose là-dessus : bâtiments, routes, joueur, arbres, lampadaires...
  */
-export function terrainHeight(x: number, z: number): number {
+function rawTerrainHeight(x: number, z: number): number {
   // Priorité au terrain LiDAR HD s'il est chargé et couvre le point (repère commun).
   const lh = lidarHeight(x, z)
   if (lh !== undefined) return lh
@@ -142,6 +202,209 @@ export function terrainHeight(x: number, z: number): number {
   // Plan du triangle qui contient (tx, tz) — même diagonale que le sol affiché.
   if (tx + tz <= 1) return hA + (hB - hA) * tx + (hC - hA) * tz
   return hD + (hB - hD) * (1 - tz) + (hC - hD) * (1 - tx)
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+const smoothstep = (a: number, b: number, v: number) => {
+  const t = clamp01((v - a) / (b - a || 1))
+  return t * t * (3 - 2 * t)
+}
+
+function segmentFrame(
+  x: number,
+  z: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): { t: number; distance: number } {
+  const dx = bx - ax
+  const dz = bz - az
+  const lenSq = dx * dx + dz * dz || 1
+  const t = clamp01(((x - ax) * dx + (z - az) * dz) / lenSq)
+  const px = ax + dx * t
+  const pz = az + dz * t
+  return { t, distance: Math.hypot(x - px, z - pz) }
+}
+
+function polylineFrame(x: number, z: number, pts: Array<{ x: number; z: number }>): { t: number; distance: number } {
+  let total = 0
+  const lengths: number[] = []
+  for (let i = 0; i < pts.length - 1; i++) {
+    const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].z - pts[i].z)
+    lengths.push(len)
+    total += len
+  }
+
+  let bestDistance = Infinity
+  let bestAlong = 0
+  let before = 0
+  for (let i = 0; i < pts.length - 1; i++) {
+    const frame = segmentFrame(x, z, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z)
+    if (frame.distance < bestDistance) {
+      bestDistance = frame.distance
+      bestAlong = before + frame.t * lengths[i]
+    }
+    before += lengths[i]
+  }
+
+  return { t: clamp01(bestAlong / (total || 1)), distance: bestDistance }
+}
+
+function orientedEllipseInfluence(
+  x: number,
+  z: number,
+  cx: number,
+  cz: number,
+  halfX: number,
+  halfZ: number,
+  rot: number,
+): number {
+  const c = Math.cos(rot)
+  const s = Math.sin(rot)
+  const dx = x - cx
+  const dz = z - cz
+  const lx = dx * c + dz * s
+  const lz = -dx * s + dz * c
+  const d = Math.hypot(lx / halfX, lz / halfZ)
+  return 1 - smoothstep(0.72, 1.08, d)
+}
+
+function bridgeDeckHeight(x: number, z: number, base: number): number {
+  let h = base
+
+  for (const bridge of BRIDGE_DECKS) {
+    const c = Math.cos(bridge.rot)
+    const s = Math.sin(bridge.rot)
+    const dx = x - bridge.x
+    const dz = z - bridge.z
+    const along = dx * c + dz * s
+    const side = -dx * s + dz * c
+    const halfLength = bridge.length / 2
+    const halfWidth = bridge.width / 2
+    const absAlong = Math.abs(along)
+    const absSide = Math.abs(side)
+    if (absAlong > halfLength + bridge.ramp || absSide > halfWidth + 5) continue
+
+    const sideWeight = 1 - smoothstep(halfWidth - 1.2, halfWidth + 5, absSide)
+    if (sideWeight <= 0) continue
+
+    const a = {
+      x: bridge.x - c * halfLength,
+      z: bridge.z - s * halfLength,
+    }
+    const b = {
+      x: bridge.x + c * halfLength,
+      z: bridge.z + s * halfLength,
+    }
+    const deckHeight = Math.max(rawTerrainHeight(a.x, a.z), rawTerrainHeight(b.x, b.z), rawTerrainHeight(bridge.x, bridge.z)) + bridge.clearance
+    const alongWeight = absAlong <= halfLength ? 1 : 1 - smoothstep(halfLength, halfLength + bridge.ramp, absAlong)
+    h += (deckHeight - h) * sideWeight * alongWeight
+  }
+
+  return h
+}
+
+function marechauxPlaceHeight(x: number, z: number, base: number): number {
+  const weight = orientedEllipseInfluence(
+    x,
+    z,
+    PLACE_MARECHAUX.x,
+    PLACE_MARECHAUX.z,
+    PLACE_MARECHAUX.halfX,
+    PLACE_MARECHAUX.halfZ,
+    PLACE_MARECHAUX.rot,
+  )
+  if (weight <= 0) return base
+
+  const centerHeight = rawTerrainHeight(PLACE_MARECHAUX.x, PLACE_MARECHAUX.z)
+  return base + (centerHeight - base) * weight * 0.88
+}
+
+function underpassHeight(x: number, z: number, base: number): number {
+  let h = base
+
+  for (const pass of UNDERPASS_CUTS) {
+    const c = Math.cos(pass.rot)
+    const s = Math.sin(pass.rot)
+    const dx = x - pass.x
+    const dz = z - pass.z
+    const along = dx * c + dz * s
+    const side = -dx * s + dz * c
+    const halfLength = pass.length / 2
+    const halfWidth = pass.width / 2
+    const absAlong = Math.abs(along)
+    const absSide = Math.abs(side)
+    if (absAlong > halfLength + pass.ramp || absSide > halfWidth + 14) continue
+
+    const sideWeight = 1 - smoothstep(halfWidth - 2, halfWidth + 14, absSide)
+    if (sideWeight <= 0) continue
+
+    const rampT = absAlong <= halfLength ? 1 : 1 - smoothstep(halfLength, halfLength + pass.ramp, absAlong)
+    const tunnelBowl = 0.82 + 0.18 * (1 - smoothstep(0, halfLength, absAlong))
+    const cut = pass.drop * rampT * tunnelBowl
+    h -= cut * sideWeight
+  }
+
+  return h
+}
+
+function gambettaGradeHeight(x: number, z: number): { height: number; weight: number } {
+  const center = { x: 103, z: 268 }
+  const crossing27June = { x: 338, z: -194 }
+  const intermarcheJunction = { x: 850, z: -1140 }
+  const lidl = { x: 1003, z: -1562 }
+  const mcdoTille = { x: 1211, z: -2171 }
+  const climb = polylineFrame(x, z, [center, crossing27June, intermarcheJunction])
+  const plateau = polylineFrame(x, z, [intermarcheJunction, lidl, mcdoTille])
+
+  const centerHeight = rawTerrainHeight(center.x, center.z)
+  const junctionHeight = Math.max(rawTerrainHeight(intermarcheJunction.x, intermarcheJunction.z), centerHeight + 7.8)
+  const plateauHeight =
+    junctionHeight * 0.78 + rawTerrainHeight(lidl.x, lidl.z) * 0.16 + rawTerrainHeight(mcdoTille.x, mcdoTille.z) * 0.06
+
+  const climbWeight = (1 - smoothstep(26, 78, climb.distance)) * Math.max(0.32, 1 - smoothstep(0.98, 1, climb.t))
+  const climbHeight = centerHeight + (junctionHeight - centerHeight) * smoothstep(0, 1, climb.t)
+
+  const plateauCorridor = 1 - smoothstep(58, 180, plateau.distance)
+  const plateauEnd = 1 - smoothstep(0.92, 1, plateau.t)
+  const plateauStart = smoothstep(0, 0.08, plateau.t)
+  const plateauWeight = plateauCorridor * Math.max(0.62, plateauStart * plateauEnd)
+  const plateauBlendHeight = junctionHeight + (plateauHeight - junctionHeight) * smoothstep(0, 0.16, plateau.t)
+
+  if (plateauWeight > climbWeight) return { height: plateauBlendHeight, weight: plateauWeight }
+  return { height: climbHeight, weight: climbWeight }
+}
+
+function beauvaisUrbanHeight(x: number, z: number, base: number): number {
+  let h = base
+
+  const gambetta = gambettaGradeHeight(x, z)
+  h += (gambetta.height - h) * clamp01(gambetta.weight)
+
+  h = underpassHeight(x, z, h)
+  h = marechauxPlaceHeight(x, z, h)
+
+  const marketWeight = orientedEllipseInfluence(x, z, 228, 254, 62, 46, -0.08)
+  if (marketWeight > 0) {
+    const marketHeight = rawTerrainHeight(228, 254)
+    h += (marketHeight - h) * marketWeight
+  }
+
+  const mairieWeight = orientedEllipseInfluence(x, z, 108, 262, 48, 34, 0.12)
+  if (mairieWeight > 0) {
+    const mairieGrade = gambettaGradeHeight(108, 262).height
+    const mairieHeight = mairieGrade * 0.65 + rawTerrainHeight(108, 262) * 0.35
+    h += (mairieHeight - h) * mairieWeight * 0.72
+  }
+
+  h = bridgeDeckHeight(x, z, h)
+
+  return h
+}
+
+export function terrainHeight(x: number, z: number): number {
+  return beauvaisUrbanHeight(x, z, rawTerrainHeight(x, z))
 }
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */

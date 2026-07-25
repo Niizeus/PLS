@@ -1,3 +1,4 @@
+import ItemPickups from './items/ItemPickups'
 import Player from './player/Player'
 import Scooter from './vehicles/Scooter'
 
@@ -15,6 +16,7 @@ export default function Characters() {
     <>
       <Player />
       <Scooter />
+      <ItemPickups />
     </>
   )
 }

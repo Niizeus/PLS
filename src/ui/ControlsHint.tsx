@@ -4,8 +4,12 @@ const CONTROLS: { keys: string; label: string }[] = [
   { keys: 'ZQSD', label: 'Se déplacer' },
   { keys: 'Maj', label: 'Courir' },
   { keys: 'E', label: 'Interagir / monter sur le scooter' },
+  { keys: 'Espace', label: 'Sauter' },
+  { keys: 'Ctrl', label: 'S accroupir' },
   { keys: 'Clic G.', label: 'Attaquer' },
   { keys: 'Clic D.', label: 'Défendre' },
+  { keys: 'I', label: 'Inventaire' },
+  { keys: '1-4', label: 'Raccourcis' },
   { keys: 'M', label: 'Carte' },
   { keys: 'Échap', label: 'Libérer la souris' },
 ]

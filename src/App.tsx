@@ -1,4 +1,5 @@
 import GameCanvas from './core/GameCanvas'
+import NeedsTicker from './gameplay/stats/NeedsTicker'
 import Hud from './ui/Hud'
 
 // App = l'écran de jeu complet : la scène 3D + l'interface 2D par-dessus.
@@ -6,6 +7,7 @@ import Hud from './ui/Hud'
 export default function App() {
   return (
     <>
+      <NeedsTicker />
       <GameCanvas />
       <Hud />
     </>

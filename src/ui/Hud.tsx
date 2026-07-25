@@ -1,7 +1,11 @@
 import { usePlayerStore, type PlayerAction } from '../gameplay/stats/playerStore'
 import ControlsHint from './ControlsHint'
 import FpsCounter from './FpsCounter'
+import InventoryPanel from './InventoryPanel'
 import Minimap from './Minimap'
+import PickupPrompt from './PickupPrompt'
+import QuickBar from './QuickBar'
+import StatsPanel from './StatsPanel'
 import WorldMap from './WorldMap'
 
 // Libellés lisibles pour l'état affiché en haut à gauche.
@@ -12,6 +16,8 @@ const ACTION_LABEL: Record<PlayerAction, string> = {
   attack: 'Attaque !',
   defense: 'Défense',
   interact: 'Interaction',
+  jump: 'Saut',
+  crouch: 'Accroupi',
 }
 
 /**
@@ -45,8 +51,12 @@ export default function Hud() {
       </div>
 
       <Minimap />
+      <StatsPanel />
       <FpsCounter />
       <ControlsHint />
+      <PickupPrompt />
+      <InventoryPanel />
+      <QuickBar />
 
       {/* Grande carte (touche M) : gère elle-même son ouverture/fermeture. */}
       <WorldMap />

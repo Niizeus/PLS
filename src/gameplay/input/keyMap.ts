@@ -15,6 +15,11 @@ export const KEY = {
   RIGHT: 'KeyD', // D
   RUN: 'ShiftLeft', // Maj = courir
   INTERACT: 'KeyE', // E = action / interagir
+  INVENTORY: 'KeyI', // I = inventaire
+  QUICK_1: 'Digit1', // 1 = raccourci inventaire
+  QUICK_2: 'Digit2', // 2 = raccourci inventaire
+  QUICK_3: 'Digit3', // 3 = raccourci inventaire
+  QUICK_4: 'Digit4', // 4 = raccourci inventaire
   JUMP: 'Space', // Espace = sauter
   CROUCH: 'ControlLeft', // Ctrl = s'accroupir
 } as const

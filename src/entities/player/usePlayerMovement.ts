@@ -3,6 +3,9 @@ import { useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
 import type { MouseState } from '../../gameplay/input/useMouse'
+import { useInventoryStore } from '../../gameplay/inventory/inventoryStore'
+import { useCharacterStatsStore } from '../../gameplay/stats/characterStatsStore'
+import { getEffectiveStats, getMovementSpeedMultiplier } from '../../gameplay/stats/effectiveStats'
 import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { useCameraStore } from '../../core/cameraStore'
 import { useScooterStore } from '../vehicles/scooterStore'
@@ -171,7 +174,11 @@ export function usePlayerMovement(
       moveDir.current.set(dirX, 0, dirZ)
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
-      const speed = crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED
+      const inventory = useInventoryStore.getState()
+      const characterStats = useCharacterStatsStore.getState()
+      const effectiveStats = getEffectiveStats(characterStats, inventory.equipped, characterStats.activeEffects)
+      const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
+      const speed = (crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED) * speedMultiplier
       // Collisions : on teste chaque axe séparément → on glisse le long des murs.
       const nx = group.position.x + moveDir.current.x * speed * delta
       if (!isBlocked(nx, group.position.z)) group.position.x = nx

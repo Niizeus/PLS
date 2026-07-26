@@ -1,5 +1,7 @@
-﻿import type { CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import { useVehicleTelemetryStore } from '../entities/vehicles/vehicleTelemetryStore'
+import { getRadioStation } from '../audio/radioCatalog'
+import { useRadioStore } from '../audio/radioStore'
 
 const MAX_DIAL_KMH = 140
 const NEEDLE_MIN = -118
@@ -10,6 +12,8 @@ export default function VehicleDashboard() {
   const kind = useVehicleTelemetryStore((s) => s.kind)
   const speedKmh = useVehicleTelemetryStore((s) => s.speedKmh)
   const fuelPercent = useVehicleTelemetryStore((s) => s.fuelPercent)
+  const stationId = useRadioStore((s) => s.currentStationId)
+  const contentLabel = useRadioStore((s) => s.currentContentLabel)
 
   if (!riding) return null
 
@@ -17,6 +21,7 @@ export default function VehicleDashboard() {
   const needle = NEEDLE_MIN + (clampedSpeed / MAX_DIAL_KMH) * (NEEDLE_MAX - NEEDLE_MIN)
   const speedText = Math.round(speedKmh).toString().padStart(3, '0')
   const fuel = Math.round(fuelPercent)
+  const station = stationId ? getRadioStation(stationId) : null
 
   return (
     <div style={panelStyle}>
@@ -48,6 +53,9 @@ export default function VehicleDashboard() {
           <div style={{ ...fuelFillStyle, width: `${fuel}%`, background: fuel < 18 ? '#ef4444' : fuel < 35 ? '#f59e0b' : '#22c55e' }} />
         </div>
         <div style={fuelTextStyle}>{fuel}%</div>
+        <div style={radioLabelStyle}>RADIO</div>
+        <div style={radioTextStyle}>{station ? station.shortName : 'OFF'}</div>
+        <div style={radioContentStyle}>{contentLabel ?? 'Silence'}</div>
       </div>
     </div>
   )
@@ -58,7 +66,7 @@ const panelStyle: CSSProperties = {
   right: 20,
   bottom: 82,
   width: 238,
-  height: 126,
+  minHeight: 150,
   display: 'grid',
   gridTemplateColumns: '136px 1fr',
   alignItems: 'center',
@@ -99,3 +107,6 @@ const fuelLabelStyle: CSSProperties = { font: '800 10px system-ui, sans-serif', 
 const fuelTrackStyle: CSSProperties = { height: 12, borderRadius: 4, background: 'rgba(30,41,59,0.92)', overflow: 'hidden', border: '1px solid rgba(148,163,184,0.28)' }
 const fuelFillStyle: CSSProperties = { height: '100%', transition: 'width 160ms linear' }
 const fuelTextStyle: CSSProperties = { font: '900 16px ui-monospace, monospace', color: '#f8fafc' }
+const radioLabelStyle: CSSProperties = { marginTop: 2, font: '800 10px system-ui, sans-serif', color: '#cbd5e1', letterSpacing: 0.8 }
+const radioTextStyle: CSSProperties = { font: '900 12px system-ui, sans-serif', color: '#fde68a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+const radioContentStyle: CSSProperties = { font: '800 10px system-ui, sans-serif', color: '#cbd5e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }

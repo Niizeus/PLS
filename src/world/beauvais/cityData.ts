@@ -17,12 +17,28 @@ import { sampleHeight } from './terrain'
  * reste le point de passage unique de tout le jeu.
  */
 
-/** Un bâtiment : hauteur (m), contour projeté en mètres [x, z], et son centre. */
+/**
+ * Un bâtiment, avec son contour projeté en mètres [x, z] et son centre.
+ *
+ * Les hauteurs viennent de la **BD TOPO de l'IGN** (mesurées, pas devinées) :
+ * voir `bdtopo.mjs`. Le toit est décrit par deux nombres seulement — sa hauteur
+ * et son orientation — et c'est `Beauvais.tsx` qui en construit la géométrie.
+ * Stocker les triangles dans le JSON l'aurait fait tripler de volume.
+ */
 export interface Building {
+  /** Hauteur des MURS, du sol à la gouttière (m). */
   h: number
   pts: number[][]
   /** Monument (cathedral / church / chapel) → look légèrement distinct. */
   kind?: string
+  /** Hauteur du toit, de la gouttière au faîtage (m). Absent = toit plat. */
+  rh?: number
+  /** Orientation du faîtage, en radians. Absent = toit plat. */
+  ra?: number
+  /** Matériau de toiture : 't' tuile, 'a' ardoise, 'z' zinc, 'b' béton. */
+  rm?: string
+  /** 1 si la hauteur est mesurée par l'IGN ; absent si elle reste estimée. */
+  bdtopo?: number
   cx: number
   cz: number
 }
@@ -66,7 +82,15 @@ export interface Bounds {
 interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
-  buildings: { h: number; pts: number[][]; kind?: string }[]
+  buildings: {
+    h: number
+    pts: number[][]
+    kind?: string
+    rh?: number
+    ra?: number
+    rm?: string
+    bdtopo?: number
+  }[]
   roads: Road[]
   waters: { pts: number[][] }[]
   greens: { pts: number[][]; wood?: number }[]
@@ -93,7 +117,17 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
     sz += z
   }
   const n = b.pts.length || 1
-  return { h: b.h, pts: b.pts, kind: b.kind, cx: sx / n, cz: sz / n }
+  return {
+    h: b.h,
+    pts: b.pts,
+    kind: b.kind,
+    rh: b.rh,
+    ra: b.ra,
+    rm: b.rm,
+    bdtopo: b.bdtopo,
+    cx: sx / n,
+    cz: sz / n,
+  }
 })
 
 /**

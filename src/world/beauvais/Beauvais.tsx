@@ -4,15 +4,18 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { BUILDINGS, SPAWN, terrainHeight, type Building } from './cityData'
+import { BUILDINGS, SPAWN, type Building } from './cityData'
+import { buildBuilding } from './buildingMesh'
 
 /**
- * 🏙️  Beauvais en BLOCS SIMPLES, généré depuis OpenStreetMap.
+ * 🏙️  Beauvais, bâtiment par bâtiment.
  *
- * Chaque bâtiment = son contour réel extrudé en un bloc d'une seule couleur.
- * Pas de texture, pas de fenêtres, pas de toit détaillé : c'est la base saine.
- * Le tracé des rues et des places reste juste, parce qu'il vient de la vraie
- * donnée OSM — seul le « décor » est volontairement minimal.
+ * Chaque bâtiment = son contour réel (OpenStreetMap), sa hauteur réelle et son
+ * toit (IGN BD TOPO). Pas encore de texture ni de fenêtres : les façades restent
+ * unies, c'est la prochaine étape. La FORME, elle, est juste.
+ *
+ * La fabrication du volume (murs + toit) vit dans `buildingMesh.ts` ; ce fichier-ci
+ * ne s'occupe que d'une chose : décider QUELS bâtiments sont montés à un instant t.
  *
  * ⚠️ La ville fait ~34 000 bâtiments : impossible de tout afficher d'un coup.
  * On fait donc du STREAMING par tuiles :
@@ -28,61 +31,6 @@ import { BUILDINGS, SPAWN, terrainHeight, type Building } from './cityData'
 
 const TILE = 180 // côté d'une tuile, en mètres
 const REACH = 1 // anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
-const MIN_HEIGHT = 3 // hauteur mini d'un bloc (m), pour éviter les galettes
-/**
- * Hauteur enterrée sous le sol. Un bâtiment est un bloc à fond plat posé sur un
- * terrain en pente : sans cette jupe, le coin aval décollerait du sol. On
- * l'enfonce donc franchement — c'est invisible et ça marche sur toutes les pentes.
- */
-const SKIRT = 8
-
-// Palette sobre : quelques tons de façade, choisis de façon déterministe.
-const FACADES = ['#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0', '#c9b79a']
-const MONUMENT = '#b9b3a4' // cathédrale, églises, chapelles : pierre claire
-
-function hash01(x: number, z: number): number {
-  const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453
-  return s - Math.floor(s)
-}
-
-function colorOf(b: Building): THREE.Color {
-  if (b.kind) return new THREE.Color(MONUMENT)
-  return new THREE.Color(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
-}
-
-/** Extrude le contour d'un bâtiment en un bloc coloré, du sol (y=0) à sa hauteur. */
-function buildOne(b: Building): THREE.BufferGeometry | null {
-  if (b.pts.length < 3) return null
-
-  // Le contour est en (x, z) monde. Une Shape vit dans le plan XY, et
-  // ExtrudeGeometry pousse vers +Z. On dessine donc en (x, -z), puis on couche
-  // le tout avec rotateX(-90°) : la profondeur d'extrusion devient la hauteur.
-  const shape = new THREE.Shape()
-  shape.moveTo(b.pts[0][0], -b.pts[0][1])
-  for (let i = 1; i < b.pts.length; i++) shape.lineTo(b.pts[i][0], -b.pts[i][1])
-  shape.closePath()
-
-  // Le bloc part sous le sol (jupe) et monte jusqu'à sa hauteur au-dessus du
-  // terrain, pris au CENTRE de l'emprise : un bâtiment a un sol horizontal.
-  const height = Math.max(MIN_HEIGHT, b.h)
-  const base = terrainHeight(b.cx, b.cz)
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: SKIRT + height, bevelEnabled: false })
-  geo.rotateX(-Math.PI / 2)
-  geo.translate(0, base - SKIRT, 0)
-
-  // Une seule couleur par bloc : on peint les sommets, ce qui permet de fusionner
-  // toute la tuile en UN seul objet (1 draw call) au lieu d'un matériau par maison.
-  const color = colorOf(b)
-  const count = geo.attributes.position.count
-  const colors = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) {
-    colors[i * 3] = color.r
-    colors[i * 3 + 1] = color.g
-    colors[i * 3 + 2] = color.b
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  return geo
-}
 
 // --- Rangement des bâtiments par tuile (une seule fois, au chargement) ---
 const tiles = new Map<string, Building[]>()
@@ -102,7 +50,7 @@ function CityTile({ tileKey }: { tileKey: string }) {
     if (!list) return null
     const parts: THREE.BufferGeometry[] = []
     for (const b of list) {
-      const geo = buildOne(b)
+      const geo = buildBuilding(b)
       if (geo) parts.push(geo)
     }
     if (parts.length === 0) return null

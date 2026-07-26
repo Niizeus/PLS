@@ -14,10 +14,14 @@ import { useCarStore } from '../vehicles/carStore'
 import { CAR } from '../vehicles/carConfig'
 import { createVehicleDriveState, driveVehicle, stopVehicle } from '../vehicles/vehicleDriving'
 import { useVehicleTelemetryStore } from '../vehicles/vehicleTelemetryStore'
+import { useRadioStore } from '../../audio/radioStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { moveWithCollision } from '../movementCollision'
 import { zoneAt } from '../../world/beauvais/zones'
 import { PLAYER } from './playerConfig'
+
+const SCOOTER_RADIO_ID = 'vehicle:scooter:prototype'
+const CAR_RADIO_ID = 'vehicle:car:prototype'
 
 /**
  * Ce que la logique produit pour le visuel (lu par Player pour animer les bras).
@@ -134,6 +138,7 @@ export function usePlayerMovement(
           group.rotation.y = scooter.parkedRot
           stopVehicle(scooterDrive.current)
           scooter.mount()
+          useRadioStore.getState().startVehicleRadio(SCOOTER_RADIO_ID)
           riding = true
         } else if (nearest === 'car') {
           k.interactQueued = false
@@ -141,6 +146,7 @@ export function usePlayerMovement(
           group.rotation.y = car.parkedRot
           stopVehicle(carDrive.current)
           car.mount()
+          useRadioStore.getState().startVehicleRadio(CAR_RADIO_ID)
           riding = true
         }
       } else if (ridingScooter) {
@@ -150,6 +156,7 @@ export function usePlayerMovement(
         group.position.x += Math.cos(rot) * 1.2
         group.position.z += -Math.sin(rot) * 1.2
         stopVehicle(scooterDrive.current)
+        useRadioStore.getState().stopRadio(SCOOTER_RADIO_ID)
         riding = false
       } else if (ridingCar) {
         k.interactQueued = false
@@ -158,6 +165,7 @@ export function usePlayerMovement(
         group.position.x += Math.cos(rot) * 1.9
         group.position.z += -Math.sin(rot) * 1.9
         stopVehicle(carDrive.current)
+        useRadioStore.getState().stopRadio(CAR_RADIO_ID)
         riding = false
       }
     }

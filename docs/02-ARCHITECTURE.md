@@ -17,7 +17,7 @@ PLS/
     │
     ├── core/              ← le "moteur" : boucle de jeu, systèmes partagés
     ├── world/             ← LE MONDE (map de Beauvais, décor, bâtiments)
-    │   └── beauvais/       ← données OSM, génération de la ville
+    │   └── beauvais/       ← données OSM + IGN, génération de la ville
     ├── entities/          ← personnages & objets (1 fichier par entité)
     ├── gameplay/          ← règles du jeu : actions, quêtes, score, "actions mauvaises"
     ├── ui/                ← interface 2D : menus, HUD, dialogues (composants React)
@@ -110,5 +110,6 @@ modifier dans GameCanvas.
 | Un menu ou un écran | `ui/` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store) |
+| Une radio jouable | fichiers `.wav` dans `public/musique/radio/RXX/` avec sous-dossiers `Musiques/`, `Jingles/`, `Publicites/`, `Emissions/`. La logique radio vit dans `src/audio/`. |
 | Un effet visuel cartoon | `shaders/` |
 | Une référence à la vie du pote | `data/` (texte/JSON) |

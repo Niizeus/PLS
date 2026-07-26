@@ -5,7 +5,10 @@
  * Ce script tourne HORS du jeu (une fois, à la main). Il :
  *   1. récupère les bâtiments de Beauvais depuis OpenStreetMap (API Overpass),
  *   2. projette les coordonnées GPS (lat/lon) en mètres (x, z) autour d'une origine,
- *   3. ESTIME une hauteur réaliste pour chaque bâtiment,
+ *   3. va chercher la VRAIE hauteur de chaque bâtiment dans la BD TOPO de l'IGN,
+ *      et en déduit la hauteur + l'orientation de son toit (voir `bdtopo.mjs` et
+ *      `roofs.mjs`). L'estimation par la surface au sol ne sert plus que de filet
+ *      de sécurité, pour le ~1 % de bâtiments sans correspondance IGN,
  *   4. écrit un fichier COMPACT que le jeu chargera (data/beauvais-buildings.json).
  *
  * Le jeu ne lit JAMAIS le gros fichier OSM brut : il lit le fichier compact.
@@ -22,50 +25,21 @@
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { fetchBdTopo, joinBdTopo } from './bdtopo.mjs'
+import { computeRidgeAngles } from './roofs.mjs'
+import { ORIGIN, BBOX, project, unproject } from './geo.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RÉGLAGES (change ici pour agrandir la zone ou déplacer l'origine)
+// RÉGLAGES
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Origine de la scène = la cathédrale Saint-Pierre. Ce point devient le (0,0) du
-// monde 3D. Tous les bâtiments sont positionnés en mètres par rapport à lui.
-const ORIGIN = { lat: 49.4326, lon: 2.081 }
-
-// Zone récupérée : TOUTE la commune de Beauvais (~7,5 km de côté) : [sud, ouest, nord, est].
-// Couvre l'ensemble des bâtiments + le plan d'eau du Canada au nord.
-const BBOX = [49.398, 2.03, 49.472, 2.145]
+// L'origine du monde (la cathédrale), l'emprise de la carte et la projection
+// GPS → mètres vivent dans `geo.mjs` : ils sont partagés avec les autres scripts
+// hors-jeu, et il ne doit y en avoir qu'une seule définition.
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OUT_FILE = join(__dirname, 'data', 'beauvais-buildings.json')
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROJECTION GPS → MÈTRES (équirectangulaire locale : précise à <0,1 % sur qq km)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const EARTH_RADIUS = 6378137 // rayon terrestre en mètres
-const deg2rad = (d) => (d * Math.PI) / 180
-
-/**
- * Convertit (lat, lon) en (x, z) mètres autour de l'origine.
- *  - x : est(+) / ouest(-)
- *  - z : sud(+) / nord(-)  → le nord "s'éloigne" dans la scène (z négatif)
- */
-function project(lat, lon) {
-  const x = deg2rad(lon - ORIGIN.lon) * EARTH_RADIUS * Math.cos(deg2rad(ORIGIN.lat))
-  const z = -deg2rad(lat - ORIGIN.lat) * EARTH_RADIUS
-  return [x, z]
-}
-
-const rad2deg = (r) => (r * 180) / Math.PI
-
-/** Inverse de project : (x, z) mètres → (lat, lon). Sert à échantillonner l'altitude. */
-function unproject(x, z) {
-  const lat = ORIGIN.lat - rad2deg(z / EARTH_RADIUS)
-  const lon = ORIGIN.lon + rad2deg(x / (EARTH_RADIUS * Math.cos(deg2rad(ORIGIN.lat))))
-  return { lat, lon }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RELIEF : on échantillonne l'altitude réelle de Beauvais (API Open-Meteo,
@@ -510,6 +484,32 @@ async function main() {
     }
   }
 
+  // ── HAUTEURS RÉELLES (IGN BD TOPO) ────────────────────────────────────────
+  // Jusqu'ici les hauteurs sortaient de `estimateHeight()` (une devinette basée
+  // sur la surface au sol). On les remplace par les hauteurs MESURÉES de l'IGN,
+  // et on en profite pour récupérer la hauteur du toit et son matériau.
+  // Si l'IGN est injoignable, on garde les estimations : le jeu reste jouable.
+  let ignReport = null
+  try {
+    const { features } = await fetchBdTopo(BBOX)
+    ignReport = joinBdTopo(buildings, features, project)
+    const roofReport = computeRidgeAngles(buildings)
+    const pc = (n) => ((n / ignReport.total) * 100).toFixed(1) + ' %'
+    console.log(
+      `   hauteurs mesurées : ${pc(ignReport.inside + ignReport.near)} ` +
+        `(${pc(ignReport.inside)} par recouvrement, ${pc(ignReport.near)} par proximité)`,
+    )
+    console.log(
+      `   ${pc(ignReport.missed)} sans correspondance → hauteur estimée conservée`,
+    )
+    console.log(
+      `   toits en pente : ${ignReport.withRoof} ` +
+        `(${roofReport.withFree} orientés sur façade libre, ${roofReport.allShared} en cœur d'îlot)`,
+    )
+  } catch (err) {
+    console.warn('⚠️  BD TOPO indisponible, on garde les hauteurs estimées :', err.message)
+  }
+
   // Petit récap des hauteurs, utile pour vérifier le réalisme d'un coup d'œil.
   const heights = buildings.map((b) => b.h).sort((a, b) => a - b)
   const q = (p) => heights[Math.floor(p * heights.length)]
@@ -521,7 +521,8 @@ async function main() {
       minX: round1(bounds.minX), maxX: round1(bounds.maxX),
       minZ: round1(bounds.minZ), maxZ: round1(bounds.maxZ),
     },
-    source: 'OpenStreetMap contributors (ODbL)',
+    source: 'OpenStreetMap contributors (ODbL) — hauteurs et toits : IGN BD TOPO (Licence Ouverte)',
+    ign: ignReport,
     generatedAt: new Date().toISOString(),
     count: buildings.length,
     roadCount: roads.length,

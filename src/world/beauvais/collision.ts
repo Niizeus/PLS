@@ -61,8 +61,13 @@ export function buildingHeightAt(x: number, z: number): number {
   const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
   if (!list) return 0
   for (const i of list) {
-    // Altitude ABSOLUE du toit (relief + hauteur du bâtiment), pour la caméra.
-    if (pointInFootprint(x, z, BUILDINGS[i].pts)) return terrainHeight(x, z) + BUILDINGS[i].h
+    // Altitude ABSOLUE du point le plus haut du bâtiment, pour la caméra.
+    // ⚠️ `h` ne monte que jusqu'à la GOUTTIÈRE : il faut ajouter le toit (`rh`),
+    // sinon la caméra passerait au travers des faîtages, qui montent jusqu'à
+    // plusieurs mètres au-dessus. On prend le faîtage sur toute l'emprise : c'est
+    // un poil prudent sur les bords, et c'est le bon sens de l'erreur.
+    const b = BUILDINGS[i]
+    if (pointInFootprint(x, z, b.pts)) return terrainHeight(x, z) + b.h + (b.rh ?? 0)
   }
   return 0
 }

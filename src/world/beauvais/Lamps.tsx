@@ -7,9 +7,8 @@ import { LAMPS, terrainHeight } from './cityData'
 /**
  * 💡 Lampadaires (OSM `highway=street_lamp`), en INSTANCES (un seul draw call).
  *
- * Modèle soigné : socle + mât + bras qui déborde sur la rue + tête lumineuse
- * (couleur chaude vive). Chaque lampadaire est tourné aléatoirement pour que les
- * bras ne pointent pas tous dans le même sens.
+ * Modèle volontairement simple : socle + mât + tête. Toutes les positions
+ * viennent de la donnée OSM — rien n'est placé à la main.
  */
 
 const H = 5.5 // hauteur du mât
@@ -44,17 +43,12 @@ function lampGeometry(): THREE.BufferGeometry {
   pole.translate(0, H / 2, 0)
   paint(pole, metal)
 
-  // Bras horizontal qui déborde sur la rue.
-  const arm = new THREE.BoxGeometry(1.1, 0.1, 0.1)
-  arm.translate(0.55, H, 0)
-  paint(arm, metal)
-
   // Tête / lanterne (couleur chaude vive = "allumée").
   const head = new THREE.CylinderGeometry(0.14, 0.26, 0.4, 8)
-  head.translate(1.05, H - 0.2, 0)
+  head.translate(0, H, 0)
   paint(head, glow)
 
-  return mergeGeometries([base, pole, arm, head], false)
+  return mergeGeometries([base, pole, head], false)
 }
 
 export default function Lamps() {

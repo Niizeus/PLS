@@ -116,23 +116,29 @@ L'idée générale, étape par étape :
 
 ### 📂 État actuel du pipeline (TOUTE la commune de Beauvais)
 
-Le pipeline couvre désormais **toute la ville** (bbox ~7,5 km) :
-**~34 000 bâtiments + ~7 000 routes + les plans d'eau** (dont le plan d'eau du Canada). Les fichiers :
+Le pipeline couvre **toute la ville** (bbox ~7,5 km) :
+**~34 000 bâtiments + ~7 000 routes + les plans d'eau** (dont le plan d'eau du Canada).
+
+> 🧱 **Le monde est volontairement PLAT et sans texture** (remise à plat de 2026-07, voir
+> [« Remise à plat »](#-remise-à-plat-du-monde-2026-07) plus bas). La **carte** reste la vraie
+> donnée OSM — tracé des rues, emprises des bâtiments, largeurs, plans d'eau. C'est seulement le
+> **décor** (relief, textures, mobilier détaillé, monuments faits main) qui a été retiré.
+
+Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires) **et le relief** (altitudes via Open-Meteo). Tourne hors-jeu. |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires) **et le relief** (altitudes via Open-Meteo). Tourne hors-jeu. ⚠️ Le relief et les murs qu'il produit ne sont **plus lus** par le jeu depuis la remise à plat. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
-| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments (façades + toits colorés) en **TUILES** (1 mesh par carré de 400 m → frustum culling automatique). |
-| `src/world/beauvais/Roads.tsx` | Routes soignées : **bordure/trottoir + bitume + ligne centrale** (rubans qui suivent le relief). Filtre les petits chemins piétons. |
-| `src/world/beauvais/Water.tsx` | Trace les plans d'eau (surfaces plates bleues). |
-| `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois, en surfaces vertes (2 teintes). |
+| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments en **blocs d'une seule couleur**, par **TUILES** de 180 m montées/démontées autour du joueur. |
+| `src/world/beauvais/Roads.tsx` | Routes : rubans plats d'une seule couleur, à la vraie largeur OSM, posés à `y = 0.03`. |
+| `src/world/beauvais/Water.tsx` | Plans d'eau : surfaces bleues plates (`y = 0.02`). Purement visuel (on ne nage pas). |
+| `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois : surfaces vertes plates (`y = 0.01`), 2 teintes. |
 | `src/world/beauvais/Trees.tsx` | Arbres instanciés (OSM + semés dans les bois). |
-| `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (le long des rues). |
-| `src/world/beauvais/Walls.tsx` | Murs / clôtures (bandes verticales fusionnées). |
+| `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (positions OSM). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
-| `src/world/Terrain.tsx` | Le **sol avec le relief réel** (maillage depuis la grille d'altitudes ; repli plat si absente). |
+| `src/world/Ground.tsx` | Le **sol : un plan PLAT à l'altitude 0** couvrant toute la ville. |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement** et **points de passage** (texte + icône, sauvegardés en local), via `src/ui/mapDraw.ts`. |
 
 ### 🏢 Comment on estime les hauteurs (réalisme)
@@ -196,17 +202,10 @@ jeu fluide :
 - [x] Inclure les bâtiments en relation (multipolygones) + cours intérieures. *(build-beauvais.mjs)*
 - [x] Routes plus propres (rubans continus). *(Roads.tsx)*
 - [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
-- [x] Habillage : verdure/parcs, arbres, lampadaires, murs. *(GreenAreas/Trees/Lamps/Walls)*
-- [x] Cathédrale + églises avec un look distinct (pierre + ardoise). *(Beauvais.tsx via `kind`)*
-- [x] **Relief réel de Beauvais** (heightmap Open-Meteo) — terrain 3D, tout posé dessus. *(Terrain.tsx + `terrainHeight`)*
-- [x] **Fix « sous le sol »** : `terrainHeight()` échantillonne le MÊME triangle que le sol affiché (barycentrique) au lieu d'une bilinéaire courbée → routes et joueur ne s'enfoncent plus dans les pentes. *(cityData.ts)*
+- [x] Habillage : verdure/parcs, arbres, lampadaires. *(GreenAreas/Trees/Lamps)*
 - [x] **Découpage en quartiers** (zones) : `zones.json` + `zoneAt()` + nom du quartier au HUD + contours sur la carte. *(zones.ts, Hud, mapDraw)*
-- [x] **Routes qui épousent le sol** : offsets Y minimes + `polygonOffset` → le perso ne « traverse » plus la route (avant l'asphalte était 18 cm au-dessus de ses pieds). *(Roads.tsx)*
-- [x] **Plans d'eau creusés** : le bassin des grands lacs est abaissé dans la grille de relief (partagée) et la surface se pose sous la berge → vrai plan d'eau, plus un patch bleu posé. *(cityData `carveWater`/`WATER_INFO` + Water.tsx)*
-- [~] **Relief plus fin** : re-génération de la grille d'altitude (32→110 pts/côté, ~268→~115 m) couvrant toute la ville, via `refine-terrain.mjs`. *(en cours de génération)*
-- [ ] **Pont de Paris = vrai pont** : tablier au-dessus de l'eau (repose sur le creusement du cours d'eau). *(prochain)*
-- [ ] **🏔️ Cap graphique — terrain LiDAR HD + bâtiments BD TOPO** : abandon d'Open-Meteo/OSM pour des données IGN précises. **Plan détaillé → [`06-CAP-GRAPHIQUE-IGN.md`](06-CAP-GRAPHIQUE-IGN.md)** (preuve faite sur le centre-ville).
-- [x] Polish : routes en relief (trottoir + bitume + lignes), lampadaires refaits, ciel en dégradé. *(Roads/Lamps/GradientSky)*
+- [x] **Remise à plat du monde** : relief supprimé, décor réduit à des blocs sans texture. *(voir la section dédiée plus bas)*
+- [ ] **Relief** : à refaire un jour, mais **une seule fois et proprement** — une source, une fonction `terrainHeight()`, et le sol affiché qui renvoie exactement la même surface.
 - [ ] Repères à la main : cathédrale soignée, ancienne prison, etc. (pas dans OSM → modélisation manuelle).
 - [ ] (Option) Ajouter les 9 tours / châteaux d'eau `man_made` d'OSM comme repères.
 - [ ] (Gros) Contours BD (cell-shading) en post-traitement — le vrai look cartoon.
@@ -237,3 +236,50 @@ jeu fluide :
 
 > 📝 Note licence : OSM est libre mais demande d'**attribuer** ("© OpenStreetMap contributors").
 > On mettra cette mention dans le jeu (écran crédits).
+
+---
+
+## 🧱 Remise à plat du monde (2026-07)
+
+### Pourquoi
+
+Le monde avait accumulé une cinquantaine de composants de décor (précincts faits main, pavages
+texturés, enseignes, mobilier de rue…) empilés sur un relief LiDAR chargé en plusieurs temps. Le
+résultat était cassé et impossible à déboguer :
+
+- **routes cassées** — chaque couche (bas-côté, bitume, trottoir, bordure, fissures) avait ses
+  propres marges verticales, calées sur un relief qui pouvait changer en cours de partie ;
+- **murs invisibles** — `collision.ts` bloque les emprises OSM de **tous** les bâtiments, mais
+  l'affichage en excluait certains (monuments faits main, `CATHEDRAL_ONLY`…). Un bâtiment exclu
+  de l'affichage mais pas des collisions = un mur qu'on ne voit pas ;
+- **objets qui flottent ou s'enfoncent** — `terrainHeight()` empilait relief LiDAR, ponts,
+  passages souterrains, rampes, places « aplanies »… chacun corrigeant le précédent.
+
+### Ce qui a été fait
+
+**Supprimé** : les ~48 composants de décor de `src/world/beauvais/`, le terrain LiDAR
+(`lidarTerrain.ts`, `TerrainLidar.tsx`, les scripts `build-terrain-*.mjs` / `refine-terrain.mjs`,
+les dalles `public/terrain/`), les murs, et toutes les corrections d'altitude de `cityData.ts`.
+
+**Gardé, intact** : l'inventaire, le personnage et ses animations, le scooter, la minimap, la
+grande carte (M), le HUD, le temps de jeu et les besoins — **et toute la donnée OSM**.
+
+**Reconstruit en simple** : voir le tableau des fichiers plus haut.
+
+### Les 3 règles à ne pas casser
+
+1. **Le monde est plat.** `terrainHeight()` (`cityData.ts`) renvoie `0`, et `Ground.tsx` affiche
+   un plan à `y = 0`. Ces deux-là doivent **toujours** être d'accord. Si tu remets du relief,
+   change les deux ensemble — et **une seule fois**, pas couche par couche.
+2. **Ce qui bloque doit être visible.** `Beauvais.tsx` affiche *tous* les bâtiments de la donnée,
+   sans exception, et `collision.ts` bloque exactement les mêmes contours. Si tu exclus un
+   bâtiment de l'affichage (pour le remplacer par un modèle fait main, par exemple), **exclus-le
+   aussi des collisions** — sinon tu recrées un mur invisible.
+3. **Une couche de sol = une hauteur.** Herbe `0.01`, eau `0.02`, routes `0.03`. Si tu ajoutes une
+   couche, donne-lui sa place dans cet ordre au lieu de bricoler des marges.
+
+### Ce qui a été archivé
+
+Les recherches sur le vrai Beauvais (repères, monuments, enseignes, tracés de rues) restent
+valables même sans le code qui les utilisait : elles sont dans **`docs/archive/`**. À relire
+avant de refaire le centre-ville — mais ne les traite pas comme l'état actuel du code.

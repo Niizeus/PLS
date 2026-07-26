@@ -1,25 +1,27 @@
 import rawData from './data/beauvais-buildings.json'
-import { lidarHeight } from './lidarTerrain'
 
 /**
- * 🗃️  Source unique des données de Beauvais (chargée une seule fois).
+ * 🗃️  Source unique des données de Beauvais (chargée une seule fois, en synchrone).
  *
- * Ce module lit le fichier compact et le rend exploitable partout :
- *  - la ville 3D (Beauvais.tsx) l'extrude,
- *  - les routes (Roads.tsx) tracent les voies,
- *  - le sol (CityGround.tsx) se dimensionne dessus,
+ * Ce module lit le fichier compact généré depuis OpenStreetMap et le rend
+ * exploitable partout :
+ *  - la ville 3D (Beauvais.tsx) extrude les bâtiments en blocs,
+ *  - les routes (Roads.tsx) tracent les voies à plat,
  *  - les collisions (collision.ts) empêchent d'entrer dans les bâtiments,
  *  - la minimap et la carte (ui/) dessinent tout ça vu du dessus.
  * Tout le monde importe d'ICI → pas de duplication, pas de divergence.
+ *
+ * ⚠️ RELIEF PLAT : le monde est volontairement à altitude 0 partout (voir
+ * `terrainHeight`). C'est la base saine sur laquelle on reconstruit. Tant que
+ * personne ne réintroduit de relief, TOUT (sol, routes, bâtiments, joueur,
+ * scooter) est calé sur y = 0 → impossible de « flotter » ou de passer sous le sol.
  */
 
 /** Un bâtiment : hauteur (m), contour projeté en mètres [x, z], et son centre. */
 export interface Building {
   h: number
   pts: number[][]
-  /** Cours intérieures (trous) éventuelles, pour les bâtiments à patio. */
-  holes?: number[][][]
-  /** Monument (cathedral / church / chapel) → look distinct. */
+  /** Monument (cathedral / church / chapel) → look légèrement distinct. */
   kind?: string
   cx: number
   cz: number
@@ -29,11 +31,6 @@ export interface Building {
 export interface Green {
   pts: number[][]
   wood?: number
-}
-
-/** Un mur / une clôture : polyligne [x, z]. */
-export interface Wall {
-  pts: number[][]
 }
 
 /** Une route : largeur (m) et polyligne de points [x, z]. */
@@ -47,30 +44,7 @@ export interface Water {
   pts: number[][]
 }
 
-export interface BridgeDeck {
-  id: string
-  name: string
-  x: number
-  z: number
-  rot: number
-  length: number
-  width: number
-  ramp: number
-  clearance: number
-}
-
-export interface UnderpassCut {
-  id: string
-  name: string
-  x: number
-  z: number
-  rot: number
-  length: number
-  width: number
-  ramp: number
-  drop: number
-}
-
+/** L'emprise totale de la ville, en mètres monde. */
 export interface Bounds {
   minX: number
   maxX: number
@@ -78,25 +52,13 @@ export interface Bounds {
   maxZ: number
 }
 
-/** Grille d'altitudes (relief), en mètres relatifs à l'origine. */
-interface Terrain {
-  cols: number
-  x0: number
-  z0: number
-  dx: number
-  dz: number
-  h: number[]
-}
-
 interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
-  terrain: Terrain | null
-  buildings: { h: number; pts: number[][]; holes?: number[][][]; kind?: string }[]
+  buildings: { h: number; pts: number[][]; kind?: string }[]
   roads: { w: number; pts: number[][] }[]
   waters: { pts: number[][] }[]
   greens: { pts: number[][]; wood?: number }[]
-  walls: { pts: number[][] }[]
   trees: number[][]
   lamps: number[][]
 }
@@ -105,49 +67,11 @@ const data = rawData as unknown as RawCity
 
 export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
-export const TERRAIN = data.terrain ?? null
 export const ROADS: Road[] = data.roads ?? []
 export const WATERS: Water[] = data.waters ?? []
 export const GREENS: Green[] = data.greens ?? []
-export const WALLS: Wall[] = data.walls ?? []
 export const TREES: number[][] = data.trees ?? []
 export const LAMPS: number[][] = data.lamps ?? []
-
-export const BRIDGE_DECKS: BridgeDeck[] = [
-  {
-    id: 'pont-de-paris',
-    name: 'Pont de Paris',
-    x: 16.6,
-    z: 719.5,
-    rot: 1.32,
-    length: 42,
-    width: 12.4,
-    ramp: 26,
-    clearance: 1.05,
-  },
-]
-
-export const PLACE_MARECHAUX = {
-  x: 634.2,
-  z: -191.5,
-  rot: 0.18,
-  halfX: 74,
-  halfZ: 46,
-}
-
-export const UNDERPASS_CUTS: UnderpassCut[] = [
-  {
-    id: 'jean-moulin-underpass',
-    name: 'Passage Jean-Moulin',
-    x: 765,
-    z: -472,
-    rot: -1.34,
-    length: 135,
-    width: 31,
-    ramp: 74,
-    drop: 3.4,
-  },
-]
 
 // On calcule le centre de chaque bâtiment une fois pour toutes.
 export const BUILDINGS: Building[] = data.buildings.map((b) => {
@@ -158,253 +82,23 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
     sz += z
   }
   const n = b.pts.length || 1
-  return { h: b.h, pts: b.pts, holes: b.holes, kind: b.kind, cx: sx / n, cz: sz / n }
+  return { h: b.h, pts: b.pts, kind: b.kind, cx: sx / n, cz: sz / n }
 })
 
 /**
- * Altitude du terrain au point monde (x, z), en mètres (0 si pas de relief).
+ * Altitude du sol au point monde (x, z).
  *
- * ⚠️ IMPORTANT : cette fonction doit renvoyer EXACTEMENT la même surface que le
- * sol affiché (Terrain.tsx). Or ce sol est fait de TRIANGLES plats (chaque case
- * de la grille est coupée en deux). On échantillonne donc le BON triangle
- * (interpolation barycentrique), et surtout PAS une interpolation bilinéaire
- * (surface courbée) qui, elle, passe au-dessus/en dessous des triangles → c'est
- * ce qui faisait "plonger" les routes et le joueur SOUS le sol dans les pentes.
+ * 👉 Le monde est PLAT : cette fonction renvoie toujours 0.
  *
- * Découpage identique à Terrain.tsx : triangles (a,c,b) puis (b,c,d), avec
- *   a = (i0,j0)  b = (i1,j0)  c = (i0,j1)  d = (i1,j1)
- * La diagonale partagée relie b et c → tx+tz ≤ 1 : triangle a,b,c ; sinon b,c,d.
- *
- * TOUT se pose là-dessus : bâtiments, routes, joueur, arbres, lampadaires...
+ * On la garde quand même (au lieu d'écrire `0` partout) parce que c'est LE point
+ * de passage unique si un jour on remet du relief : il suffira de changer ici, et
+ * le sol, les routes, le joueur et le scooter suivront ensemble. Si tu remets du
+ * relief, assure-toi que le sol AFFICHÉ (Ground.tsx) renvoie exactement la même
+ * surface que cette fonction — sinon on retombe sur des objets qui flottent ou
+ * un joueur qui s'enfonce.
  */
-function rawTerrainHeight(x: number, z: number): number {
-  // Priorité au terrain LiDAR HD s'il est chargé et couvre le point (repère commun).
-  const lh = lidarHeight(x, z)
-  if (lh !== undefined) return lh
-  const t = TERRAIN
-  if (!t) return 0
-  const last = t.cols - 1
-  let fi = (x - t.x0) / t.dx
-  let fj = (z - t.z0) / t.dz
-  fi = Math.min(last, Math.max(0, fi))
-  fj = Math.min(last, Math.max(0, fj))
-  const i0 = Math.floor(fi)
-  const j0 = Math.floor(fj)
-  const i1 = Math.min(i0 + 1, last)
-  const j1 = Math.min(j0 + 1, last)
-  const tx = fi - i0 // position dans la case, sens X (0 → i0, 1 → i1)
-  const tz = fj - j0 // position dans la case, sens Z (0 → j0, 1 → j1)
-  const h = t.h
-  const hA = h[j0 * t.cols + i0] // coin (i0, j0)
-  const hB = h[j0 * t.cols + i1] // coin (i1, j0)
-  const hC = h[j1 * t.cols + i0] // coin (i0, j1)
-  const hD = h[j1 * t.cols + i1] // coin (i1, j1)
-  // Plan du triangle qui contient (tx, tz) — même diagonale que le sol affiché.
-  if (tx + tz <= 1) return hA + (hB - hA) * tx + (hC - hA) * tz
-  return hD + (hB - hD) * (1 - tz) + (hC - hD) * (1 - tx)
-}
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
-const smoothstep = (a: number, b: number, v: number) => {
-  const t = clamp01((v - a) / (b - a || 1))
-  return t * t * (3 - 2 * t)
-}
-
-function segmentFrame(
-  x: number,
-  z: number,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-): { t: number; distance: number } {
-  const dx = bx - ax
-  const dz = bz - az
-  const lenSq = dx * dx + dz * dz || 1
-  const t = clamp01(((x - ax) * dx + (z - az) * dz) / lenSq)
-  const px = ax + dx * t
-  const pz = az + dz * t
-  return { t, distance: Math.hypot(x - px, z - pz) }
-}
-
-function polylineFrame(x: number, z: number, pts: Array<{ x: number; z: number }>): { t: number; distance: number } {
-  let total = 0
-  const lengths: number[] = []
-  for (let i = 0; i < pts.length - 1; i++) {
-    const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].z - pts[i].z)
-    lengths.push(len)
-    total += len
-  }
-
-  let bestDistance = Infinity
-  let bestAlong = 0
-  let before = 0
-  for (let i = 0; i < pts.length - 1; i++) {
-    const frame = segmentFrame(x, z, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z)
-    if (frame.distance < bestDistance) {
-      bestDistance = frame.distance
-      bestAlong = before + frame.t * lengths[i]
-    }
-    before += lengths[i]
-  }
-
-  return { t: clamp01(bestAlong / (total || 1)), distance: bestDistance }
-}
-
-function orientedEllipseInfluence(
-  x: number,
-  z: number,
-  cx: number,
-  cz: number,
-  halfX: number,
-  halfZ: number,
-  rot: number,
-): number {
-  const c = Math.cos(rot)
-  const s = Math.sin(rot)
-  const dx = x - cx
-  const dz = z - cz
-  const lx = dx * c + dz * s
-  const lz = -dx * s + dz * c
-  const d = Math.hypot(lx / halfX, lz / halfZ)
-  return 1 - smoothstep(0.72, 1.08, d)
-}
-
-function bridgeDeckHeight(x: number, z: number, base: number): number {
-  let h = base
-
-  for (const bridge of BRIDGE_DECKS) {
-    const c = Math.cos(bridge.rot)
-    const s = Math.sin(bridge.rot)
-    const dx = x - bridge.x
-    const dz = z - bridge.z
-    const along = dx * c + dz * s
-    const side = -dx * s + dz * c
-    const halfLength = bridge.length / 2
-    const halfWidth = bridge.width / 2
-    const absAlong = Math.abs(along)
-    const absSide = Math.abs(side)
-    if (absAlong > halfLength + bridge.ramp || absSide > halfWidth + 5) continue
-
-    const sideWeight = 1 - smoothstep(halfWidth - 1.2, halfWidth + 5, absSide)
-    if (sideWeight <= 0) continue
-
-    const a = {
-      x: bridge.x - c * halfLength,
-      z: bridge.z - s * halfLength,
-    }
-    const b = {
-      x: bridge.x + c * halfLength,
-      z: bridge.z + s * halfLength,
-    }
-    const deckHeight = Math.max(rawTerrainHeight(a.x, a.z), rawTerrainHeight(b.x, b.z), rawTerrainHeight(bridge.x, bridge.z)) + bridge.clearance
-    const alongWeight = absAlong <= halfLength ? 1 : 1 - smoothstep(halfLength, halfLength + bridge.ramp, absAlong)
-    h += (deckHeight - h) * sideWeight * alongWeight
-  }
-
-  return h
-}
-
-function marechauxPlaceHeight(x: number, z: number, base: number): number {
-  const weight = orientedEllipseInfluence(
-    x,
-    z,
-    PLACE_MARECHAUX.x,
-    PLACE_MARECHAUX.z,
-    PLACE_MARECHAUX.halfX,
-    PLACE_MARECHAUX.halfZ,
-    PLACE_MARECHAUX.rot,
-  )
-  if (weight <= 0) return base
-
-  const centerHeight = rawTerrainHeight(PLACE_MARECHAUX.x, PLACE_MARECHAUX.z)
-  return base + (centerHeight - base) * weight * 0.88
-}
-
-function underpassHeight(x: number, z: number, base: number): number {
-  let h = base
-
-  for (const pass of UNDERPASS_CUTS) {
-    const c = Math.cos(pass.rot)
-    const s = Math.sin(pass.rot)
-    const dx = x - pass.x
-    const dz = z - pass.z
-    const along = dx * c + dz * s
-    const side = -dx * s + dz * c
-    const halfLength = pass.length / 2
-    const halfWidth = pass.width / 2
-    const absAlong = Math.abs(along)
-    const absSide = Math.abs(side)
-    if (absAlong > halfLength + pass.ramp || absSide > halfWidth + 14) continue
-
-    const sideWeight = 1 - smoothstep(halfWidth - 2, halfWidth + 14, absSide)
-    if (sideWeight <= 0) continue
-
-    const rampT = absAlong <= halfLength ? 1 : 1 - smoothstep(halfLength, halfLength + pass.ramp, absAlong)
-    const tunnelBowl = 0.82 + 0.18 * (1 - smoothstep(0, halfLength, absAlong))
-    const cut = pass.drop * rampT * tunnelBowl
-    h -= cut * sideWeight
-  }
-
-  return h
-}
-
-function gambettaGradeHeight(x: number, z: number): { height: number; weight: number } {
-  const center = { x: 103, z: 268 }
-  const crossing27June = { x: 338, z: -194 }
-  const intermarcheJunction = { x: 850, z: -1140 }
-  const lidl = { x: 1003, z: -1562 }
-  const mcdoTille = { x: 1211, z: -2171 }
-  const climb = polylineFrame(x, z, [center, crossing27June, intermarcheJunction])
-  const plateau = polylineFrame(x, z, [intermarcheJunction, lidl, mcdoTille])
-
-  const centerHeight = rawTerrainHeight(center.x, center.z)
-  const junctionHeight = Math.max(rawTerrainHeight(intermarcheJunction.x, intermarcheJunction.z), centerHeight + 7.8)
-  const plateauHeight =
-    junctionHeight * 0.78 + rawTerrainHeight(lidl.x, lidl.z) * 0.16 + rawTerrainHeight(mcdoTille.x, mcdoTille.z) * 0.06
-
-  const climbWeight = (1 - smoothstep(26, 78, climb.distance)) * Math.max(0.32, 1 - smoothstep(0.98, 1, climb.t))
-  const climbHeight = centerHeight + (junctionHeight - centerHeight) * smoothstep(0, 1, climb.t)
-
-  const plateauCorridor = 1 - smoothstep(58, 180, plateau.distance)
-  const plateauEnd = 1 - smoothstep(0.92, 1, plateau.t)
-  const plateauStart = smoothstep(0, 0.08, plateau.t)
-  const plateauWeight = plateauCorridor * Math.max(0.62, plateauStart * plateauEnd)
-  const plateauBlendHeight = junctionHeight + (plateauHeight - junctionHeight) * smoothstep(0, 0.16, plateau.t)
-
-  if (plateauWeight > climbWeight) return { height: plateauBlendHeight, weight: plateauWeight }
-  return { height: climbHeight, weight: climbWeight }
-}
-
-function beauvaisUrbanHeight(x: number, z: number, base: number): number {
-  let h = base
-
-  const gambetta = gambettaGradeHeight(x, z)
-  h += (gambetta.height - h) * clamp01(gambetta.weight)
-
-  h = underpassHeight(x, z, h)
-  h = marechauxPlaceHeight(x, z, h)
-
-  const marketWeight = orientedEllipseInfluence(x, z, 228, 254, 62, 46, -0.08)
-  if (marketWeight > 0) {
-    const marketHeight = rawTerrainHeight(228, 254)
-    h += (marketHeight - h) * marketWeight
-  }
-
-  const mairieWeight = orientedEllipseInfluence(x, z, 108, 262, 48, 34, 0.12)
-  if (mairieWeight > 0) {
-    const mairieGrade = gambettaGradeHeight(108, 262).height
-    const mairieHeight = mairieGrade * 0.65 + rawTerrainHeight(108, 262) * 0.35
-    h += (mairieHeight - h) * mairieWeight * 0.72
-  }
-
-  h = bridgeDeckHeight(x, z, h)
-
-  return h
-}
-
-export function terrainHeight(x: number, z: number): number {
-  return beauvaisUrbanHeight(x, z, rawTerrainHeight(x, z))
+export function terrainHeight(_x: number, _z: number): number {
+  return 0
 }
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */
@@ -420,77 +114,6 @@ export function pointInFootprint(x: number, z: number, pts: number[][]): boolean
 }
 
 /**
- * 💧 Creusement des plans d'eau.
- *
- * Avant, l'eau était un polygone plat POSÉ sur le sol → un lac « peint ». Ici on
- * CREUSE réellement le bassin : on abaisse les sommets de la grille de relief
- * situés à l'intérieur d'un plan d'eau. Comme on modifie la grille PARTAGÉE
- * (TERRAIN.h), le sol affiché (Terrain.tsx) ET `terrainHeight()` restent d'accord
- * → pas de nouveau décalage « sous le sol ». La surface d'eau (Water.tsx) est
- * ensuite posée un peu SOUS la berge grâce à `WATER_INFO`.
- *
- * Note : à la résolution de la grille, seuls les GRANDS plans d'eau (plan d'eau
- * du Canada) contiennent des sommets → eux sont vraiment creusés ; les fins
- * cours d'eau restent posés (bassin trop étroit pour la grille).
- */
-export interface WaterInfo {
-  /** Altitude (m) de la surface d'eau de ce plan d'eau. */
-  surfaceY: number
-  /** true si le bassin a réellement été creusé dans la grille. */
-  carved: boolean
-}
-export const WATER_INFO: WaterInfo[] = []
-const WATER_DEPTH = 4 // profondeur du bassin sous la berge (m)
-const WATER_DROP = 0.4 // la surface d'eau se pose un peu sous la berge (m)
-
-;(function carveWater() {
-  if (!TERRAIN || WATERS.length === 0) {
-    for (let i = 0; i < WATERS.length; i++) WATER_INFO.push({ surfaceY: 0, carved: false })
-    return
-  }
-  const t = TERRAIN
-  // 1) Boîte englobante + niveau de berge (médiane du contour, AVANT creusement).
-  const boxes = WATERS.map((w) => {
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
-    const hs: number[] = []
-    for (const [x, z] of w.pts) {
-      if (x < minX) minX = x
-      if (x > maxX) maxX = x
-      if (z < minZ) minZ = z
-      if (z > maxZ) maxZ = z
-      hs.push(terrainHeight(x, z))
-    }
-    hs.sort((a, b) => a - b)
-    return { minX, maxX, minZ, maxZ, shore: hs[hs.length >> 1] ?? 0 }
-  })
-  // 2) Creuse chaque sommet de grille situé DANS un plan d'eau (avec pré-filtre bbox).
-  const carved = new Array(WATERS.length).fill(false)
-  for (let j = 0; j < t.cols; j++) {
-    for (let i = 0; i < t.cols; i++) {
-      const x = t.x0 + i * t.dx
-      const z = t.z0 + j * t.dz
-      for (let w = 0; w < WATERS.length; w++) {
-        const b = boxes[w]
-        if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue
-        if (pointInFootprint(x, z, WATERS[w].pts)) {
-          const idx = j * t.cols + i
-          const floor = b.shore - WATER_DEPTH
-          if (t.h[idx] > floor) t.h[idx] = floor
-          carved[w] = true
-        }
-      }
-    }
-  }
-  // 3) Niveau de surface : sous la berge si creusé, sinon juste au-dessus du sol.
-  for (let w = 0; w < WATERS.length; w++) {
-    WATER_INFO.push({
-      surfaceY: carved[w] ? boxes[w].shore - WATER_DROP : boxes[w].shore + 0.05,
-      carved: carved[w],
-    })
-  }
-})()
-
-/**
  * Cherche un point de spawn DÉGAGÉ devant la cathédrale (à l'origine 0,0).
  *
  * On teste des points sur des anneaux autour de la cathédrale, on écarte ceux qui
@@ -498,6 +121,9 @@ const WATER_DROP = 0.4 // la surface d'eau se pose un peu sous la berge (m)
  * du bâtiment le plus proche) : c'est typiquement le parvis, donc "devant".
  */
 function findSpawn(): { x: number; z: number } {
+  // Pré-filtre : seuls les bâtiments proches de l'origine peuvent gêner.
+  const near = BUILDINGS.filter((b) => b.cx * b.cx + b.cz * b.cz < 200 * 200)
+
   let best = { x: 0, z: 0 }
   let bestOpenness = -1
 
@@ -511,8 +137,7 @@ function findSpawn(): { x: number; z: number } {
       // Distance au sommet de bâtiment le plus proche + test "dans un bâtiment ?".
       let nearest = Infinity
       let inside = false
-      for (const b of BUILDINGS) {
-        // Pré-filtre : on ignore les bâtiments lointains.
+      for (const b of near) {
         if ((x - b.cx) ** 2 + (z - b.cz) ** 2 > 3600) continue
         if (pointInFootprint(x, z, b.pts)) {
           inside = true

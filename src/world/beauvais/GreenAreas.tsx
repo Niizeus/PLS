@@ -1,60 +1,67 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
-import { GREENS, terrainHeight } from './cityData'
+import { GREENS } from './cityData'
 
 /**
- * 🌳 Espaces verts (parcs, pelouses, bois) depuis OpenStreetMap.
+ * 🌿 Les espaces verts (parcs, pelouses, bois) d'OpenStreetMap.
  *
- * Remplis à plat, en deux teintes : pelouse/parc (clair) et boisé (plus foncé).
- * C'est ce qui aide le plus à reconnaître la ville (le vert casse le gris et colle
- * à une vraie carte). Tout fusionné en 2 meshes (1 par teinte).
+ * Chaque zone est son contour réel, rempli à plat juste au-dessus du sol.
+ * Deux teintes seulement : herbe pour les parcs, plus foncé pour les bois.
+ * Tout est fusionné en une géométrie par teinte (2 draw calls).
  */
 
-const GREEN_Y = 0.012 // au-dessus du sol, sous les routes et l'eau
-const GRASS = '#7ba05b'
-const WOOD = '#5c8449'
+const GRASS = '#7ba055'
+const WOOD = '#5d8544'
+const Y_GRASS = 0.01 // au ras du sol, et SOUS les routes (qui sont à 0.03)
 
-function mergePolys(filter: (wood: number | undefined) => boolean): THREE.BufferGeometry | null {
-  const geos: THREE.BufferGeometry[] = []
-  for (const g of GREENS) {
-    if (!filter(g.wood) || g.pts.length < 3) continue
-    const shape = new THREE.Shape()
-    shape.moveTo(g.pts[0][0], -g.pts[0][1])
-    for (let i = 1; i < g.pts.length; i++) shape.lineTo(g.pts[i][0], -g.pts[i][1])
-    shape.closePath()
-    const geo = new THREE.ShapeGeometry(shape)
-    geo.rotateX(-Math.PI / 2)
-    // Drape la surface sur le relief (chaque sommet à l'altitude du terrain).
-    const pos = geo.attributes.position
-    for (let v = 0; v < pos.count; v++) {
-      pos.setY(v, terrainHeight(pos.getX(v), pos.getZ(v)) + GREEN_Y)
-    }
-    geos.push(geo)
+/** Remplit un contour [x, z] par une surface plate posée à Y_GRASS. */
+function fill(pts: number[][]): THREE.BufferGeometry | null {
+  if (pts.length < 3) return null
+  // Une Shape vit dans le plan XY : on dessine en (x, -z) puis on couche la surface.
+  const shape = new THREE.Shape()
+  shape.moveTo(pts[0][0], -pts[0][1])
+  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0], -pts[i][1])
+  shape.closePath()
+
+  const geo = new THREE.ShapeGeometry(shape)
+  geo.rotateX(-Math.PI / 2)
+  geo.translate(0, Y_GRASS, 0)
+  return geo
+}
+
+function buildGeometry(wooded: boolean): THREE.BufferGeometry | null {
+  const parts: THREE.BufferGeometry[] = []
+  for (const green of GREENS) {
+    if (Boolean(green.wood) !== wooded) continue
+    const geo = fill(green.pts)
+    if (geo) parts.push(geo)
   }
-  if (geos.length === 0) return null
-  const merged = mergeGeometries(geos, false)
-  geos.forEach((g) => g.dispose())
+  if (parts.length === 0) return null
+  const merged = mergeGeometries(parts, false)
+  parts.forEach((p) => p.dispose())
   return merged
 }
 
-export default function GreenAreas() {
-  const grass = useMemo(() => mergePolys((wood) => !wood), [])
-  const wood = useMemo(() => mergePolys((w) => !!w), [])
+function Patch({ wooded, color }: { wooded: boolean; color: string }) {
+  const geometry = useMemo(() => buildGeometry(wooded), [wooded])
+  useEffect(() => () => geometry?.dispose(), [geometry])
 
+  if (!geometry) return null
+  return (
+    <mesh geometry={geometry} receiveShadow>
+      {/* DoubleSide : le sens des triangles dépend du sens de tracé OSM. */}
+      <meshToonMaterial color={color} gradientMap={toonGradient} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
+export default function GreenAreas() {
   return (
     <>
-      {grass && (
-        <mesh geometry={grass} receiveShadow>
-          <meshToonMaterial color={GRASS} gradientMap={toonGradient} />
-        </mesh>
-      )}
-      {wood && (
-        <mesh geometry={wood} receiveShadow>
-          <meshToonMaterial color={WOOD} gradientMap={toonGradient} />
-        </mesh>
-      )}
+      <Patch wooded={false} color={GRASS} />
+      <Patch wooded color={WOOD} />
     </>
   )
 }

@@ -94,7 +94,10 @@ export default function InventoryPanel() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === KEY.INVENTORY && !event.repeat) {
+      if ((event.code === KEY.INVENTORY || event.code === KEY.INVENTORY_ALT) && !event.repeat) {
+        // ⚠️ Tab déplace le focus dans la page par défaut : sans ce preventDefault,
+        // l'inventaire s'ouvrirait ET le navigateur sauterait sur un bouton.
+        event.preventDefault()
         setOpen((current) => !current)
         document.exitPointerLock?.()
       } else if (event.key === 'Escape') {

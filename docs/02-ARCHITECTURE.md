@@ -108,6 +108,8 @@ modifier dans GameCanvas.
 | Une nouvelle quête / mission | `data/quests.json` (+ logique dans `gameplay/`) |
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
+| Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. |
+| Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store) |
 | Une radio jouable | fichiers `.wav` dans `public/musique/radio/RXX/` avec sous-dossiers `Musiques/`, `Jingles/`, `Publicites/`, `Emissions/`. La logique radio vit dans `src/audio/`. |

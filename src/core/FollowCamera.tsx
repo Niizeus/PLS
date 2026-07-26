@@ -5,6 +5,7 @@ import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { useCarStore } from '../entities/vehicles/carStore'
 import { useScooterStore } from '../entities/vehicles/scooterStore'
 import { buildingHeightAt } from '../world/beauvais/collision'
+import { terrainHeight } from '../world/beauvais/cityData'
 import { useCameraStore } from './cameraStore'
 
 interface CameraRig {
@@ -45,6 +46,20 @@ const LOOK_AHEAD = 0.45
 const DISTANCE_CLOSE_SPEED = 28
 const DISTANCE_RELEASE_SPEED = 3.2
 const ROTATION_LAG = 10
+
+/**
+ * Regarder vers le haut, sans enterrer la caméra.
+ *
+ * Quand le pitch devient négatif (voir `cameraStore.ts`), la caméra descend sous
+ * la ligne des yeux. Sur terrain plat elle toucherait le sol tout de suite et le
+ * mouvement serait bloqué au bout de 2°. On combine donc deux choses :
+ *  - `GROUND_CLEARANCE` : la caméra ne passe jamais sous le sol ;
+ *  - `LOOK_UP_GAIN` : plus on lève les yeux, plus le point VISÉ monte. C'est lui
+ *    qui fait vraiment lever la tête, la caméra n'ayant plus qu'à s'écarter un peu.
+ * Résultat : on voit le haut de la cathédrale depuis le parvis.
+ */
+const GROUND_CLEARANCE = 0.6
+const LOOK_UP_GAIN = 4.5
 
 /** Camera 3e personne proche, type GTA arcade, avec collision mur plus stricte. */
 export default function FollowCamera() {
@@ -106,9 +121,17 @@ export default function FollowCamera() {
     const follow = 1 - Math.exp(-rig.follow * delta)
     camera.position.lerp(desiredPos.current, follow)
 
+    // La caméra ne s'enfonce jamais dans le sol (indispensable dès que le pitch
+    // devient négatif, mais utile aussi dans les descentes).
+    const floorY = terrainHeight(camera.position.x, camera.position.z) + GROUND_CLEARANCE
+    if (camera.position.y < floorY) camera.position.y = floorY
+
+    // Point visé : il MONTE quand on lève les yeux. C'est ce qui permet de voir
+    // le ciel et le haut des bâtiments sans avoir à enterrer la caméra.
+    const lookUp = Math.max(0, -pitch) * LOOK_UP_GAIN
     lookAt.current.set(
       ox - Math.sin(yaw) * LOOK_AHEAD,
-      oy,
+      oy + lookUp,
       oz - Math.cos(yaw) * LOOK_AHEAD,
     )
     camera.lookAt(lookAt.current)
@@ -124,12 +147,20 @@ function currentRig(): CameraRig {
 }
 
 function cameraObstructed(x: number, y: number, z: number): boolean {
+  // ⚠️ `buildingHeightAt` renvoie 0 quand il n'y a AUCUN bâtiment. Sans le test
+  // `> 0`, tout point sous l'altitude 0 était déclaré "dans un mur" — donc dans
+  // les quartiers bas de Beauvais (le relief passe sous la cathédrale, qui est le
+  // zéro du monde) la caméra se collait au perso en permanence, sans raison.
+  const blocked = (sx: number, sz: number) => {
+    const top = buildingHeightAt(sx, sz)
+    return top > 0 && y < top + 0.35
+  }
   return (
-    y < buildingHeightAt(x, z) + 0.35 ||
-    y < buildingHeightAt(x + CAMERA_RADIUS, z) + 0.35 ||
-    y < buildingHeightAt(x - CAMERA_RADIUS, z) + 0.35 ||
-    y < buildingHeightAt(x, z + CAMERA_RADIUS) + 0.35 ||
-    y < buildingHeightAt(x, z - CAMERA_RADIUS) + 0.35
+    blocked(x, z) ||
+    blocked(x + CAMERA_RADIUS, z) ||
+    blocked(x - CAMERA_RADIUS, z) ||
+    blocked(x, z + CAMERA_RADIUS) ||
+    blocked(x, z - CAMERA_RADIUS)
   )
 }
 

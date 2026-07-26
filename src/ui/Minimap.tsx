@@ -3,6 +3,7 @@ import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { SPAWN } from '../world/beauvais/cityData'
 import { buildingsNear } from '../world/beauvais/collision'
 import { drawBuildings, drawPlayer, type MapView } from './mapDraw'
+import { HUD } from './hudStyle'
 
 /**
  * Minimap ronde en haut à droite : vue du dessus centrée sur le joueur, nord en haut.
@@ -54,16 +55,15 @@ export default function Minimap() {
 
   return (
     <div
+      // Position gérée par la colonne droite du HUD (`Hud.tsx`).
       style={{
-        position: 'fixed',
-        top: 12,
-        right: 12,
+        position: 'relative',
         width: SIZE,
         height: SIZE,
         borderRadius: '50%',
         overflow: 'hidden',
-        border: '3px solid rgba(15, 20, 34, 0.85)',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+        border: `3px solid ${HUD.bg}`,
+        boxShadow: HUD.shadow,
         pointerEvents: 'none',
       }}
     >

@@ -3,6 +3,7 @@ import type { ItemEffectKey } from '../data/items'
 import { useInventoryStore } from '../gameplay/inventory/inventoryStore'
 import { useCharacterStatsStore } from '../gameplay/stats/characterStatsStore'
 import { getEffectiveStats, getEquipmentBonuses, getStatusEffectBonuses } from '../gameplay/stats/effectiveStats'
+import { HUD, panel } from './hudStyle'
 
 const VITALS: { key: ItemEffectKey; label: string; color: string }[] = [
   { key: 'health', label: 'Sante', color: '#ef4444' },
@@ -42,20 +43,9 @@ export default function StatsPanel() {
   const effectiveStats = useMemo(() => getEffectiveStats(stats, equipped, stats.activeEffects), [equipped, stats])
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 88,
-        left: 12,
-        width: 260,
-        padding: '10px 12px',
-        borderRadius: 8,
-        background: 'rgba(15, 20, 34, 0.72)',
-        color: '#e6ecf5',
-        font: '12px system-ui, sans-serif',
-        pointerEvents: 'none',
-      }}
-    >
+    // La position est décidée par la colonne gauche du HUD (`Hud.tsx`) : ce
+    // composant ne connaît plus que sa propre largeur.
+    <div style={{ ...panel, width: 260, font: `12px ${HUD.font}` }}>
       <div style={{ display: 'grid', gap: 6 }}>
         {VITALS.map((vital) => (
           <div key={vital.key} style={{ display: 'grid', gridTemplateColumns: '54px 1fr 30px', alignItems: 'center', gap: 7 }}>

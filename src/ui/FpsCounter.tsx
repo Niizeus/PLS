@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { HUD, panel } from './hudStyle'
 
 /**
  * Compteur de FPS (images/seconde), pour vérifier qu'on tient nos 60.
@@ -31,19 +32,14 @@ export default function FpsCounter() {
   const color = fps >= 55 ? '#5cf07a' : fps >= 30 ? '#f0c04a' : '#f05c5c'
 
   return (
+    // Position gérée par la colonne droite du HUD (`Hud.tsx`).
     <div
       style={{
-        position: 'fixed',
-        // Sous la minimap (qui occupe le coin haut-droit).
-        top: 184,
-        right: 12,
-        padding: '6px 10px',
-        borderRadius: 8,
-        background: 'rgba(15, 20, 34, 0.7)',
+        ...panel,
+        padding: '5px 10px',
         color,
-        font: '600 14px ui-monospace, monospace',
+        font: `600 13px ${HUD.mono}`,
         letterSpacing: 0.5,
-        pointerEvents: 'none',
       }}
     >
       {fps} FPS

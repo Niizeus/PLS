@@ -257,7 +257,7 @@ pour limiter les traversees de batiments a vitesse voiture. La camera est reglee
 avec un suivi plus nerveux en vehicule et une collision mur plus dense.
 Quand le joueur conduit, un tableau de bord affiche la vitesse reelle en km/h avec aiguille et
 compteur numerique, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
-Chaque vehicule garde sa station radio attribuee : au premier demarrage, une des cinq radios est choisie aleatoirement, puis elle reste la meme quand on descend et qu'on remonte. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
+Chaque vehicule garde sa station radio attribuee : au premier demarrage, une des cinq radios est choisie aleatoirement, puis elle reste la meme quand on descend et qu'on remonte. **La touche R change de station** (elle tourne en boucle sur les cinq) ; le choix est memorise sur le vehicule, donc chaque caisse garde SA station. La touche est rappelee sur le tableau de bord, a cote du nom de la station. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
 Les emissions programmees ont des horaires fixes dans le temps du jeu. Premiere grille en place : Podcast_Du_Soir, de 18h00 a 19h00 sur chaque station, avec des episodes RXX-E01.wav a RXX-E10.wav qui avancent dans l'ordre jour apres jour puis bouclent.
 
 ---

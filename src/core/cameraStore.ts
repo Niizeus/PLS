@@ -12,9 +12,21 @@ import { create } from 'zustand'
  * jamais via le hook réactif. C'est le même principe que le store du joueur.
  */
 
-// Bornes du pitch : on empêche de passer sous l'horizon ou au-dessus du perso.
-export const PITCH_MIN = 0.15
-export const PITCH_MAX = 1.2
+/**
+ * Bornes du pitch.
+ *
+ * `pitch` est la hauteur de la caméra AU-DESSUS du perso : grand = vue plongeante,
+ * petit = vue rasante. L'ancien plancher (0,15 rad ≈ 9°) gardait donc toujours la
+ * caméra au-dessus de l'épaule, regard légèrement vers le bas — **impossible de
+ * lever les yeux**, ni vers le ciel ni vers le haut de la cathédrale.
+ *
+ * On descend maintenant en NÉGATIF : la caméra passe sous la ligne des yeux et la
+ * vue se redresse. Deux garde-fous vont avec, dans `FollowCamera.tsx` : la caméra
+ * ne s'enfonce jamais dans le sol, et le point visé monte à mesure qu'on lève les
+ * yeux (sans ça, sur terrain plat, le sol bloquerait tout le mouvement).
+ */
+export const PITCH_MIN = -0.45 // ≈ -26° : on regarde vers le haut
+export const PITCH_MAX = 1.35 // ≈ 77° : vue quasi verticale
 
 interface CameraState {
   yaw: number

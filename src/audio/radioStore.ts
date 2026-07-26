@@ -18,6 +18,8 @@ interface RadioState {
   radioFilterEnabled: boolean
   assignStationToVehicle: (vehicleId: string) => RadioStationId
   startVehicleRadio: (vehicleId: string) => RadioStationId
+  /** Passe à la station suivante. Ne fait rien si aucune radio ne joue. */
+  nextStation: () => RadioStationId | null
   stopRadio: (sourceId: string) => void
   setCurrentContentLabel: (label: string | null) => void
   setVolume: (volume: number) => void
@@ -53,6 +55,30 @@ export const useRadioStore = create<RadioState>()(
           currentStationId: stationId,
           currentContentLabel: null,
         })
+        return stationId
+      },
+      /**
+       * Station suivante (touche R en véhicule).
+       *
+       * On mémorise le choix dans `vehicleStations` : chaque véhicule garde SA
+       * station, donc en redescendant puis remontant on retrouve la sienne — c'est
+       * ce qui donne l'impression que l'autoradio est celui de la caisse.
+       */
+      nextStation: () => {
+        const { activeSource, currentStationId } = get()
+        if (!activeSource || !currentStationId) return null
+
+        const index = RADIO_STATION_IDS.indexOf(currentStationId)
+        const stationId = RADIO_STATION_IDS[(index + 1) % RADIO_STATION_IDS.length]
+
+        set((state) => ({
+          currentStationId: stationId,
+          currentContentLabel: null,
+          vehicleStations:
+            activeSource.kind === 'vehicle'
+              ? { ...state.vehicleStations, [activeSource.id]: stationId }
+              : state.vehicleStations,
+        }))
         return stationId
       },
       stopRadio: (sourceId) => {

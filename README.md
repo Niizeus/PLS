@@ -99,11 +99,18 @@ un terrain de test en cell-shading (avec ombres douces et contours BD), **Chibru
 
 | Touche | Action |
 |--------|--------|
-| **ZQSD** | Se déplacer (fonctionne aussi en QWERTY : on lit la position physique des touches) |
+| **ZQSD** | Se déplacer / conduire (fonctionne aussi en QWERTY : on lit la position physique des touches) |
 | **Maj** | Courir |
-| **E** | Action / interagir |
+| **Espace** / **Ctrl** | Sauter / s'accroupir |
+| **E** | Action / interagir / monter dans un véhicule |
 | **Clic gauche** | Attaquer |
 | **Clic droit** | Défendre |
+| **Tab** (ou **I**) | Inventaire |
+| **1-4** | Raccourcis d'inventaire |
+| **R** | Station de radio suivante (en véhicule) |
+| **M** | Carte |
+| **F1** | Déplier/replier le rappel des touches |
+| **Échap** | Libérer la souris |
 
 > C'est un **playground de test**, pas encore Beauvais : la vraie ville (OSM) viendra dans une
 > étape dédiée (voir [docs/04-MONDE-BEAUVAIS.md](docs/04-MONDE-BEAUVAIS.md)).

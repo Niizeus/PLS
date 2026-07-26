@@ -80,17 +80,21 @@ function getMusicPosition(
   for (const track of musicTracks) {
     const duration = Math.max(1, track.durationSeconds)
     if (cursor < duration) {
-      return { track, offsetSeconds: cursor, content: 'music', label: 'Musiques' }
+      return { track, offsetSeconds: cursor, content: 'music', label: track.title }
     }
     cursor -= duration
   }
 
-  return { track: musicTracks[0], offsetSeconds: 0, content: 'music', label: 'Musiques' }
+  return { track: musicTracks[0], offsetSeconds: 0, content: 'music', label: musicTracks[0].title }
 }
 
+/**
+ * Garde l'ordre du catalogue mais renvoie la version sondee des morceaux : c'est elle qui
+ * porte la duree reelle du fichier, indispensable pour placer le curseur de la timeline.
+ */
 function filterAvailable(tracks: RadioTrack[], availableTracks: RadioTrack[]): RadioTrack[] {
-  const availableIds = new Set(availableTracks.map((track) => track.id))
-  return tracks.filter((track) => availableIds.has(track.id))
+  const availableById = new Map(availableTracks.map((track) => [track.id, track]))
+  return tracks.map((track) => availableById.get(track.id)).filter((track): track is RadioTrack => track !== undefined)
 }
 
 function isMinuteInSlot(minuteOfDay: number, startMinute: number, durationMinutes: number): boolean {

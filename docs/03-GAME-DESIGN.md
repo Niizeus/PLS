@@ -258,7 +258,9 @@ avec un suivi plus nerveux en vehicule et une collision mur plus dense.
 Quand le joueur conduit, un tableau de bord affiche la vitesse reelle en km/h avec aiguille et
 compteur numerique, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
 Chaque vehicule garde sa station radio attribuee : au premier demarrage, une des cinq radios est choisie aleatoirement, puis elle reste la meme quand on descend et qu'on remonte. **La touche R change de station** (elle tourne en boucle sur les cinq) ; le choix est memorise sur le vehicule, donc chaque caisse garde SA station. La touche est rappelee sur le tableau de bord, a cote du nom de la station. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
-Les emissions programmees ont des horaires fixes dans le temps du jeu. Premiere grille en place : Podcast_Du_Soir, de 18h00 a 19h00 sur chaque station, avec des episodes RXX-E01.wav a RXX-E10.wav qui avancent dans l'ordre jour apres jour puis bouclent.
+Le contenu des stations est **detecte sur disque**, pas ecrit en dur : chaque fichier audio depose dans `public/musique/radio/RXX_Nom/` entre dans la programmation, quel que soit son nom. Le titre affiche sur le tableau de bord est deduit du nom du fichier. Voir `public/musique/radio/README.md`.
+
+Les emissions programmees ont des horaires fixes dans le temps du jeu : chaque sous-dossier de `Emissions/` occupe une tranche d'une heure a partir de 18h00, dans l'ordre alphabetique. Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle. Premiere grille en place : `La_Zone_Libre` (TekRadz), `Derriere_La_Chanson` (Franchon), `Zone_De_Clash` (NRV), `La_France_En_Danger` (Lys France), `Starzone` (Alterz), de 18h00 a 19h00.
 
 ---
 
@@ -303,7 +305,11 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
 ## 🔊 Ambiance sonore
 
 - Musique légère, drôle ou nerveuse selon les moments.
-- Les cinq radios de depart (R01 a R05) sont des flux coherents du monde, pas des pistes relancees a zero par objet.
+- Les cinq radios de depart sont des flux coherents du monde, pas des pistes relancees a zero par objet.
+  **TekRadz** (R01, tekno underground militante), **Franchon** (R02, musique francaise),
+  **NRV** (R03, rap et clashs), **Lys France** (R04, info reactionnaire satirique) et
+  **Alterz** (R05, pop commerciale internationale). Identites completes dans
+  `docs/Documentations RADIO/Identite des radios du jeu.pdf`.
 - Les radios sont structurees en musiques, jingles, pubs et emissions programmees.
 - Bruitages exagérés façon cartoon.
 - Ambiance sonore de ville : circulation, pluie, bars, gare, parc, commissariat.

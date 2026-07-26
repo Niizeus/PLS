@@ -58,16 +58,7 @@ export default function RadioAudioSystem() {
     const station = getRadioStation(stationId)
     const playableTracks = getStationPlayableTracks(station)
 
-    Promise.all(
-      playableTracks.map(async (track) => {
-        try {
-          const response = await fetch(track.src, { method: 'HEAD' })
-          return response.ok ? track : null
-        } catch {
-          return null
-        }
-      }),
-    ).then((tracks) => {
+    Promise.all(playableTracks.map(probeTrack)).then((tracks) => {
       if (!alive) return
       setAvailability((state) => ({
         ...state,
@@ -142,6 +133,48 @@ export default function RadioAudioSystem() {
   }, [stationId])
 
   return null
+}
+
+/** Delai au-dela duquel on considere que la duree ne viendra pas, sans pour autant jeter le morceau. */
+const METADATA_TIMEOUT_MS = 10_000
+
+/**
+ * Verifie qu'un fichier existe vraiment et releve sa duree reelle.
+ *
+ * Le catalogue est construit a partir des noms de fichiers : il ne connait pas la duree.
+ * Or la timeline en a besoin pour savoir ou en serait la station si personne n'ecoutait.
+ * On charge donc juste les metadonnees (`preload = 'metadata'`), ce qui sert aussi de test
+ * de presence : un fichier absent ou illisible declenche `error` et sort de la playlist.
+ */
+function probeTrack(track: RadioTrack): Promise<RadioTrack | null> {
+  return new Promise((resolve) => {
+    const probe = new Audio()
+    probe.preload = 'metadata'
+
+    let settled = false
+    const finish = (result: RadioTrack | null) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeoutId)
+      probe.removeAttribute('src')
+      probe.load()
+      resolve(result)
+    }
+
+    const timeoutId = window.setTimeout(() => finish(track), METADATA_TIMEOUT_MS)
+
+    probe.addEventListener(
+      'loadedmetadata',
+      () => {
+        const duration = Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : track.durationSeconds
+        finish({ ...track, durationSeconds: duration })
+      },
+      { once: true },
+    )
+    probe.addEventListener('error', () => finish(null), { once: true })
+
+    probe.src = track.src
+  })
 }
 
 async function playRadio(

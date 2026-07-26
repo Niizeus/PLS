@@ -347,6 +347,13 @@ dans l'ordre, puis la liste boucle.
 ⏱️ Un jour de jeu dure une heure reelle : **une heure de jeu ne vaut que 2 min 30 d'audio**. Une
 emission de 14 minutes occupe donc pres de 6 heures de jeu.
 
+**La regie (`radioPlayout.ts`).** Deux lecteurs alternent : pendant que l'un finit en fondu sortant,
+l'autre demarre en fondu entrant — comme dans une vraie regie. Avec un seul lecteur, changer de
+morceau voulait dire ecraser sa source, donc une coupure nette. Le morceau suivant est en plus
+**annonce a l'avance** : la timeline etant une fonction du temps, on lui demande ce qui passera dans
+une seconde, et on lance le fondu pendant que le morceau courant joue encore. Fini le silence entre
+deux titres. Zapper de station utilise un fondu plus court et plus franc, pour que ca s'entende.
+
 ---
 
 ## 🧩 Activités et mini-jeux

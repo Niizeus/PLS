@@ -6,6 +6,7 @@ import { usePlayerMovement } from './usePlayerMovement'
 import { PLAYER } from './playerConfig'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { SPAWN } from '../../world/beauvais/cityData'
+import { groundHeight } from '../../world/beauvais/roadway'
 import PlayerModel from './PlayerModel'
 
 /**
@@ -34,7 +35,7 @@ export default function Player() {
   usePlayerMovement(groupRef, keys, mouse)
 
   return (
-    <group ref={groupRef} position={[SPAWN.x, PLAYER.BODY_HEIGHT, SPAWN.z]}>
+    <group ref={groupRef} position={[SPAWN.x, groundHeight(SPAWN.x, SPAWN.z) + PLAYER.BODY_HEIGHT, SPAWN.z]}>
       <Suspense fallback={null}>
         <PlayerModel />
       </Suspense>

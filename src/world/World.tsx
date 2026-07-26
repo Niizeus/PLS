@@ -6,6 +6,7 @@ import Roads from './beauvais/Roads'
 import Beauvais from './beauvais/Beauvais'
 import Trees from './beauvais/Trees'
 import Lamps from './beauvais/Lamps'
+import ScaleReferences from './beauvais/ScaleReferences'
 import { loadTerrain } from './beauvais/terrain'
 
 /**
@@ -59,6 +60,7 @@ export default function World() {
       <Beauvais />
       <Trees />
       <Lamps />
+      <ScaleReferences />
     </>
   )
 }

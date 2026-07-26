@@ -247,9 +247,16 @@ Le joueur peut utiliser ou voler :
 Même si les sorties routières sont bloquées par les travaux, les véhicules restent essentiels pour
 circuler, fuir la police, faire des missions ou provoquer le chaos.
 
-**Déjà en place :** un **scooter** conduisible (`src/entities/vehicles/`). On s'en approche et on
-monte/descend avec **E** ; conduite à ZQSD (accélère, freine/recule, braque), plus rapide qu'à pied.
-Base réutilisable pour les autres véhicules (voiture, vélo, kart...).
+**Deja en place :** un **scooter** et une **voiture prototype** conduisibles (`src/entities/vehicles/`).
+On s'en approche et on monte/descend avec **E** ; conduite a ZQSD (accelere, freine/recule, braque).
+La voiture sert de premier test d'echelle et de feeling : conduite arcade plus lourde, direction lissee,
+freinage plus progressif et rebond amorti contre les obstacles. Les vehicules partagent un noyau de
+conduite commun (`vehicleDriving.ts`) avec des reglages propres a chaque type.
+Les deplacements utilisent maintenant une collision a sous-pas avec empreinte simplifiee,
+pour limiter les traversees de batiments a vitesse voiture. La camera est reglee plus proche,
+avec un suivi plus nerveux en vehicule et une collision mur plus dense.
+Quand le joueur conduit, un tableau de bord affiche la vitesse reelle en km/h avec aiguille et
+compteur numerique, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
 
 ---
 

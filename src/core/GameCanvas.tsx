@@ -29,7 +29,7 @@ export default function GameCanvas() {
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      camera={{ position: [0, 6, 9], fov: 50, near: 0.1, far: 220 }}
+      camera={{ position: [0, 5, 8], fov: 55, near: 0.1, far: 220 }}
     >
       {/* Ciel en dégradé + brouillard assorti à l'horizon (climat océanique, cf docs/04). */}
       <GradientSky />

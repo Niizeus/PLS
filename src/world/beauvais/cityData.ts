@@ -33,10 +33,21 @@ export interface Green {
   wood?: number
 }
 
-/** Une route : largeur (m) et polyligne de points [x, z]. */
+/** Une route : largeur (m), polyligne [x, z] et metadonnees OSM utiles au rendu. */
 export interface Road {
   w: number
   pts: number[][]
+  id?: number
+  highway?: string
+  name?: string
+  ref?: string
+  lanes?: number
+  oneway?: boolean
+  service?: string
+  junction?: string
+  bridge?: boolean
+  tunnel?: boolean
+  layer?: number
 }
 
 /** Un plan d'eau : contour [x, z]. */
@@ -56,7 +67,7 @@ interface RawCity {
   origin: { lat: number; lon: number }
   bounds: Bounds
   buildings: { h: number; pts: number[][]; kind?: string }[]
-  roads: { w: number; pts: number[][] }[]
+  roads: Road[]
   waters: { pts: number[][] }[]
   greens: { pts: number[][]; wood?: number }[]
   trees: number[][]

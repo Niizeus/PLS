@@ -10,8 +10,12 @@ import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerSt
 import { useCameraStore } from '../../core/cameraStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
-import { isBlocked } from '../../world/beauvais/collision'
-import { terrainHeight } from '../../world/beauvais/cityData'
+import { useCarStore } from '../vehicles/carStore'
+import { CAR } from '../vehicles/carConfig'
+import { createVehicleDriveState, driveVehicle, stopVehicle } from '../vehicles/vehicleDriving'
+import { useVehicleTelemetryStore } from '../vehicles/vehicleTelemetryStore'
+import { groundHeight } from '../../world/beauvais/roadway'
+import { moveWithCollision } from '../movementCollision'
 import { zoneAt } from '../../world/beauvais/zones'
 import { PLAYER } from './playerConfig'
 
@@ -66,8 +70,11 @@ export function usePlayerMovement(
 
   // Vecteurs réutilisés chaque frame (on évite d'en allouer dans la boucle).
   const moveDir = useRef(new THREE.Vector3())
-  // Vitesse courante du scooter (scalaire, le long de son orientation).
-  const rideSpeed = useRef(0)
+  // Etats de conduite conserves hors React pour eviter les re-render par frame.
+  const scooterDrive = useRef(createVehicleDriveState())
+  const carDrive = useRef(createVehicleDriveState())
+  // Hauteur de sol lissee pour eviter les secousses camera sur routes/bordures.
+  const groundY = useRef<number | null>(null)
   // Saut : hauteur au-dessus du sol + vitesse verticale.
   const jumpY = useRef(0)
   const vy = useRef(0)
@@ -89,46 +96,103 @@ export function usePlayerMovement(
     // On borne le delta : si l'onglet a "laggé", on évite un saut géant.
     const delta = Math.min(rawDelta, 0.1)
 
-    // --- 0. Scooter : monter / descendre (E), puis conduire si on roule ---
+    // --- 0. Vehicules : monter / descendre (E), puis conduire si on roule ---
     const scooter = useScooterStore.getState()
-    let riding = scooter.riding
+    const car = useCarStore.getState()
+    const ridingScooter = scooter.riding
+    const ridingCar = car.riding
+    let riding = ridingScooter || ridingCar
 
     if (k.interactQueued) {
       if (!riding) {
-        // Monter si on est assez près du scooter garé.
-        const dx = group.position.x - scooter.parkedX
-        const dz = group.position.z - scooter.parkedZ
-        if (dx * dx + dz * dz <= SCOOTER.MOUNT_RANGE * SCOOTER.MOUNT_RANGE) {
+        let nearest: 'scooter' | 'car' | null = null
+        let nearestD2 = Infinity
+
+        const scooterDx = group.position.x - scooter.parkedX
+        const scooterDz = group.position.z - scooter.parkedZ
+        const scooterD2 = scooterDx * scooterDx + scooterDz * scooterDz
+        if (scooterD2 <= SCOOTER.MOUNT_RANGE * SCOOTER.MOUNT_RANGE && scooterD2 < nearestD2) {
+          nearest = 'scooter'
+          nearestD2 = scooterD2
+        }
+
+        const carDx = group.position.x - car.parkedX
+        const carDz = group.position.z - car.parkedZ
+        const carD2 = carDx * carDx + carDz * carDz
+        if (carD2 <= CAR.MOUNT_RANGE * CAR.MOUNT_RANGE && carD2 < nearestD2) {
+          nearest = 'car'
+          nearestD2 = carD2
+        }
+
+        if (nearest === 'scooter') {
           k.interactQueued = false
           group.position.set(
             scooter.parkedX,
-            terrainHeight(scooter.parkedX, scooter.parkedZ) + SCOOTER.SEAT_HEIGHT,
+            groundHeight(scooter.parkedX, scooter.parkedZ) + SCOOTER.SEAT_HEIGHT,
             scooter.parkedZ,
           )
           group.rotation.y = scooter.parkedRot
-          rideSpeed.current = 0
+          stopVehicle(scooterDrive.current)
           scooter.mount()
           riding = true
+        } else if (nearest === 'car') {
+          k.interactQueued = false
+          group.position.set(car.parkedX, groundHeight(car.parkedX, car.parkedZ) + CAR.SEAT_HEIGHT, car.parkedZ)
+          group.rotation.y = car.parkedRot
+          stopVehicle(carDrive.current)
+          car.mount()
+          riding = true
         }
-      } else {
-        // Descendre : garer le scooter ici, et poser le joueur juste à côté.
+      } else if (ridingScooter) {
         k.interactQueued = false
         const rot = group.rotation.y
         scooter.parkAt(group.position.x, group.position.z, rot)
         group.position.x += Math.cos(rot) * 1.2
         group.position.z += -Math.sin(rot) * 1.2
-        rideSpeed.current = 0
+        stopVehicle(scooterDrive.current)
+        riding = false
+      } else if (ridingCar) {
+        k.interactQueued = false
+        const rot = group.rotation.y
+        car.parkAt(group.position.x, group.position.z, rot)
+        group.position.x += Math.cos(rot) * 1.9
+        group.position.z += -Math.sin(rot) * 1.9
+        stopVehicle(carDrive.current)
         riding = false
       }
     }
 
+    const activeScooter = useScooterStore.getState().riding
+    const activeCar = useCarStore.getState().riding
+    riding = activeScooter || activeCar
+
+    if (activeScooter) {
+      const scooterState = useScooterStore.getState()
+      driveVehicle(group, scooterState.fuelLiters > 0 ? k : withoutThrottle(k), scooterDrive.current, SCOOTER, delta)
+      if (Math.abs(scooterDrive.current.speed) > 0.2) {
+        scooterState.consumeFuel((Math.abs(scooterDrive.current.speed) * 0.000009 + (k.forward ? 0.000015 : 0)) * delta)
+      }
+      const fuelRatio = scooterState.fuelCapacityLiters > 0 ? scooterState.fuelLiters / scooterState.fuelCapacityLiters : 0
+      useVehicleTelemetryStore.getState().setTelemetry('scooter', scooterDrive.current.speed, fuelRatio)
+    } else if (activeCar) {
+      const carState = useCarStore.getState()
+      driveVehicle(group, carState.fuelLiters > 0 ? k : withoutThrottle(k), carDrive.current, CAR, delta)
+      if (Math.abs(carDrive.current.speed) > 0.2) {
+        carState.consumeFuel((Math.abs(carDrive.current.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
+      }
+      const fuelRatio = carState.fuelCapacityLiters > 0 ? carState.fuelLiters / carState.fuelCapacityLiters : 0
+      useVehicleTelemetryStore.getState().setTelemetry('car', carDrive.current.speed, fuelRatio)
+    } else {
+      useVehicleTelemetryStore.getState().clearTelemetry()
+    }
+
     if (riding) {
-      driveScooter(group, k, rideSpeed, delta)
+      const speed = activeScooter ? scooterDrive.current.speed : carDrive.current.speed
       const vis = motion.current
-      vis.action = Math.abs(rideSpeed.current) > 0.2 ? 'run' : 'idle'
+      vis.action = Math.abs(speed) > 0.2 ? 'run' : 'idle'
       vis.attackProgress = 0
       vis.interactProgress = 0
-      vis.moveIntensity = 0 // pas d'animation de marche quand on roule
+      vis.moveIntensity = 0
       if (usePlayerStore.getState().action !== vis.action) setAction(vis.action)
       if (usePlayerStore.getState().isDefending) setDefending(false)
       return
@@ -192,11 +256,16 @@ export function usePlayerMovement(
       const effectiveStats = getEffectiveStats(characterStats, inventory.equipped, characterStats.activeEffects)
       const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
       const speed = (crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED) * speedMultiplier
-      // Collisions : on teste chaque axe séparément → on glisse le long des murs.
-      const nx = group.position.x + moveDir.current.x * speed * delta
-      if (!isBlocked(nx, group.position.z)) group.position.x = nx
-      const nz = group.position.z + moveDir.current.z * speed * delta
-      if (!isBlocked(group.position.x, nz)) group.position.z = nz
+      // Collision robuste avec sous-pas : evite de traverser les facades a haute vitesse.
+      const move = moveWithCollision(
+        group.position.x,
+        group.position.z,
+        moveDir.current.x * speed * delta,
+        moveDir.current.z * speed * delta,
+        0.34,
+      )
+      group.position.x = move.x
+      group.position.z = move.z
 
       // Oriente le perso vers sa direction de marche (rotation douce).
       const targetAngle = Math.atan2(moveDir.current.x, moveDir.current.z)
@@ -206,8 +275,9 @@ export function usePlayerMovement(
     }
 
     // Colle le perso au relief, + la hauteur de saut éventuelle.
-    group.position.y =
-      terrainHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT + jumpY.current
+    const targetGroundY = groundHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT
+    groundY.current = smoothGroundY(groundY.current, targetGroundY, delta)
+    group.position.y = groundY.current + jumpY.current
 
     // --- 4. Détermine l'action affichée (priorité : attaque > saut > accroupi > ...) ---
     let action: PlayerAction
@@ -237,57 +307,24 @@ export function usePlayerMovement(
 }
 
 /**
- * Physique simple du scooter : accélère/freine (Z/S), braque (Q/D) d'autant plus
- * qu'on va vite, et avance dans la direction où il pointe. La marche arrière
- * inverse le braquage, comme un vrai véhicule.
+ * Interpolation d'angle (radians) qui prend le plus court chemin et reste
+ * stable quel que soit le frame-rate. Sert à tourner le perso en douceur.
  */
-function driveScooter(
-  group: THREE.Group,
-  k: KeyboardState,
-  rideSpeed: { current: number },
-  delta: number,
-) {
-  // Accélération / frein / frein moteur
-  if (k.forward) rideSpeed.current += SCOOTER.ACCEL * delta
-  else if (k.backward) rideSpeed.current -= SCOOTER.BRAKE * delta
-  else {
-    const f = SCOOTER.FRICTION * delta
-    rideSpeed.current =
-      rideSpeed.current > 0
-        ? Math.max(0, rideSpeed.current - f)
-        : Math.min(0, rideSpeed.current + f)
-  }
-  // Borne la vitesse (avant / arrière)
-  rideSpeed.current = Math.max(
-    -SCOOTER.REVERSE_SPEED,
-    Math.min(SCOOTER.MAX_SPEED, rideSpeed.current),
-  )
+function withoutThrottle(k: KeyboardState): KeyboardState {
+  return { ...k, forward: false }
+}
 
-  // Braquage : proportionnel à la vitesse (on ne tourne pas à l'arrêt).
-  const steer = (k.left ? 1 : 0) - (k.right ? 1 : 0)
-  if (steer !== 0) {
-    group.rotation.y += steer * SCOOTER.STEER * (rideSpeed.current / SCOOTER.MAX_SPEED) * delta
-  }
-
-  // Avance dans la direction où pointe le scooter, avec collisions (axe par axe).
-  const nx = group.position.x + Math.sin(group.rotation.y) * rideSpeed.current * delta
-  const nz = group.position.z + Math.cos(group.rotation.y) * rideSpeed.current * delta
-  let moved = false
-  if (!isBlocked(nx, group.position.z)) {
-    group.position.x = nx
-    moved = true
-  }
-  if (!isBlocked(group.position.x, nz)) {
-    group.position.z = nz
-    moved = true
-  }
-  if (!moved) rideSpeed.current = 0 // on a tapé un mur : on s'arrête
-  group.position.y = terrainHeight(group.position.x, group.position.z) + SCOOTER.SEAT_HEIGHT
+function smoothGroundY(current: number | null, target: number, delta: number): number {
+  if (current === null || Math.abs(target - current) > 2.5) return target
+  const t = 1 - Math.exp(-14 * delta)
+  const next = current + (target - current) * t
+  const maxStep = 6 * delta
+  return THREE.MathUtils.clamp(next, current - maxStep, current + maxStep)
 }
 
 /**
  * Interpolation d'angle (radians) qui prend le plus court chemin et reste
- * stable quel que soit le frame-rate. Sert à tourner le perso en douceur.
+ * stable quel que soit le frame-rate. Sert a tourner le perso en douceur.
  */
 function dampAngle(current: number, target: number, speed: number, delta: number): number {
   let diff = target - current

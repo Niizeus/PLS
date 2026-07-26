@@ -1,6 +1,7 @@
 import ItemPickups from './items/ItemPickups'
 import Player from './player/Player'
 import Scooter from './vehicles/Scooter'
+import Car from './vehicles/Car'
 
 /**
  * LES PERSONNAGES & VÉHICULES : le joueur (Chibrux), le scooter, et plus tard les PNJ.
@@ -16,6 +17,7 @@ export default function Characters() {
     <>
       <Player />
       <Scooter />
+      <Car />
       <ItemPickups />
     </>
   )

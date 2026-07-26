@@ -280,7 +280,33 @@ const ROAD_SKIP = new Set(['proposed', 'construction', 'raceway', 'bus_guideway'
 
 function roadWidth(tags) {
   if (ROAD_SKIP.has(tags.highway)) return 0
-  return ROAD_WIDTH[tags.highway] ?? 4 // largeur par défaut si type inconnu
+  return ROAD_WIDTH[tags.highway] ?? 4 // largeur par defaut si type inconnu
+}
+
+function parseRoadNumber(value) {
+  if (value === undefined || value === null) return undefined
+  const n = parseFloat(String(value).replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : undefined
+}
+
+function osmYes(value) {
+  return ['yes', 'true', '1'].includes(String(value ?? '').toLowerCase())
+}
+
+function roadMeta(id, tags) {
+  const meta = { id, highway: tags.highway }
+  if (tags.name) meta.name = String(tags.name)
+  if (tags.ref) meta.ref = String(tags.ref)
+  if (tags.service) meta.service = String(tags.service)
+  if (tags.junction) meta.junction = String(tags.junction)
+  const lanes = parseRoadNumber(tags.lanes)
+  if (lanes !== undefined) meta.lanes = lanes
+  const layer = parseRoadNumber(tags.layer)
+  if (layer !== undefined) meta.layer = layer
+  if (osmYes(tags.oneway) || tags.oneway === '-1') meta.oneway = true
+  if (osmYes(tags.bridge)) meta.bridge = true
+  if (osmYes(tags.tunnel)) meta.tunnel = true
+  return meta
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -410,7 +436,7 @@ async function main() {
         // ROUTE : polyligne (ouverte). Largeur selon le type.
         const w = roadWidth(tags)
         if (w <= 0 || pts.length < 2) continue
-        roads.push({ w, pts })
+        roads.push({ w, pts, ...roadMeta(el.id, tags) })
         for (const [x, z] of pts) grow(x, z)
       } else if (tags.natural === 'water') {
         // PLAN D'EAU (way fermé).

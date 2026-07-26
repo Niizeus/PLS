@@ -3,6 +3,7 @@ import { useFBX, useAnimations } from '@react-three/drei'
 import * as THREE from 'three'
 import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { useScooterStore } from '../vehicles/scooterStore'
+import { useCarStore } from '../vehicles/carStore'
 import { PLAYER } from './playerConfig'
 
 /**
@@ -116,9 +117,11 @@ export default function PlayerModel() {
     return { scale, y }
   }, [character])
 
-  // Anime selon l'état du jeu (ou "drive" quand on conduit le scooter).
+  // Anime selon l'etat du jeu (ou "drive" quand on conduit un vehicule).
   const action = usePlayerStore((s) => s.action)
-  const riding = useScooterStore((s) => s.riding)
+  const ridingScooter = useScooterStore((s) => s.riding)
+  const ridingCar = useCarStore((s) => s.riding)
+  const riding = ridingScooter || ridingCar
   const current = useRef('')
   useEffect(() => {
     const name = riding ? 'drive' : ACTION_TO_ANIM[action] ?? 'idle'

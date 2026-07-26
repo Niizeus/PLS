@@ -8,7 +8,8 @@ import { usePickupStore, type WorldPickup } from '../../gameplay/inventory/picku
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { toonGradient } from '../../shaders/toonGradient'
 import { isBlocked } from '../../world/beauvais/collision'
-import { SPAWN, terrainHeight } from '../../world/beauvais/cityData'
+import { SPAWN } from '../../world/beauvais/cityData'
+import { groundHeight } from '../../world/beauvais/roadway'
 
 const PICKUP_RANGE = 3
 
@@ -124,7 +125,7 @@ export default function ItemPickups() {
         const item = ITEMS_BY_ID[pickup.itemId]
         if (!item) return null
         return (
-          <group key={pickup.id} position={[pickup.x, terrainHeight(pickup.x, pickup.z) + 0.55, pickup.z]}>
+          <group key={pickup.id} position={[pickup.x, groundHeight(pickup.x, pickup.z) + 0.55, pickup.z]}>
             <mesh castShadow>
               <boxGeometry args={[0.65, 0.65, 0.65]} />
               <meshToonMaterial color={PICKUP_COLOR[item.category]} gradientMap={toonGradient} />

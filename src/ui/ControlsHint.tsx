@@ -3,7 +3,7 @@ const CONTROLS: { keys: string; label: string }[] = [
   { keys: 'Souris', label: 'Tourner la caméra' },
   { keys: 'ZQSD', label: 'Se déplacer' },
   { keys: 'Maj', label: 'Courir' },
-  { keys: 'E', label: 'Interagir / monter sur le scooter' },
+  { keys: 'E', label: 'Interagir / monter vehicule' },
   { keys: 'Espace', label: 'Sauter' },
   { keys: 'Ctrl', label: 'S accroupir' },
   { keys: 'Clic G.', label: 'Attaquer' },

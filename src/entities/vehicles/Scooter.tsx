@@ -4,9 +4,9 @@ import { Outlines } from '@react-three/drei'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { terrainHeight } from '../../world/beauvais/cityData'
+import { groundHeight } from '../../world/beauvais/roadway'
 import { useScooterStore } from './scooterStore'
-import { SCOOTER_COLORS } from './scooterConfig'
+import { SCOOTER, SCOOTER_COLORS } from './scooterConfig'
 
 /**
  * Le scooter (placeholder cartoon en primitives).
@@ -28,11 +28,11 @@ export default function Scooter() {
     if (riding) {
       const player = usePlayerStore.getState().playerObject
       if (player) {
-        g.position.set(player.position.x, terrainHeight(player.position.x, player.position.z), player.position.z)
+        g.position.set(player.position.x, player.position.y - SCOOTER.SEAT_HEIGHT, player.position.z)
         g.rotation.y = player.rotation.y
       }
     } else {
-      g.position.set(parkedX, terrainHeight(parkedX, parkedZ), parkedZ)
+      g.position.set(parkedX, groundHeight(parkedX, parkedZ), parkedZ)
       g.rotation.y = parkedRot
     }
   })

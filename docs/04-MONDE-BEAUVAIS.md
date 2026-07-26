@@ -129,18 +129,20 @@ Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires). Tourne hors-jeu. ⚠️ La grille d'altitude Open-Meteo qu'il produit n'est **plus lue** : le relief vient de l'IGN (ligne suivante). |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : recupere OSM et exporte batiments, routes, eau, verdure, murs, arbres, lampadaires. Les routes gardent aussi `highway`, `name`, `ref`, `lanes`, `oneway`, `service`, `bridge`, `tunnel`, `layer` pour les fusions de chaussee. Tourne hors-jeu. La grille Open-Meteo produite n'est plus lue : le relief vient de l'IGN. |
 | `src/world/beauvais/build-terrain-global.mjs` | Télécharge le **relief LiDAR HD de l'IGN** pour toute la commune → `public/terrain/global.png`. Tourne hors-jeu. |
 | `src/world/beauvais/terrain.ts` | Charge cette carte et l'échantillonne : **source unique de la hauteur du sol**. |
-| `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
+| `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact charge par le jeu (batiments, routes enrichies, eau, limites). ~5,5 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments en **blocs d'une seule couleur**, par **TUILES** de 180 m montées/démontées autour du joueur. |
-| `src/world/beauvais/Roads.tsx` | Routes : rubans plats d'une seule couleur, à la vraie largeur OSM, posés à `y = 0.03`. Filtre les chemins piétons et ne peint pas ce qui est sous un bâtiment (voir plus bas). |
+| `src/world/beauvais/Roads.tsx` | Routes : rubans en volume par tuiles depuis `roadway.ts`. Les cotes interieurs fusionnes sont rendus en bitume, et les routes ne recoivent pas les ombres dures des batiments. Surface fusionnee : `road-surface-test.json` couvre maintenant toute la ville en tuiles de 180 m. Chaque tuile est rendue autour du joueur, retessellee en petits triangles pour suivre le relief, possede un bord vertical visible, et les rubans classiques ne sont caches que sous les polygones experimentaux reels afin de garder une route visible si la surface de test rate une zone. |
 | `src/world/beauvais/Water.tsx` | Plans d'eau : surfaces bleues plates (`y = 0.02`). Purement visuel (on ne nage pas). |
 | `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois : surfaces vertes plates (`y = 0.01`), 2 teintes. |
 | `src/world/beauvais/Trees.tsx` | Arbres instanciés (OSM + semés dans les bois). |
 | `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (positions OSM). |
+| `src/world/beauvais/ScaleReferences.tsx` | Reperes d'echelle pres du spawn : place de stationnement, bornes et jauge a hauteur humaine. |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
+| `src/world/beauvais/debug-road-geometry.mjs` | Outil hors-jeu : genere `public/debug/road-geometry.html` et `data/road-surface-test.json`. La V2 compare les rubans actuels a une surface de chaussee fusionnee par polygones (`polygon-clipping`) et exporte les surfaces de toute la ville en tuiles streamables, avec un panneau de diagnostic prioritaire sur le centre-ville. Commande : `npm run debug:roads`. |
 | `src/world/Ground.tsx` | Le **sol avec son vrai relief**, affiché en dalles de 256 m autour du joueur. |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement** et **points de passage** (texte + icône, sauvegardés en local), via `src/ui/mapDraw.ts`. |
 
@@ -174,10 +176,11 @@ jeu fluide :
   autour du perso) au lieu de couvrir toute la ville.
 - **Minimap** (`Minimap.tsx`) : ne dessine que les bâtiments proches, récupérés via la grille
   spatiale (`collision.buildingsNear`), au lieu de parcourir les 34 000.
+- **Routes coherentes** (`roadway.ts` + `Roads.tsx`) : `roadway.ts` garde la surface physique et detecte les voies proches a fusionner. `Roads.tsx` dessine des rubans continus. Les carrefours complexes ne doivent plus etre corriges directement en 3D sans validation : `npm run debug:roads` genere d abord une vue 2D pour verifier axes, largeurs et noeuds.
 - **Grande carte M** (`WorldMap.tsx`) : la ville (statique) est pré-rendue **une seule fois**
   dans un canvas hors-écran, puis recopiée chaque image → ouverture instantanée.
 
-> ⏳ **Reste à faire** (opti secondaire) : le fichier compact (~4,8 Mo) est encore **embarqué
+> ⏳ **Reste à faire** (opti secondaire) : le fichier compact ville (~5,5 Mo) et la surface de route tuilée (~6,7 Mo) sont encore **embarques
 > dans le bundle**. Le charger en **asset** (fetch au démarrage) allègerait le JS. Un vrai
 > **LOD** (silhouettes simplifiées au loin) serait le prochain gain si on agrandit encore.
 
@@ -203,7 +206,10 @@ jeu fluide :
 - [x] Optimisation : ombres qui suivent le joueur. *(Lights.tsx)*
 - [x] Optimisation : minimap + carte allégées. *(Minimap/WorldMap/mapDraw)*
 - [x] Inclure les bâtiments en relation (multipolygones) + cours intérieures. *(build-beauvais.mjs)*
-- [x] Routes plus propres (rubans continus). *(Roads.tsx)*
+- [x] Routes plus propres : metadonnees OSM, fusion physique des voies proches et rendu ruban corrige. *(build-beauvais.mjs, roadway.ts, Roads.tsx)*
+- [x] Outil de diagnostic 2D des carrefours avant nouvelle passe 3D, avec comparaison rubans actuels / surface fusionnee et cible centre-ville. *(debug-road-geometry.mjs, `npm run debug:roads`, `polygon-clipping`)*
+- [x] Surface fusionnee et tuilée sur toute la ville, avec triangles orientes vers le haut, retessellation de hauteur, bord vertical et masque limite aux polygones reels. *(road-surface-test.json, debug-road-geometry.mjs, Roads.tsx, roadway.ts)*
+- [ ] Etendre la generation de surfaces aux carrefours valides apres retour visuel en jeu.
 - [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
 - [x] Habillage : verdure/parcs, arbres, lampadaires. *(GreenAreas/Trees/Lamps)*
 - [x] **Découpage en quartiers** (zones) : `zones.json` + `zoneAt()` + nom du quartier au HUD + contours sur la carte. *(zones.ts, Hud, mapDraw)*
@@ -216,6 +222,7 @@ jeu fluide :
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
 - [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
 - [x] Spawn dégagé DEVANT la cathédrale (point le plus ouvert). *(cityData.SPAWN)*
+- [x] Reperes d'echelle pres du spawn : voiture 4 m, place de stationnement, bornes et hauteur humaine. *(ScaleReferences.tsx)*
 - [x] Hauteurs réalistes (type + surface + variation). *(build-beauvais.mjs)*
 - [x] Façades + toits colorés de façon variée. *(Beauvais.tsx)*
 - [x] Sol couvrant toute la zone générée. *(CityGround)*
@@ -270,11 +277,13 @@ grande carte (M), le HUD, le temps de jeu et les besoins — **et toute la donn�
 **Reconstruit en simple** : voir le tableau des fichiers plus haut.
 
 ### Les 3 règles à ne pas casser
-
-1. **Une seule hauteur de sol.** `terrainHeight()` (`cityData.ts`) et le sol affiché
-   (`Ground.tsx`) doivent décrire **exactement la même surface**, et tout ce qui se pose au sol
-   passe par `terrainHeight()` — jamais de hauteur en dur. Détail, pièges et vérification
-   chiffrée : [« Le relief de Beauvais »](#️-le-relief-de-beauvais).
+1. **Deux hauteurs, deux usages.** `terrainHeight()` (`cityData.ts`) decrit le relief nu et doit
+   rester coherent avec le sol affiche (`Ground.tsx`). `groundHeight()` (`roadway.ts`) decrit la
+   surface praticable finale : relief ou dessus de chaussee, selon le point. Tout ce qui se deplace
+   ou se pose en jeu (joueur, vehicules, pickups, reperes) doit utiliser `groundHeight()` - jamais
+   de hauteur en dur. Detail, pieges et verification chiffree : voir la section Le relief de Beauvais.
+   Les surfaces experimentales de route echantillonnent aussi le relief autour du point pour eviter un bitume enterre dans les bosses. Les collisions de deplacement sont testees en sous-pas et avec une empreinte au sol simplifiee,
+   afin que les vehicules rapides ne traversent pas les facades entre deux frames.
 2. **Ce qui bloque doit être visible.** `Beauvais.tsx` affiche *tous* les bâtiments de la donnée,
    sans exception, et `collision.ts` bloque exactement les mêmes contours. Si tu exclus un
    bâtiment de l'affichage (pour le remplacer par un modèle fait main, par exemple), **exclus-le

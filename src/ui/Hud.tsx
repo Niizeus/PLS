@@ -7,6 +7,7 @@ import Minimap from './Minimap'
 import PickupPrompt from './PickupPrompt'
 import QuickBar from './QuickBar'
 import StatsPanel from './StatsPanel'
+import VehicleDashboard from './VehicleDashboard'
 import WorldMap from './WorldMap'
 
 // Libellés lisibles pour l'état affiché en haut à gauche.
@@ -63,6 +64,7 @@ export default function Hud() {
       <PickupPrompt />
       <InventoryPanel />
       <QuickBar />
+      <VehicleDashboard />
 
       {/* Grande carte (touche M) : gère elle-même son ouverture/fermeture. */}
       <WorldMap />

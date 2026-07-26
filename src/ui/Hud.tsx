@@ -21,6 +21,7 @@ const ACTION_LABEL: Record<PlayerAction, string> = {
   interact: 'Interaction',
   jump: 'Saut',
   crouch: 'Accroupi',
+  hurt: 'Touché !',
 }
 
 /**

@@ -5,6 +5,7 @@ import { useMouse } from '../../gameplay/input/useMouse'
 import { usePlayerMovement } from './usePlayerMovement'
 import { PLAYER } from './playerConfig'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
+import { useCharacterStatsStore } from '../../gameplay/stats/characterStatsStore'
 import { SPAWN } from '../../world/beauvais/cityData'
 import { groundHeight } from '../../world/beauvais/roadway'
 import PlayerModel from './PlayerModel'
@@ -27,6 +28,19 @@ export default function Player() {
     setPlayerObject(groupRef.current)
     return () => setPlayerObject(null)
   }, [setPlayerObject])
+
+  // Dégâts → animation "Hurt".
+  // On surveille simplement la barre de vie : dès qu'elle BAISSE (coup reçu,
+  // faim, chute...), on joue l'animation. Quand un vrai système de combat
+  // arrivera, il pourra aussi appeler `usePlayerStore.getState().takeHit()`
+  // directement, sans toucher à ce fichier.
+  useEffect(() => {
+    let previousHealth = useCharacterStatsStore.getState().health
+    return useCharacterStatsStore.subscribe((state) => {
+      if (state.health < previousHealth) usePlayerStore.getState().takeHit()
+      previousHealth = state.health
+    })
+  }, [])
 
   // Branche les entrées + la logique de déplacement/combat (déplace le groupe,
   // met à jour l'action dans le store).

@@ -6,7 +6,8 @@ import type { MouseState } from '../../gameplay/input/useMouse'
 import { useInventoryStore } from '../../gameplay/inventory/inventoryStore'
 import { useCharacterStatsStore } from '../../gameplay/stats/characterStatsStore'
 import { getEffectiveStats, getMovementSpeedMultiplier } from '../../gameplay/stats/effectiveStats'
-import { usePlayerStore, type PlayerAction } from '../../gameplay/stats/playerStore'
+import { usePlayerStore, type AttackMove, type PlayerAction } from '../../gameplay/stats/playerStore'
+import { getCombatStyle } from './combatStyle'
 import { useCameraStore } from '../../core/cameraStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
@@ -56,6 +57,8 @@ export function usePlayerMovement(
   const setAction = usePlayerStore((s) => s.setAction)
   const setDefending = usePlayerStore((s) => s.setDefending)
   const setZoneName = usePlayerStore((s) => s.setZoneName)
+  const strike = usePlayerStore((s) => s.strike)
+  const endStrike = usePlayerStore((s) => s.endStrike)
 
   // Dernier quartier détecté : on ne met à jour le store que quand il CHANGE.
   const lastZoneId = useRef<string | null>('__init__')
@@ -63,6 +66,17 @@ export function usePlayerMovement(
   // Minuteurs internes (en secondes restantes).
   const attackTimer = useRef(0)
   const interactTimer = useRef(0)
+  const hurtTimer = useRef(0)
+
+  // --- Enchaînement de coups (combo) ---
+  /** Durée totale du coup en cours (sert à calculer attackProgress). */
+  const attackDuration = useRef(0)
+  /** Numéro du coup en cours dans l'enchaînement : 0 = aucun, 1..3 = poing 1/2/3. */
+  const comboStep = useRef(0)
+  /** Temps restant pour enchaîner sur le coup suivant (0 = l'enchaînement retombe). */
+  const comboWindow = useRef(0)
+  /** Dernier `hurtToken` vu : s'il change, c'est qu'on vient de prendre un coup. */
+  const lastHurtToken = useRef(usePlayerStore.getState().hurtToken)
 
   // État visuel renvoyé au composant Player.
   const motion = useRef<PlayerMotion>({
@@ -201,16 +215,53 @@ export function usePlayerMovement(
       vis.attackProgress = 0
       vis.interactProgress = 0
       vis.moveIntensity = 0
+      // On ne se bat pas au volant : on remet le combat à zéro.
+      attackTimer.current = 0
+      hurtTimer.current = 0
+      comboStep.current = 0
+      comboWindow.current = 0
+      lastHurtToken.current = usePlayerStore.getState().hurtToken
+      if (usePlayerStore.getState().attackMove) endStrike()
       if (usePlayerStore.getState().action !== vis.action) setAction(vis.action)
       if (usePlayerStore.getState().isDefending) setDefending(false)
       return
     }
 
-    // --- 1. Déclencheurs consommés (attaque / interaction) ---
+    // --- 1a. On encaisse un coup ? (n'importe qui peut appeler takeHit()) ---
+    const hurtToken = usePlayerStore.getState().hurtToken
+    if (hurtToken !== lastHurtToken.current) {
+      lastHurtToken.current = hurtToken
+      hurtTimer.current = PLAYER.HURT_DURATION
+      // Se prendre un coup casse l'enchaînement en cours.
+      attackTimer.current = 0
+      comboStep.current = 0
+      comboWindow.current = 0
+      if (usePlayerStore.getState().attackMove) endStrike()
+    }
+
+    // --- 1b. Déclencheurs consommés (attaque / interaction) ---
     if (m.attackQueued) {
       m.attackQueued = false
-      // On (re)lance l'attaque même si on en faisait déjà une (enchaînement).
-      attackTimer.current = PLAYER.ATTACK_DURATION
+      // Sonné par un coup : on ne peut pas frapper (l'anim Hurt a la priorité).
+      if (hurtTimer.current <= 0) {
+        let move: AttackMove
+        if (getCombatStyle() === 'weapon') {
+          // Avec une arme : une seule animation pour l'instant (pas d'enchaînement).
+          move = 'weapon'
+          comboStep.current = 0
+          attackDuration.current = PLAYER.WEAPON_ATTACK_DURATION
+        } else {
+          // Mains nues : 3 coups qui s'enchaînent tant qu'on reclique assez vite.
+          const canChain = comboWindow.current > 0 && comboStep.current > 0 && comboStep.current < PLAYER.COMBO_DURATIONS.length
+          comboStep.current = canChain ? comboStep.current + 1 : 1
+          move = `punch${comboStep.current}` as AttackMove
+          attackDuration.current = PLAYER.COMBO_DURATIONS[comboStep.current - 1]
+        }
+        attackTimer.current = attackDuration.current
+        // La fenêtre d'enchaînement court pendant le coup + un petit délai après.
+        comboWindow.current = attackDuration.current + PLAYER.COMBO_WINDOW
+        strike(move)
+      }
     }
     if (k.interactQueued) {
       k.interactQueued = false
@@ -218,6 +269,14 @@ export function usePlayerMovement(
     }
     if (attackTimer.current > 0) attackTimer.current -= delta
     if (interactTimer.current > 0) interactTimer.current -= delta
+    if (hurtTimer.current > 0) hurtTimer.current -= delta
+    if (comboWindow.current > 0) {
+      comboWindow.current -= delta
+      // Fenêtre écoulée : le prochain clic repartira au coup n°1.
+      if (comboWindow.current <= 0) comboStep.current = 0
+    }
+    // Coup terminé : on efface le coup affiché (le modèle 3D revient à idle/marche).
+    if (attackTimer.current <= 0 && usePlayerStore.getState().attackMove) endStrike()
 
     // --- 2. Intentions de déplacement depuis ZQSD ---
     // fwd    : avant(+) / arrière(-)
@@ -234,7 +293,7 @@ export function usePlayerMovement(
     const grounded = jumpY.current <= 0.001
     if (k.jumpQueued) {
       k.jumpQueued = false
-      if (grounded && !crouching && !isDefending) vy.current = PLAYER.JUMP_SPEED
+      if (grounded && !crouching && !isDefending && hurtTimer.current <= 0) vy.current = PLAYER.JUMP_SPEED
     }
     vy.current -= PLAYER.GRAVITY * delta
     jumpY.current += vy.current * delta
@@ -248,8 +307,9 @@ export function usePlayerMovement(
     // Le déplacement suit l'orientation de la caméra : "avant" = là où la caméra
     // regarde, quel que soit l'angle choisi à la souris.
     let moveIntensity = 0
-    if (isMoving && !isDefending) {
-      // En défense on reste planté (bouclier levé) : plus lisible, plus tactique.
+    if (isMoving && !isDefending && hurtTimer.current <= 0) {
+      // En défense on reste planté (garde levée) : plus lisible, plus tactique.
+      // Idem quand on est sonné par un coup (animation Hurt) : on subit.
       const yaw = useCameraStore.getState().yaw
       const sin = Math.sin(yaw)
       const cos = Math.cos(yaw)
@@ -287,9 +347,10 @@ export function usePlayerMovement(
     groundY.current = smoothGroundY(groundY.current, targetGroundY, delta)
     group.position.y = groundY.current + jumpY.current
 
-    // --- 4. Détermine l'action affichée (priorité : attaque > saut > accroupi > ...) ---
+    // --- 4. Détermine l'action affichée (priorité : dégâts > attaque > saut > ...) ---
     let action: PlayerAction
-    if (attackTimer.current > 0) action = 'attack'
+    if (hurtTimer.current > 0) action = 'hurt'
+    else if (attackTimer.current > 0) action = 'attack'
     else if (airborne) action = 'jump'
     else if (interactTimer.current > 0) action = 'interact'
     else if (crouching) action = 'crouch'
@@ -302,7 +363,9 @@ export function usePlayerMovement(
     const vis = motion.current
     vis.action = action
     vis.attackProgress =
-      attackTimer.current > 0 ? 1 - attackTimer.current / PLAYER.ATTACK_DURATION : 0
+      attackTimer.current > 0 && attackDuration.current > 0
+        ? 1 - attackTimer.current / attackDuration.current
+        : 0
     vis.interactProgress =
       interactTimer.current > 0 ? 1 - interactTimer.current / PLAYER.INTERACT_DURATION : 0
     vis.moveIntensity = moveIntensity

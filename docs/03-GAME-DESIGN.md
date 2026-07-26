@@ -178,6 +178,42 @@ bonus de stats, des effets spéciaux ou débloquer certaines interactions.
 
 ---
 
+## 🥊 Combat au corps à corps
+
+### Attaquer (clic gauche)
+
+**À mains nues** (rien d'équipé, ou juste le « Poing basique ») : un **enchaînement de 3 coups**.
+Chaque clic joue le coup suivant — poing 1, poing 2, poing 3 — à condition de recliquer assez
+vite. Si on attend trop, l'enchaînement retombe et le clic suivant repart au coup n°1. Après le
+3e coup, on repart aussi au coup n°1.
+
+**Avec une arme équipée** (main droite ou gauche, catégorie `arme`/`arme_lancer` — ex : la pelle) :
+une **animation d'attaque différente**, sans enchaînement pour l'instant.
+
+> ⏳ L'animation d'arme n'existe pas encore : en attendant, l'attaque à l'arme rejoue le 1er coup
+> de poing. Le mode d'emploi pour brancher le futur FBX est écrit en commentaire dans
+> `src/entities/player/PlayerModel.tsx` (constante `ATTACK_TO_ANIM`).
+
+### Se défendre (clic droit maintenu)
+
+Chibrux lève sa **garde** (animation dédiée, jouée en boucle) et reste planté : en défense on ne
+se déplace pas et on ne saute pas. Plus lisible, plus tactique.
+
+### Encaisser (animation « Hurt »)
+
+Dès que la **santé baisse** (coup reçu, faim/soif à zéro, etc.), Chibrux joue l'animation de
+douleur. Pendant ce court instant il est **sonné** : il ne bouge plus, ne frappe plus, ne saute
+plus, et l'enchaînement en cours est cassé. N'importe quel système peut déclencher ça avec
+`usePlayerStore.getState().takeHit()`.
+
+### Réglages
+
+Toutes les durées (les 3 coups, la fenêtre d'enchaînement, l'attaque à l'arme, la durée du
+« sonné ») se règlent au même endroit : `src/entities/player/playerConfig.ts`. Les animations
+sont **calées sur ces durées**, donc changer une valeur change vraiment la vitesse du geste.
+
+---
+
 ## 🚓 Police, délits et respawn
 
 Le jeu assume une dimension **GTA-like cartoon**.

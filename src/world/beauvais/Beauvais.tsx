@@ -6,6 +6,7 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { BUILDINGS, SPAWN, type Building } from './cityData'
 import { buildBuilding } from './buildingMesh'
+import { CATHEDRAL } from './cathedralMesh'
 
 /**
  * 🏙️  Beauvais, bâtiment par bâtiment.
@@ -24,9 +25,11 @@ import { buildBuilding } from './buildingMesh'
  *    est construite à son montage et libérée à son démontage.
  *
  * ⚠️ Cohérence avec les collisions : on affiche TOUS les bâtiments de la donnée,
- * sans exception. `collision.ts` bloque exactement les mêmes contours → pas de
- * « mur invisible » (un bâtiment qui bloque mais qu'on ne voit pas). Si un jour
- * tu exclus un bâtiment de l'affichage, exclus-le AUSSI des collisions.
+ * à UNE exception près — la cathédrale, qui a son propre modèle (`Cathedral.tsx`)
+ * bâti sur exactement la même emprise. `collision.ts` bloque les mêmes contours →
+ * pas de « mur invisible » (un bâtiment qui bloque mais qu'on ne voit pas). Si un
+ * jour tu exclus un autre bâtiment de l'affichage sans le remplacer, exclus-le
+ * AUSSI des collisions.
  */
 
 const TILE = 180 // côté d'une tuile, en mètres
@@ -37,6 +40,7 @@ const tiles = new Map<string, Building[]>()
 const keyOf = (tx: number, tz: number) => tx + ':' + tz
 
 for (const b of BUILDINGS) {
+  if (b === CATHEDRAL) continue // monument à part : voir Cathedral.tsx
   const key = keyOf(Math.floor(b.cx / TILE), Math.floor(b.cz / TILE))
   let list = tiles.get(key)
   if (!list) tiles.set(key, (list = []))

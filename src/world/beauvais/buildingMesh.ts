@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { terrainHeight, type Building } from './cityData'
+import { orientRing } from './footprintField'
 
 /**
  * 🧱 buildingMesh.ts — transforme UN bâtiment (contour + hauteurs) en triangles.
@@ -74,20 +75,9 @@ function roofColor(b: Building): THREE.Color {
   return new THREE.Color(b.kind ? ROOF_SLATE : ROOF_TILE)
 }
 
-/**
- * Renvoie le contour dans le sens qui donne des murs tournés vers l'EXTÉRIEUR.
- * Les contours OSM arrivent dans les deux sens ; sans ça, un bâtiment sur deux
- * serait retourné (on verrait à travers).
- */
-function orientRing(pts: number[][]): number[][] {
-  let area = 0
-  for (let i = 0; i < pts.length; i++) {
-    const [x1, z1] = pts[i]
-    const [x2, z2] = pts[(i + 1) % pts.length]
-    area += x1 * z2 - x2 * z1
-  }
-  return area < 0 ? pts.slice().reverse() : pts
-}
+// `orientRing` (importé) remet le contour dans le sens qui donne des murs tournés
+// vers l'EXTÉRIEUR : les contours OSM arrivent dans les deux sens, et sans ça un
+// bâtiment sur deux serait retourné (on verrait à travers).
 
 type Tri = number[][] // 3 points [x, z]
 

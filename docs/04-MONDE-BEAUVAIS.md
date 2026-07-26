@@ -138,7 +138,11 @@ Les fichiers :
 | `src/world/beauvais/terrain.ts` | Charge cette carte et l'échantillonne : **source unique de la hauteur du sol**. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact charge par le jeu (batiments avec hauteurs et toits IGN, routes enrichies, eau, limites). ~6,4 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
-| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : monte/démonte les bâtiments par **TUILES** de 180 m autour du joueur (la forme d'un bâtiment, elle, est faite par `buildingMesh.ts`). |
+| `src/world/beauvais/Beauvais.tsx` | **Temps 3** : monte/démonte les bâtiments par **TUILES** de 180 m autour du joueur (la forme d'un bâtiment, elle, est faite par `buildingMesh.ts`). Saute la cathédrale, qui a son propre modèle. |
+| `src/world/beauvais/Cathedral.tsx` | La **cathédrale Saint-Pierre**, affichée en permanence (repère central, visible de loin). Voir « La cathédrale » plus bas. |
+| `src/world/beauvais/cathedralMesh.ts` | Construit son maillage : masses étagées, toit, contreforts, arcs-boutants, verrières, rosaces. |
+| `src/world/beauvais/footprintField.ts` | Outil de géométrie : champ de distance d'une emprise + extraction de contours (« marching squares »). Sert à rétrécir une emprise pour en tirer les masses hautes. Fournit aussi `orientRing()`, partagé avec `buildingMesh.ts`. |
+| `src/world/beauvais/meshBuilder.ts` | Petite boîte à outils pour bâtir un décor à la main (murs, surfaces, prismes, pinacles, plaques murales, poutres courbes) en couleur par sommet, sans se tromper de sens de face. |
 | `src/world/beauvais/Roads.tsx` | Routes : rubans en volume par tuiles depuis `roadway.ts`. Les cotes interieurs fusionnes sont rendus en bitume, et les routes ne recoivent pas les ombres dures des batiments. Surface fusionnee : `road-surface-test.json` couvre maintenant toute la ville en tuiles de 180 m. Chaque tuile est rendue autour du joueur, retessellee en petits triangles pour suivre le relief, possede un bord vertical visible, et les rubans classiques ne sont caches que sous les polygones experimentaux reels afin de garder une route visible si la surface de test rate une zone. |
 | `src/world/beauvais/Water.tsx` | Plans d'eau : surfaces bleues plates (`y = 0.02`). Purement visuel (on ne nage pas). |
 | `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois : surfaces vertes plates (`y = 0.01`), 2 teintes. |
@@ -213,6 +217,51 @@ côté mettrait le faîtage en travers de la rue, l'inverse de la réalité.
 - Tout le monde (change `BBOX` / `ORIGIN` dans `geo.mjs` d'abord) :
   `node src/world/beauvais/build-beauvais.mjs` — retélécharge OSM **et** l'IGN.
 
+### ⛪ La cathédrale Saint-Pierre (le seul bâtiment fait main)
+
+Les 34 000 bâtiments de la ville passent par le même gabarit « murs + toit ». Appliqué au
+**plus haut chœur gothique du monde**, ça donnait un bloc de 45 m de haut, plat sur le
+dessus, au milieu de Beauvais. La cathédrale a donc son propre modèle
+(`Cathedral.tsx` + `cathedralMesh.ts`), et c'est le **seul** bâtiment dans ce cas.
+
+**Rien n'est dessiné à la main pour autant.** Le principe : on part de l'emprise réelle
+d'OpenStreetMap et on la **rétrécit** pour obtenir les masses intérieures.
+
+```
+emprise réelle  →  contour à 7 m du bord  →  plan en croix ∩ emprise
+chapelles 12 m     bas-côtés 25 m            vaisseau 43 m + toit à 58 m
+```
+
+- Le rétrécissement passe par un **champ de distance** (`footprintField.ts`) : pour chaque
+  point, « à quelle profondeur suis-je dans le bâtiment ? ». Les contours intérieurs en
+  sont extraits par *marching squares*. Conséquence : le **chevet reste arrondi** et les
+  chapelles rayonnantes restent là où elles sont, sans qu'on ait à les redessiner.
+- Le champ est **lissé** avant usage. Une emprise OSM est hérissée de décrochements d'un
+  mètre ; en la rétrécissant telle quelle, le contour intérieur devient une dentelle en
+  zigzag qui fait rater la triangulation des toits (trous). Et architecturalement, un
+  vaisseau central ne reproduit pas les hoquets des chapelles.
+- Le **vaisseau haut** est l'emprise croisée avec un plan en **croix** (chœur + transept)
+  tracé dans le repère du monument (axe obtenu par analyse de l'emprise, ≈ 10° au sud de
+  l'est). D'où les deux **pignons de transept**, chacun avec sa **rosace** de 12 m.
+- Le toit, ce sont **deux toits à deux pentes qui se croisent** : on garde le plus haut des
+  deux en chaque point, et ce simple `max` dessine tout seul les noues de la croisée, les
+  pignons au bout des bras et la croupe du chevet.
+- **Contreforts et arcs-boutants** : on avance le long du mur extérieur tous les 10,5 m ;
+  à chaque station on plante un contrefort à pinacle, puis on cherche le vaisseau
+  **droit derrière** pour y lancer deux volées d'arcs. Là où il n'y a pas de vaisseau
+  derrière (à l'ouest), le contrefort reste bas et il n'y a pas d'arc.
+
+Ce qui reste fidèle au vrai monument : **pas de flèche** (celle de 153 m s'est effondrée en
+1573), **pas de nef** (jamais bâtie — la masse s'arrête net sur un mur droit à l'ouest),
+chœur très haut, arcs-boutants rapprochés, deux rosaces de 11 m.
+
+**Cohérence avec le reste du jeu :**
+- l'emprise du niveau bas est **exactement** celle qui bloque le joueur (`collision.ts`) :
+  pas de mur invisible. Seuls les contreforts débordent de ~2,6 m sans bloquer ;
+- le modèle n'est **pas découpé en tuiles** : il est affiché en permanence, c'est le repère
+  central de la carte. Ça ne coûte qu'un objet (~10 500 triangles) ;
+- il se construit en ~30 ms, une seule fois, au chargement du monde.
+
 ### ⚡ Optimisations en place
 
 À l'échelle de toute la ville (~34 000 bâtiments), plusieurs optimisations rendent le
@@ -264,12 +313,13 @@ jeu fluide :
 - [x] **Découpage en quartiers** (zones) : `zones.json` + `zoneAt()` + nom du quartier au HUD + contours sur la carte. *(zones.ts, Hud, mapDraw)*
 - [x] **Remise à plat du monde** : décor réduit à des blocs sans texture. *(voir la section dédiée plus bas)*
 - [x] **Relief réel de TOUTE la commune** (LiDAR HD de l'IGN) : une source, une fonction `terrainHeight()`, et un sol affiché qui décrit exactement la même surface. *(voir « Le relief de Beauvais »)*
-- [ ] Repères à la main : cathédrale soignée, ancienne prison, etc. (pas dans OSM → modélisation manuelle).
+- [x] **Cathédrale Saint-Pierre soignée** : modèle dédié bâti sur l'emprise réelle (masses étagées, arcs-boutants, rosaces). *(voir « La cathédrale Saint-Pierre »)*
+- [ ] Autres repères à la main : ancienne prison, etc. (pas dans OSM → modélisation manuelle).
 - [ ] (Option) Ajouter les 9 tours / châteaux d'eau `man_made` d'OSM comme repères.
 - [ ] (Gros) Contours BD (cell-shading) en post-traitement — le vrai look cartoon.
 - [ ] Optimisation restante : charger le JSON en asset (fetch) au lieu de l'embarquer.
 - [ ] Routes/eau sur la minimap (déjà sur la grande carte).
-- [ ] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto).
+- [x] Placer la cathédrale comme repère central (modèle fait main par-dessus la base auto). *(Cathedral.tsx, affichée en permanence)*
 - [x] Spawn dégagé DEVANT la cathédrale (point le plus ouvert). *(cityData.SPAWN)*
 - [x] Reperes d'echelle pres du spawn : voiture 4 m, place de stationnement, bornes et hauteur humaine. *(ScaleReferences.tsx)*
 - [x] **Hauteurs réelles mesurées** (IGN BD TOPO) sur 97,5 % des bâtiments, l'estimation ne servant plus que de filet. *(bdtopo.mjs, update-heights-ign.mjs)*

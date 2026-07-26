@@ -4,6 +4,7 @@ import GreenAreas from './beauvais/GreenAreas'
 import Water from './beauvais/Water'
 import Roads from './beauvais/Roads'
 import Beauvais from './beauvais/Beauvais'
+import Cathedral from './beauvais/Cathedral'
 import Trees from './beauvais/Trees'
 import Lamps from './beauvais/Lamps'
 import ScaleReferences from './beauvais/ScaleReferences'
@@ -58,6 +59,7 @@ export default function World() {
       <Water />
       <Roads />
       <Beauvais />
+      <Cathedral />
       <Trees />
       <Lamps />
       <ScaleReferences />

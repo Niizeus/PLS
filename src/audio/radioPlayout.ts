@@ -15,11 +15,14 @@
  *
  * ```text
  *   lecteur A ─▶ gain A ─┐
- *                        ├─▶ programme ─▶ filtre radio ─▶ volume ─▶ sortie
- *   lecteur B ─▶ gain B ─┘                    ▲
- *                                             │
- *                       (étape suivante : souffle et zapping se branchent ici)
+ *                        ├─▶ programme ─▶ filtre radio ─┐
+ *   lecteur B ─▶ gain B ─┘                              ├─▶ volume ─▶ sortie
+ *                    souffle + zapping ─────────────────┘
  * ```
+ *
+ * Le bruit se branche **après** le filtre du programme : il a déjà son propre
+ * timbre (voir `radioNoise.ts`), le colorer une seconde fois l'étoufferait. En
+ * revanche il passe bien par le volume — c'est le poste entier qu'on baisse.
  *
  * Les gains A et B ne servent QU'au fondu (0 → 1). Le volume du joueur vit sur
  * le gain final : régler le volume ne perturbe donc jamais un fondu en cours.
@@ -28,6 +31,8 @@
  * navigateurs refusent de démarrer un `AudioContext` tant que le joueur n'a rien
  * touché. Tant qu'il est suspendu, on réessaie simplement au coup suivant.
  */
+
+import { createRadioNoise, type RadioNoise } from './radioNoise'
 
 export interface PlayoutRequest {
   /** URL du fichier à diffuser. */
@@ -43,6 +48,10 @@ export interface RadioPlayout {
   resync: (offsetSeconds: number, toleranceSeconds: number) => void
   setVolume: (volume: number) => void
   setFilterEnabled: (enabled: boolean) => void
+  /** Souffle de fond permanent. `0` = antenne coupée, `1` = niveau nominal. */
+  setHiss: (level: number) => void
+  /** Bouffée de bruit de changement de station. */
+  zap: () => void
   /** Source en cours de diffusion, ou `null`. */
   currentSrc: () => string | null
   dispose: () => void
@@ -68,8 +77,11 @@ export function createRadioPlayout(): RadioPlayout {
   let filter: BiquadFilterNode | null = null
   let master: GainNode | null = null
 
+  let noise: RadioNoise | null = null
   let volume = 1
   let filterEnabled = false
+  /** Souffle demandé avant que le contexte n'existe : on l'appliquera à l'ouverture. */
+  let hissLevel = 0
 
   function ensureGraph(): AudioContext | null {
     if (context) return context
@@ -99,6 +111,9 @@ export function createRadioPlayout(): RadioPlayout {
       // Le volume vit sur le gain final : l'élément reste à fond.
       deck.audio.volume = 1
     }
+
+    noise = createRadioNoise(context, master)
+    noise.setHiss(hissLevel)
 
     return context
   }
@@ -187,11 +202,28 @@ export function createRadioPlayout(): RadioPlayout {
     setFilterEnabled(enabled) {
       filterEnabled = enabled
       applyFilter(filter, enabled)
+      // Poste « radio » assumé : on pousse le souffle avec.
+      noise?.setHiss(hissLevel * (enabled ? 1.8 : 1))
+    },
+
+    setHiss(level) {
+      hissLevel = Math.max(0, level)
+      noise?.setHiss(hissLevel * (filterEnabled ? 1.8 : 1))
+    },
+
+    zap() {
+      // Le zapping doit s'entendre même quand l'antenne était coupée : c'est lui
+      // qui ouvre le poste.
+      if (!ensureGraph()) return
+      if (context?.state === 'suspended') void context.resume().catch(() => undefined)
+      noise?.zap()
     },
 
     currentSrc: () => decks[active].src,
 
     dispose() {
+      noise?.dispose()
+      noise = null
       for (const deck of decks) {
         cancelStop(deck)
         deck.audio.pause()

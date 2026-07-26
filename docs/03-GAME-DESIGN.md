@@ -354,6 +354,14 @@ morceau voulait dire ecraser sa source, donc une coupure nette. Le morceau suiva
 une seconde, et on lance le fondu pendant que le morceau courant joue encore. Fini le silence entre
 deux titres. Zapper de station utilise un fondu plus court et plus franc, pour que ca s'entende.
 
+**Le bruit du poste (`radioNoise.ts`).** Un **souffle** de fond permanent, dont l'intensite respire
+lentement et au hasard, et une **bouffee de zapping** au changement de station : du bruit dont la
+bande passante balaie le spectre, double d'un sifflement qui glisse — une molette qu'on tourne.
+Tout est synthetise, **aucun fichier audio a fournir**, ce qui fait aussi que deux zappings ne
+sonnent jamais pareil. Niveaux mesures contre une vraie musique de la station : le zap sort a
+**+2 dB** (200 ms), le souffle reste **23 dB en dessous** — on l'entend dans les passages calmes,
+jamais par-dessus un morceau. Le filtre « poste pourri » (deja en place) pousse le souffle avec lui.
+
 ---
 
 ## 🧩 Activités et mini-jeux

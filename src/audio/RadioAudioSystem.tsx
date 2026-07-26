@@ -105,6 +105,7 @@ export default function RadioAudioSystem() {
         // `undefined` = sondage en cours : on ne coupe pas l'antenne pour si peu.
         if (stopped || tracks) {
           playout.play(null, STATION_FADE)
+          playout.setHiss(0)
           useRadioStore.getState().setCurrentContentLabel(null)
           previousStationRef.current = null
         }
@@ -123,9 +124,13 @@ export default function RadioAudioSystem() {
 
       useRadioStore.getState().setCurrentContentLabel(position.label)
 
-      // Zapper doit s'entendre : fondu court et net, pas un enchaînement doux.
+      // Zapper doit s'entendre : bouffée de bruit + fondu court et net, pas un
+      // enchaînement doux comme entre deux titres.
       const zapped = previousStationRef.current !== null && previousStationRef.current !== stationId
+      // Le poste s'allume aussi avec un coup de molette.
+      if (zapped || previousStationRef.current === null) playout.zap()
       previousStationRef.current = stationId
+      playout.setHiss(1)
 
       const request = { src: position.track.src, offsetSeconds: position.offsetSeconds }
 

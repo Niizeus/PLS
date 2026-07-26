@@ -334,7 +334,18 @@ Le cadran se gradue **selon le vehicule** (~80 km/h pour le scooter, ~220 pour l
 Chaque vehicule garde sa station radio attribuee : au premier demarrage, une des cinq radios est choisie aleatoirement, puis elle reste la meme quand on descend et qu'on remonte. **La touche R change de station** (elle tourne en boucle sur les cinq) ; le choix est memorise sur le vehicule, donc chaque caisse garde SA station. La touche est rappelee sur le tableau de bord, a cote du nom de la station. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
 Le contenu des stations est **detecte sur disque**, pas ecrit en dur : chaque fichier audio depose dans `public/musique/radio/RXX_Nom/` entre dans la programmation, quel que soit son nom. Le titre affiche sur le tableau de bord est deduit du nom du fichier. Voir `public/musique/radio/README.md`.
 
-Les emissions programmees ont des horaires fixes dans le temps du jeu : chaque sous-dossier de `Emissions/` occupe une tranche d'une heure a partir de 18h00, dans l'ordre alphabetique. Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle. Premiere grille en place : `La_Zone_Libre` (TekRadz), `Derriere_La_Chanson` (Franchon), `Zone_De_Clash` (NRV), `La_France_En_Danger` (Lys France), `Starzone` (Alterz), de 18h00 a 19h00.
+Les emissions sont structurees en **emission → episode → parties**. Un episode est une diffusion, et
+ses parties **s'enchainent sans interruption**. La regle de rangement est deduite du disque : des
+fichiers poses dans le dossier de l'emission forment un seul episode en plusieurs parties, tandis
+que des sous-dossiers donnent un episode chacun (voir `public/musique/radio/README.md`).
+
+Les emissions commencent a **18h00** (temps du jeu), dans l'ordre alphabetique des dossiers, et
+durent **ce que dure vraiment l'episode du jour** — sans jamais mordre sur l'emission suivante.
+Quand l'episode est fini, la station repasse en musique. Un episode est choisi par jour de jeu,
+dans l'ordre, puis la liste boucle.
+
+⏱️ Un jour de jeu dure une heure reelle : **une heure de jeu ne vaut que 2 min 30 d'audio**. Une
+emission de 14 minutes occupe donc pres de 6 heures de jeu.
 
 ---
 

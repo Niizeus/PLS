@@ -10,7 +10,25 @@ export interface RadioTrack {
   title: string
   src: string
   contentType: RadioContentType
-  /** Duree de reference. Remplacee par la vraie duree des que le fichier est sonde (RadioAudioSystem). */
+  /** Duree en secondes. Mesuree au scan quand c'est possible, sinon estimee puis corrigee. */
+  durationSeconds: number
+  /** Vrai quand la duree a ete MESUREE : inutile de sonder le fichier au chargement. */
+  durationKnown: boolean
+}
+
+/**
+ * Un ÉPISODE : une diffusion, faite d'une ou plusieurs PARTIES qui s'enchaînent.
+ *
+ * Ce niveau manquait : chaque fichier d'une émission était pris pour un épisode
+ * à part, diffusé un jour différent. Trois fichiers `ZoneLibrePartie (1..3)`
+ * étaient donc étalés sur trois jours au lieu de s'enchaîner — c'est ce qui
+ * donnait des émissions « entrecoupées de musique ».
+ */
+export interface RadioEpisode {
+  id: string
+  title: string
+  parts: RadioTrack[]
+  /** Durée totale des parties (s). `0` tant qu'aucune durée n'est connue. */
   durationSeconds: number
 }
 
@@ -21,7 +39,7 @@ export interface ScheduledRadioProgram {
   startMinute: number
   durationMinutes: number
   episodeMode: RadioEpisodeMode
-  episodes: RadioTrack[]
+  episodes: RadioEpisode[]
 }
 
 export interface RadioStation {
@@ -111,7 +129,7 @@ function toTracks(
   contentType: RadioContentType,
   category: string,
   files: RadioManifestFile[],
-  durationSeconds: number,
+  fallbackSeconds: number,
 ): RadioTrack[] {
   return files.map((file) => ({
     // L'identifiant suit le fichier, pas sa position : renommer un voisin ne casse rien.
@@ -119,7 +137,11 @@ function toTracks(
     title: file.title,
     src: file.src,
     contentType,
-    durationSeconds,
+    // La durée vient du scan quand le format le permet (voir radioManifestPlugin) ;
+    // sinon on garde une estimation, corrigée plus tard par le sondage navigateur.
+    durationSeconds: file.durationSeconds > 0 ? file.durationSeconds : fallbackSeconds,
+    /** Vrai quand la durée est mesurée, donc fiable. */
+    durationKnown: file.durationSeconds > 0,
   }))
 }
 
@@ -143,7 +165,16 @@ function toStation(id: RadioStationId, manifest: RadioManifestStation | undefine
       startMinute: EVENING_PROGRAMS_START_MINUTE + index * PROGRAM_SLOT_MINUTES,
       durationMinutes: PROGRAM_SLOT_MINUTES,
       episodeMode: 'daily-sequence',
-      episodes: toTracks(id, 'show', `Emissions/${program.folder}`, program.episodes, DEFAULT_SHOW_SECONDS),
+      episodes: program.episodes.map((episode) => {
+        const category = `Emissions/${program.folder}${episode.folder ? '/' + episode.folder : ''}`
+        const parts = toTracks(id, 'show', category, episode.parts, DEFAULT_SHOW_SECONDS)
+        return {
+          id: `${id}/${category}`,
+          title: episode.title,
+          parts,
+          durationSeconds: parts.reduce((sum, part) => sum + part.durationSeconds, 0),
+        }
+      }),
     })),
   }
 }
@@ -163,9 +194,18 @@ export function getRadioStation(id: RadioStationId): RadioStation {
   return RADIO_STATIONS.find((station) => station.id === id) ?? RADIO_STATIONS[0]
 }
 
+/**
+ * Tout ce qu'une station peut diffuser.
+ *
+ * ⚠️ Les jingles et les publicités en font partie : ils étaient scannés sur le
+ * disque, exposés dans le catalogue… et jamais rendus jouables. Du code mort.
+ * La grille de programmation (étape suivante) pourra les placer.
+ */
 export function getStationPlayableTracks(station: RadioStation): RadioTrack[] {
   return [
     ...station.musicTracks,
-    ...station.scheduledPrograms.flatMap((program) => program.episodes),
+    ...station.jingles,
+    ...station.ads,
+    ...station.scheduledPrograms.flatMap((program) => program.episodes.flatMap((episode) => episode.parts)),
   ]
 }

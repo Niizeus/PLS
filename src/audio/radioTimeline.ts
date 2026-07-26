@@ -1,5 +1,14 @@
 import { getDayNumber, getMinuteOfDay, MINUTES_PER_DAY, REAL_SECONDS_PER_GAME_DAY } from '../gameplay/time/gameTimeStore'
-import type { RadioStation, RadioTrack, ScheduledRadioProgram } from './radioCatalog'
+import type { RadioEpisode, RadioStation, RadioTrack, ScheduledRadioProgram } from './radioCatalog'
+
+/**
+ * 📻 OÙ EN EST UNE STATION, À UN INSTANT DONNÉ.
+ *
+ * Principe fondateur, à ne pas casser : la position est **calculée** depuis
+ * l'horloge, jamais mémorisée. Une station tourne donc toute seule même quand
+ * personne ne l'écoute — on descend de voiture cinq minutes, on remonte, et la
+ * chanson a avancé. Comme une vraie radio.
+ */
 
 export type RadioTimelineContent = 'music' | 'show'
 
@@ -9,8 +18,11 @@ export interface RadioTimelinePosition {
   content: RadioTimelineContent
   label: string
   programId?: string
+  /** Temps restant sur cette piste (s) : sert à enchaîner AVANT la fin. */
+  remainingSeconds: number
 }
 
+/** 1 jour de jeu = 1 heure réelle, donc 1 minute de jeu = 2,5 secondes réelles. */
 const GAME_SECONDS_PER_GAME_MINUTE = REAL_SECONDS_PER_GAME_DAY / MINUTES_PER_DAY
 
 const STATION_SEED_OFFSETS_SECONDS: Record<string, number> = {
@@ -26,42 +38,125 @@ export function getRadioTimelinePosition(
   totalGameMinutes: number,
   availableTracks: RadioTrack[],
 ): RadioTimelinePosition | null {
-  const activeProgram = getActiveProgram(station, totalGameMinutes)
-  if (activeProgram) {
-    const position = getProgramPosition(activeProgram, totalGameMinutes, availableTracks)
+  const available = new Map(availableTracks.map((track) => [track.id, track]))
+
+  const active = getActiveProgram(station, totalGameMinutes, available)
+  if (active) {
+    const position = getProgramPosition(active, totalGameMinutes)
     if (position) return position
   }
 
   return getMusicPosition(station, totalGameMinutes, availableTracks)
 }
 
-function getActiveProgram(station: RadioStation, totalGameMinutes: number): ScheduledRadioProgram | null {
-  const minuteOfDay = getMinuteOfDay(totalGameMinutes)
-  return station.scheduledPrograms.find((program) => isMinuteInSlot(minuteOfDay, program.startMinute, program.durationMinutes)) ?? null
+// ---------------------------------------------------------------------------
+// Émissions
+// ---------------------------------------------------------------------------
+
+interface ActiveProgram {
+  program: ScheduledRadioProgram
+  episode: RadioEpisode
 }
 
-function getProgramPosition(
+/**
+ * L'émission en cours, s'il y en a une.
+ *
+ * ⚠️ Le créneau **n'est pas** une durée fixe d'une heure. Une heure de jeu ne
+ * vaut que 2 min 30 réelles : une émission de quinze minutes y serait tranchée
+ * net. Un créneau dure donc **ce que dure vraiment l'épisode du jour**, sans
+ * jamais mordre sur l'émission suivante.
+ */
+function getActiveProgram(
+  station: RadioStation,
+  totalGameMinutes: number,
+  available: Map<string, RadioTrack>,
+): ActiveProgram | null {
+  const minuteOfDay = getMinuteOfDay(totalGameMinutes)
+
+  for (let i = 0; i < station.scheduledPrograms.length; i++) {
+    const program = station.scheduledPrograms[i]
+    const episode = episodeOfTheDay(program, totalGameMinutes, available)
+    if (!episode) continue
+
+    // Longueur réelle de l'épisode, convertie en minutes de jeu.
+    let lengthMinutes = episode.durationSeconds / GAME_SECONDS_PER_GAME_MINUTE
+    // Une émission ne déborde jamais sur la suivante : c'est elle qui prend l'antenne.
+    const next = station.scheduledPrograms[i + 1]
+    if (next) lengthMinutes = Math.min(lengthMinutes, next.startMinute - program.startMinute)
+
+    if (getSlotOffsetMinutes(minuteOfDay, program.startMinute) < lengthMinutes) {
+      return { program, episode }
+    }
+  }
+
+  return null
+}
+
+/** Un épisode par jour, dans l'ordre ; passé le dernier, la liste boucle. */
+function episodeOfTheDay(
   program: ScheduledRadioProgram,
   totalGameMinutes: number,
-  availableTracks: RadioTrack[],
-): RadioTimelinePosition | null {
-  const availableEpisodes = filterAvailable(program.episodes, availableTracks)
-  if (availableEpisodes.length === 0) return null
+  available: Map<string, RadioTrack>,
+): RadioEpisode | null {
+  const episodes: RadioEpisode[] = []
+  for (const episode of program.episodes) {
+    const parts = episode.parts
+      .map((part) => available.get(part.id))
+      .filter((part): part is RadioTrack => part !== undefined)
+    if (parts.length === 0) continue
+    episodes.push({
+      ...episode,
+      parts,
+      durationSeconds: parts.reduce((sum, part) => sum + Math.max(1, part.durationSeconds), 0),
+    })
+  }
+  if (episodes.length === 0) return null
 
   const dayIndex = getDayNumber(totalGameMinutes) - 1
-  const episode = availableEpisodes[dayIndex % availableEpisodes.length]
-  const slotOffsetMinutes = getSlotOffsetMinutes(getMinuteOfDay(totalGameMinutes), program.startMinute)
-  const slotOffsetSeconds = slotOffsetMinutes * GAME_SECONDS_PER_GAME_MINUTE
-  const offsetSeconds = slotOffsetSeconds % Math.max(1, episode.durationSeconds)
-
-  return {
-    track: episode,
-    offsetSeconds,
-    content: 'show',
-    label: program.title,
-    programId: program.id,
-  }
+  return episodes[dayIndex % episodes.length]
 }
+
+/**
+ * La PARTIE en cours de l'épisode, et où on en est dedans.
+ *
+ * C'est le correctif principal : avant, chaque fichier d'une émission était pris
+ * pour un épisode à part, diffusé un jour différent. Les trois parties d'une
+ * même émission étaient donc étalées sur trois jours, séparées par de la
+ * musique — d'où l'impression d'émissions entrecoupées. On les enchaîne
+ * maintenant bout à bout.
+ *
+ * L'ancien code faisait aussi `offset % durée`, ce qui faisait BOUCLER une
+ * émission plus courte que son créneau. Ici, quand l'épisode est fini, on rend
+ * `null` et la station repasse en musique.
+ */
+function getProgramPosition(active: ActiveProgram, totalGameMinutes: number): RadioTimelinePosition | null {
+  const { program, episode } = active
+  const slotOffsetMinutes = getSlotOffsetMinutes(getMinuteOfDay(totalGameMinutes), program.startMinute)
+  let cursor = slotOffsetMinutes * GAME_SECONDS_PER_GAME_MINUTE
+
+  for (let i = 0; i < episode.parts.length; i++) {
+    const part = episode.parts[i]
+    const duration = Math.max(1, part.durationSeconds)
+    if (cursor < duration) {
+      return {
+        track: part,
+        offsetSeconds: cursor,
+        content: 'show',
+        // « La Zone Libre (2/3) » : on voit où on en est de l'émission.
+        label: episode.parts.length > 1 ? `${program.title} (${i + 1}/${episode.parts.length})` : program.title,
+        programId: program.id,
+        remainingSeconds: duration - cursor,
+      }
+    }
+    cursor -= duration
+  }
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Musique
+// ---------------------------------------------------------------------------
 
 function getMusicPosition(
   station: RadioStation,
@@ -80,12 +175,25 @@ function getMusicPosition(
   for (const track of musicTracks) {
     const duration = Math.max(1, track.durationSeconds)
     if (cursor < duration) {
-      return { track, offsetSeconds: cursor, content: 'music', label: track.title }
+      return {
+        track,
+        offsetSeconds: cursor,
+        content: 'music',
+        label: track.title,
+        remainingSeconds: duration - cursor,
+      }
     }
     cursor -= duration
   }
 
-  return { track: musicTracks[0], offsetSeconds: 0, content: 'music', label: musicTracks[0].title }
+  const first = musicTracks[0]
+  return {
+    track: first,
+    offsetSeconds: 0,
+    content: 'music',
+    label: first.title,
+    remainingSeconds: Math.max(1, first.durationSeconds),
+  }
 }
 
 /**
@@ -95,13 +203,6 @@ function getMusicPosition(
 function filterAvailable(tracks: RadioTrack[], availableTracks: RadioTrack[]): RadioTrack[] {
   const availableById = new Map(availableTracks.map((track) => [track.id, track]))
   return tracks.map((track) => availableById.get(track.id)).filter((track): track is RadioTrack => track !== undefined)
-}
-
-function isMinuteInSlot(minuteOfDay: number, startMinute: number, durationMinutes: number): boolean {
-  const endMinute = (startMinute + durationMinutes) % MINUTES_PER_DAY
-  if (durationMinutes >= MINUTES_PER_DAY) return true
-  if (startMinute < endMinute) return minuteOfDay >= startMinute && minuteOfDay < endMinute
-  return minuteOfDay >= startMinute || minuteOfDay < endMinute
 }
 
 function getSlotOffsetMinutes(minuteOfDay: number, startMinute: number): number {

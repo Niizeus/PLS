@@ -147,6 +147,10 @@ const METADATA_TIMEOUT_MS = 10_000
  * de presence : un fichier absent ou illisible declenche `error` et sort de la playlist.
  */
 function probeTrack(track: RadioTrack): Promise<RadioTrack | null> {
+  // Durée déjà MESURÉE au scan (voir radioManifestPlugin) : le fichier existe
+  // forcément, puisque Vite l'a lu sur le disque. Rien à télécharger.
+  if (track.durationKnown) return Promise.resolve(track)
+
   return new Promise((resolve) => {
     const probe = new Audio()
     probe.preload = 'metadata'

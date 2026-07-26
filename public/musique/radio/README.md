@@ -23,8 +23,40 @@ R01_TekRadz/
   Jingles/                  habillage court
   Publicites/               pubs et annonces
   Emissions/
-    La_Zone_Libre/          un dossier par emission, un fichier par episode
+    La_Zone_Libre/          un dossier par emission
 ```
+
+## Emissions : episodes et parties
+
+Une **emission** (`La_Zone_Libre/`) contient des **episodes** (une diffusion), et un episode peut
+etre coupe en plusieurs **parties** qui s'ENCHAINENT sans interruption.
+
+La regle est deduite de ce que tu ranges — tu n'as rien a declarer :
+
+| Dans le dossier de l'emission | Ce que le jeu comprend |
+|---|---|
+| des **fichiers** | **un seul episode**, et ces fichiers en sont les **parties**, dans l'ordre |
+| des **sous-dossiers** | **un sous-dossier = un episode**, ses fichiers en sont les parties |
+
+Les deux peuvent cohabiter : les fichiers poses a la racine forment l'episode n°1, et chaque
+sous-dossier ajoute un episode.
+
+```text
+Emissions/
+  La_Zone_Libre/                    un seul episode en 3 parties
+    ZoneLibrePartie (1).wav
+    ZoneLibrePartie (2).wav
+    ZoneLibrePartie (3).wav
+  Chronique/                        un episode par sous-dossier
+    Les billet d'humeur de jeanne/
+      partie 1.wav
+      partie 2.wav
+```
+
+> ⚠️ **Piege a connaitre.** Avant, chaque fichier d'une emission etait pris pour un episode a part,
+> diffuse un jour different : trois parties d'une meme emission etaient etalees sur trois jours,
+> separees par de la musique. C'est corrige — mais ca veut dire que si tu veux vraiment plusieurs
+> episodes, il faut des **sous-dossiers**, pas des fichiers cote a cote.
 
 ## Comment ajouter une musique
 
@@ -44,18 +76,31 @@ Un prefixe d'identifiant a l'ancienne (`R01-T01 Titre.wav`) est reconnu et retir
 ## Programmation
 
 - Hors emission, la station enchaine les fichiers de `Musiques/` en boucle.
-- Chaque sous-dossier de `Emissions/` occupe une tranche d'une heure de jeu a partir de 18h00,
-  dans l'ordre alphabetique (la premiere de 18h00 a 19h00, la suivante de 19h00 a 20h00).
+- Les emissions commencent a **18h00** (temps du jeu), dans l'ordre alphabetique des dossiers.
+- Une emission dure **ce que dure vraiment son episode du jour** — plus une tranche d'une heure
+  imposee. Quand l'episode est fini, la station repasse en musique.
+- En revanche, une emission **ne mord jamais sur la suivante** : si tu en places deux a une heure
+  d'ecart et que la premiere est trop longue, elle sera coupee. La grille de programmation
+  (a venir) permettra de placer les creneaux proprement.
 - Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle.
 
-Le temps du jeu est accelere : une heure de jeu correspond a une fenetre audio courte, pour que
-la radio reste synchronisee avec l'horloge du monde. La station joue « en continu » meme quand
-personne n'ecoute : en montant dans un vehicule, on tombe au milieu d'un morceau.
+⏱️ **Attention a l'echelle de temps.** Un jour de jeu dure une heure reelle, donc **une heure de jeu
+ne vaut que 2 minutes 30 d'audio reel**. Une emission de 14 minutes occupe donc pres de 6 heures
+de jeu. C'est normal, mais ca surprend quand on remplit le planning.
+
+La station joue « en continu » meme quand personne n'ecoute : en montant dans un vehicule, on
+tombe au milieu d'un morceau.
 
 ## Details techniques
 
 Le scan est fait par `vite/radioManifestPlugin.ts`, qui expose le resultat au jeu via le module
 virtuel `virtual:pls-radio-manifest`. `src/audio/radioCatalog.ts` y ajoute les identites des
-stations ; la duree reelle de chaque fichier est mesuree au chargement par `RadioAudioSystem`.
+stations.
+
+La **duree** de chaque fichier est lue au scan, cote Node : pour un `.wav`, elle se lit directement
+dans l'en-tete, sans rien decoder ni installer. Les formats compresses (`.mp3`, `.ogg`...) n'ont pas
+cet en-tete simple : leur duree est alors mesuree par le navigateur au chargement, comme avant.
+Autrement dit, **le `.wav` est le format le plus confortable ici** — le jeu demarre plus vite et la
+grille de programmation connait les durees sans rien telecharger.
 
 Un dossier dont le nom ne commence pas par `RXX` est ignore.

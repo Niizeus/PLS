@@ -119,26 +119,29 @@ L'idée générale, étape par étape :
 Le pipeline couvre **toute la ville** (bbox ~7,5 km) :
 **~34 000 bâtiments + ~7 000 routes + les plans d'eau** (dont le plan d'eau du Canada).
 
-> 🧱 **Le monde est volontairement PLAT et sans texture** (remise à plat de 2026-07, voir
-> [« Remise à plat »](#-remise-à-plat-du-monde-2026-07) plus bas). La **carte** reste la vraie
-> donnée OSM — tracé des rues, emprises des bâtiments, largeurs, plans d'eau. C'est seulement le
-> **décor** (relief, textures, mobilier détaillé, monuments faits main) qui a été retiré.
+> 🧱 **Le décor est volontairement minimal et sans texture** (remise à plat de 2026-07, voir
+> [« Remise à plat »](#-remise-à-plat-du-monde-2026-07) plus bas). La **carte**, elle, est la
+> vraie donnée : tracé des rues, emprises des bâtiments, largeurs et plans d'eau (OSM), **et le
+> vrai relief de la commune** (LiDAR HD de l'IGN — voir [« Le relief »](#️-le-relief-de-beauvais)).
+> Ce sont les textures, le mobilier détaillé et les monuments faits main qui ont été retirés.
 
 Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires) **et le relief** (altitudes via Open-Meteo). Tourne hors-jeu. ⚠️ Le relief et les murs qu'il produit ne sont **plus lus** par le jeu depuis la remise à plat. |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : récupère OSM (bâtiments `way`+`relation`, routes, eau, verdure, murs, arbres, lampadaires). Tourne hors-jeu. ⚠️ La grille d'altitude Open-Meteo qu'il produit n'est **plus lue** : le relief vient de l'IGN (ligne suivante). |
+| `src/world/beauvais/build-terrain-global.mjs` | Télécharge le **relief LiDAR HD de l'IGN** pour toute la commune → `public/terrain/global.png`. Tourne hors-jeu. |
+| `src/world/beauvais/terrain.ts` | Charge cette carte et l'échantillonne : **source unique de la hauteur du sol**. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact chargé par le jeu (bâtiments, routes, eau, limites). ~4,8 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : extrude les bâtiments en **blocs d'une seule couleur**, par **TUILES** de 180 m montées/démontées autour du joueur. |
-| `src/world/beauvais/Roads.tsx` | Routes : rubans plats d'une seule couleur, à la vraie largeur OSM, posés à `y = 0.03`. |
+| `src/world/beauvais/Roads.tsx` | Routes : rubans plats d'une seule couleur, à la vraie largeur OSM, posés à `y = 0.03`. Filtre les chemins piétons et ne peint pas ce qui est sous un bâtiment (voir plus bas). |
 | `src/world/beauvais/Water.tsx` | Plans d'eau : surfaces bleues plates (`y = 0.02`). Purement visuel (on ne nage pas). |
 | `src/world/beauvais/GreenAreas.tsx` | Parcs / pelouses / bois : surfaces vertes plates (`y = 0.01`), 2 teintes. |
 | `src/world/beauvais/Trees.tsx` | Arbres instanciés (OSM + semés dans les bois). |
 | `src/world/beauvais/Lamps.tsx` | Lampadaires instanciés (positions OSM). |
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
-| `src/world/Ground.tsx` | Le **sol : un plan PLAT à l'altitude 0** couvrant toute la ville. |
+| `src/world/Ground.tsx` | Le **sol avec son vrai relief**, affiché en dalles de 256 m autour du joueur. |
 | `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement** et **points de passage** (texte + icône, sauvegardés en local), via `src/ui/mapDraw.ts`. |
 
 ### 🏢 Comment on estime les hauteurs (réalisme)
@@ -204,8 +207,8 @@ jeu fluide :
 - [x] Collision caméra (elle ne traverse plus les bâtiments). *(FollowCamera.tsx)*
 - [x] Habillage : verdure/parcs, arbres, lampadaires. *(GreenAreas/Trees/Lamps)*
 - [x] **Découpage en quartiers** (zones) : `zones.json` + `zoneAt()` + nom du quartier au HUD + contours sur la carte. *(zones.ts, Hud, mapDraw)*
-- [x] **Remise à plat du monde** : relief supprimé, décor réduit à des blocs sans texture. *(voir la section dédiée plus bas)*
-- [ ] **Relief** : à refaire un jour, mais **une seule fois et proprement** — une source, une fonction `terrainHeight()`, et le sol affiché qui renvoie exactement la même surface.
+- [x] **Remise à plat du monde** : décor réduit à des blocs sans texture. *(voir la section dédiée plus bas)*
+- [x] **Relief réel de TOUTE la commune** (LiDAR HD de l'IGN) : une source, une fonction `terrainHeight()`, et un sol affiché qui décrit exactement la même surface. *(voir « Le relief de Beauvais »)*
 - [ ] Repères à la main : cathédrale soignée, ancienne prison, etc. (pas dans OSM → modélisation manuelle).
 - [ ] (Option) Ajouter les 9 tours / châteaux d'eau `man_made` d'OSM comme repères.
 - [ ] (Gros) Contours BD (cell-shading) en post-traitement — le vrai look cartoon.
@@ -268,15 +271,163 @@ grande carte (M), le HUD, le temps de jeu et les besoins — **et toute la donn�
 
 ### Les 3 règles à ne pas casser
 
-1. **Le monde est plat.** `terrainHeight()` (`cityData.ts`) renvoie `0`, et `Ground.tsx` affiche
-   un plan à `y = 0`. Ces deux-là doivent **toujours** être d'accord. Si tu remets du relief,
-   change les deux ensemble — et **une seule fois**, pas couche par couche.
+1. **Une seule hauteur de sol.** `terrainHeight()` (`cityData.ts`) et le sol affiché
+   (`Ground.tsx`) doivent décrire **exactement la même surface**, et tout ce qui se pose au sol
+   passe par `terrainHeight()` — jamais de hauteur en dur. Détail, pièges et vérification
+   chiffrée : [« Le relief de Beauvais »](#️-le-relief-de-beauvais).
 2. **Ce qui bloque doit être visible.** `Beauvais.tsx` affiche *tous* les bâtiments de la donnée,
    sans exception, et `collision.ts` bloque exactement les mêmes contours. Si tu exclus un
    bâtiment de l'affichage (pour le remplacer par un modèle fait main, par exemple), **exclus-le
    aussi des collisions** — sinon tu recrées un mur invisible.
-3. **Une couche de sol = une hauteur.** Herbe `0.01`, eau `0.02`, routes `0.03`. Si tu ajoutes une
-   couche, donne-lui sa place dans cet ordre au lieu de bricoler des marges.
+3. **Une couche de sol = une entrée dans `groundLayers.ts`.** Ce fichier est la source unique de
+   l'empilement (hauteur + rang de profondeur) : herbe, bois, eau, routes. Si tu ajoutes une
+   couche, donne-lui sa place **là** et nulle part ailleurs. **Deux surfaces colorées différemment
+   ne doivent jamais être à la MÊME hauteur sans les départager** — voir juste en dessous.
+
+### ⛰️ Le relief de Beauvais
+
+Les altitudes viennent du **LiDAR HD de l'IGN** (le modèle numérique de terrain officiel
+français), pré-téléchargées par `build-terrain-global.mjs` dans **`public/terrain/global.png`** :
+une grille de **1751 × 1626 nœuds tous les 8 m**, soit 14 × 13 km — toute la commune et au-delà.
+Le fichier fait 3,6 Mo et se charge en **186 ms**.
+
+C'est le vrai relief : la cathédrale est à **69,9 m NGF** (réel ~67 m), la gare plus bas dans la
+vallée du Thérain à **64,4 m**, et la carte va de **53 à 175 m** — 122 m de dénivelé entre le
+fond de vallée et les coteaux.
+
+**Les trois règles qui empêchent le bug de 2026-07 de revenir** (le relief chargé en deux temps
+qui faisait « plonger » routes et pelouses — voir la section suivante) :
+
+1. **UNE seule carte.** Un fichier, une résolution. Pas de second niveau de détail qui viendrait
+   contredire le premier. ⚠️ Les 182 dalles 2 m de l'ancienne version n'ont **pas** été
+   restaurées, et c'est délibéré.
+2. **Chargée AVANT tout affichage.** `World.tsx` attend `loadTerrain()` avant de monter quoi que
+   ce soit. `terrainHeight()` est donc **figée pour toute la partie** : tout le décor, qui
+   construit sa géométrie une seule fois au montage, lit forcément la bonne hauteur.
+3. **Une seule façon d'échantillonner.** `sampleHeight()` interpole **dans le triangle**
+   (barycentrique), avec le même découpage que le maillage affiché — surtout **pas** en
+   bilinéaire, qui décrit une surface courbée passant à côté des triangles.
+
+**Vérifié, pas supposé** : on reconstruit une vraie dalle de maillage, on cherche par force brute
+le triangle qui contient chacun de 20 000 points au hasard, et on compare avec `terrainHeight()`.
+
+| | Écart maximal avec le sol affiché |
+|---|---|
+| `sampleHeight()` (barycentrique, retenu) | **8·10⁻¹⁴ m** ✅ |
+| interpolation bilinéaire (ancienne méthode) | **0,135 m** — l'ordre de grandeur qui enfonçait les routes |
+
+**Comment chaque couche se pose dessus :**
+
+| Couche | Méthode | Pourquoi |
+|---|---|---|
+| Sol (`Ground.tsx`) | dalles de 256 m autour du joueur | 2,8 M de nœuds : impossible en un seul maillage |
+| Bâtiments | altitude au centre de l'emprise + jupe enterrée de 8 m | un bâtiment a un sol horizontal ; mesuré, 99 % des emprises varient de moins de 3,2 m |
+| Routes | segments densifiés à 8 m, chaque bord à sa propre altitude | une rue OSM peut être un segment droit de 200 m : sans découpe, elle ferait un pont |
+| Verdure / eau | découpe **pilotée par l'erreur** (`conformToTerrain`) | découper « tous les 10 m » donnait 1,2 M de triangles ; viser 0,35 m d'erreur en donne 124 k, en mieux |
+
+> ⚠️ **Le piège de la verdure.** Une zone verte d'OSM couvre en médiane 2,5 m de dénivelé, et
+> jusqu'à **76 m** pour les grands bois de coteau : posée à plat, elle tranche la colline. D'où
+> la découpe adaptative. Le réglage du garde-fou est mesuré : à 4 000 triangles par polygone,
+> cinq bois plafonnaient avec 7,3 m d'écart ; à 30 000, plus aucun ne plafonne et l'écart maximal
+> tombe à **0,62 m**, pour 13 % de triangles en plus.
+
+> 📝 **Simplification assumée** : l'eau suit le relief au lieu d'être horizontale. Une vraie
+> surface d'eau est plane, mais tant qu'on ne creuse pas les berges, une nappe plane flotterait
+> au-dessus d'un bord et s'enfoncerait sous l'autre. Coller au sol est le moindre mal.
+
+**Régénérer le relief** (si on agrandit la zone) : `node src/world/beauvais/build-terrain-global.mjs`
+— nécessite `npm install` (le script utilise `geotiff` et `pngjs`, des dépendances de dev).
+
+### 🔦 Pourquoi le sol ne clignote pas (et comment ne pas le recasser)
+
+Un sol plat qui scintille quand le joueur bouge, c'est presque toujours l'une de ces deux causes.
+Les deux sont corrigées ; si le scintillement revient, commence par regarder ici.
+
+**1. La grille d'ombre qui glisse** (`src/core/Lights.tsx`). La zone d'ombre suit le joueur pour
+rester petite et nette. Mais l'ombre est calculée dans une petite texture : si cette zone se
+déplace en continu, sa grille de texels glisse sous le décor et les mêmes points du sol basculent
+à chaque image entre « à l'ombre » et « éclairé » → la route clignote.
+`snapShadowCenter()` arrondit donc le centre de la zone à un **multiple d'un texel** (3,4 cm) :
+la grille reste alignée sur le monde. Vérifié : avant, un point fixe du monde se décalait de
+**0,499 texel** ; après, de **0,000**. La direction du soleil, elle, ne bouge pas (dérive `1e-16`).
+S'y ajoute `shadow-normalBias` : le matin et le soir le soleil est rasant, et sans cette marge une
+grande surface plate se raye d'ombres parasites.
+
+> ⚠️ `SHADOW_HALF` et `SHADOW_MAP` servent à la fois au calcul du texel **et** au JSX
+> (`shadow-camera-*`, `shadow-mapSize`). Si tu changes la taille de la zone d'ombre ou la
+> résolution, change la constante — ne réécris pas les nombres en dur dans le JSX, sinon le
+> calage se fait sur un texel qui n'existe pas et le scintillement revient.
+
+**2. Deux surfaces exactement à la même hauteur.** C'est la SEULE configuration qui clignote
+vraiment. Mesuré en rendant deux surfaces l'une sur l'autre et en comptant les pixels volés :
+
+| Écart entre les deux surfaces | Pixels volés | Images qui changent |
+|---|---|---|
+| 0 cm | 100 % | 25/39 → **ça clignote** |
+| 0,5 cm | 99,9 % | 8/39 → ça clignote |
+| **1 cm et plus** | **0 %** | 0/39 → stable |
+| n'importe lequel + `polygonOffset` | **0 %** | 0/39 → stable |
+
+Testé aussi jusqu'à 6 km de l'origine et avec un sol en un seul quad de 12 km : **aucun effet**.
+Autrement dit, écarter les couches d'un centimètre suffit, et il est inutile de subdiviser le sol.
+Les deux vrais cas de coplanarité trouvés dans la donnée :
+
+- **26 bois tracés à l'intérieur d'une pelouse** → deux verts différents à la même altitude.
+  Réglé par le classement de `groundLayers.ts` (`polygonOffset`).
+- **81 rues dont le ruban se replie sur lui-même** (virages en épingle) → la route se recouvre
+  elle-même. Réglé par le sens des triangles, ci-dessous.
+
+**3. Le sens des triangles (`side`).** Une surface vue « de dos » n'est pas juste invisible : avec
+`DoubleSide`, la carte graphique **retourne sa normale**, et la surface se retrouve éclairée PAR
+EN DESSOUS — donc sombre. Deux surfaces coplanaires de sens opposés ont alors des couleurs
+différentes, et clignotent l'une sur l'autre. C'était le cas des routes : **la totalité du réseau
+était à l'envers** (59 008 triangles sur 59 118), donc éclairé par en dessous, et les 110 triangles
+restants — les replis d'épingle — clignotaient par-dessus.
+
+Désormais : routes, verdure et eau sont toutes en **face avant uniquement** (`side` par défaut),
+avec un sens de triangles homogène (routes 99,83 % à l'endroit, les 0,17 % de replis étant
+simplement écartés). ⚠️ Ne remets pas `DoubleSide` sur une surface de sol « pour être tranquille » :
+c'est précisément ce qui a créé le bug.
+
+### 🏢 Pourquoi les immeubles ne sont plus « posés sur les routes »
+
+Symptôme : du bitume qui entrait sous un immeuble, et des routes qui mouraient contre un mur.
+
+**Ce n'est PAS un décalage de données** — c'était la première hypothèse, elle est fausse.
+Bâtiments et routes passent par le même `project()`, et seuls **0,40 %** des points de route
+tombent dans un bâtiment. Les vraies voies de circulation (primaire, secondaire, tertiaire,
+nationale, autoroute) sont à **0,0 %** : zéro chevauchement. Tout était concentré sur les chemins
+piétons (5,2 % des voies concernées), les escaliers (10,8 %) et les allées de service (2,6 %).
+
+Deux causes, deux correctifs dans `Roads.tsx` :
+
+1. **Les chemins piétons étaient peints en bitume.** OSM cartographie 1 671 `footway` / `path` /
+   `steps` / `cycleway` à Beauvais, et ils vont jusqu'aux PORTES des immeubles — d'où les
+   « routes » qui s'arrêtent au pied des bâtiments. C'est une régression de la remise à plat :
+   l'ancien `Roads.tsx` les filtrait déjà. Filtre rétabli (`MIN_DRIVABLE_WIDTH`). ⚠️ Les rues
+   piétonnes du centre sont des `pedestrian` de 5 m : elles **restent**.
+2. **Le reste traverse vraiment des bâtiments** (passages couverts, allées de cour). On ne peint
+   donc plus la chaussée à l'intérieur d'un bâtiment, via `clipToOutside()` — qui s'appuie sur
+   **`isBlocked()`, la même fonction qui arrête le joueur**. La chaussée est peinte exactement là
+   où on peut circuler (c'est la règle n°2 appliquée dans l'autre sens).
+
+Mesuré sur la donnée réelle :
+
+| | Voies peintes | Surface peinte sur un bâtiment | Extrémités mourant dans un bâtiment |
+|---|---|---|---|
+| Avant | 7 066 | 0,273 % | 158 |
+| + filtre piétons | 5 395 | 0,208 % | 83 |
+| + découpe aux bâtiments | 5 400 | **0,080 %** | **0** |
+
+Coût : ~120 ms une seule fois au montage, et +1 % de sommets (on n'affine la découpe qu'aux
+segments qui touchent réellement un bâtiment). Les 0,080 % restants sont la largeur du ruban qui
+déborde légèrement sous un mur quand l'axe de la rue longe la façade — invisible, puisque le
+bâtiment est un bloc plein dessiné par-dessus.
+
+> 💡 Piste si on veut aller plus loin un jour : `build-beauvais.mjs` n'exporte que la **largeur**
+> de chaque voie, pas son type OSM. On déduit donc « piéton » de la largeur. Exporter `highway`
+> dans le JSON rendrait ce filtre explicite — et permettrait de dessiner les trottoirs dans une
+> teinte à part au lieu de les jeter.
 
 ### Ce qui a été archivé
 

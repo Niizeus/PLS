@@ -1,4 +1,5 @@
 import rawData from './data/beauvais-buildings.json'
+import { sampleHeight } from './terrain'
 
 /**
  * 🗃️  Source unique des données de Beauvais (chargée une seule fois, en synchrone).
@@ -11,10 +12,9 @@ import rawData from './data/beauvais-buildings.json'
  *  - la minimap et la carte (ui/) dessinent tout ça vu du dessus.
  * Tout le monde importe d'ICI → pas de duplication, pas de divergence.
  *
- * ⚠️ RELIEF PLAT : le monde est volontairement à altitude 0 partout (voir
- * `terrainHeight`). C'est la base saine sur laquelle on reconstruit. Tant que
- * personne ne réintroduit de relief, TOUT (sol, routes, bâtiments, joueur,
- * scooter) est calé sur y = 0 → impossible de « flotter » ou de passer sous le sol.
+ * ⚠️ La hauteur du sol ne vit PAS ici : elle vient de `terrain.ts` (relief LiDAR
+ * de l'IGN). Ce module se contente de la ré-exporter via `terrainHeight()`, qui
+ * reste le point de passage unique de tout le jeu.
  */
 
 /** Un bâtiment : hauteur (m), contour projeté en mètres [x, z], et son centre. */
@@ -86,19 +86,20 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
 })
 
 /**
- * Altitude du sol au point monde (x, z).
+ * Altitude du sol au point monde (x, z), en mètres.
  *
- * 👉 Le monde est PLAT : cette fonction renvoie toujours 0.
+ * 👉 C'EST LE POINT DE PASSAGE UNIQUE de la hauteur du sol dans tout le jeu :
+ * le joueur, le scooter, les bâtiments, les routes, les arbres, les lampadaires
+ * et les objets au sol passent tous par ici. Personne ne calcule sa hauteur
+ * dans son coin — c'est ce qui garantit que rien ne flotte ni ne s'enfonce.
  *
- * On la garde quand même (au lieu d'écrire `0` partout) parce que c'est LE point
- * de passage unique si un jour on remet du relief : il suffira de changer ici, et
- * le sol, les routes, le joueur et le scooter suivront ensemble. Si tu remets du
- * relief, assure-toi que le sol AFFICHÉ (Ground.tsx) renvoie exactement la même
- * surface que cette fonction — sinon on retombe sur des objets qui flottent ou
- * un joueur qui s'enfonce.
+ * Le relief réel (LiDAR HD de l'IGN) vit dans `terrain.ts`. Il est chargé UNE
+ * fois avant tout affichage : cette fonction est donc figée pour toute la
+ * partie. Tant que la carte n'est pas chargée (ou si elle échoue), elle renvoie
+ * 0 et le monde est plat — voir l'avertissement en tête de `terrain.ts`.
  */
-export function terrainHeight(_x: number, _z: number): number {
-  return 0
+export function terrainHeight(x: number, z: number): number {
+  return sampleHeight(x, z)
 }
 
 /** Test "le point (x,z) est-il à l'intérieur de ce contour ?" (lancer de rayon). */

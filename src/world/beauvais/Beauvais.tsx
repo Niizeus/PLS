@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { BUILDINGS, SPAWN, type Building } from './cityData'
+import { BUILDINGS, SPAWN, terrainHeight, type Building } from './cityData'
 
 /**
  * 🏙️  Beauvais en BLOCS SIMPLES, généré depuis OpenStreetMap.
@@ -29,6 +29,12 @@ import { BUILDINGS, SPAWN, type Building } from './cityData'
 const TILE = 180 // côté d'une tuile, en mètres
 const REACH = 1 // anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
 const MIN_HEIGHT = 3 // hauteur mini d'un bloc (m), pour éviter les galettes
+/**
+ * Hauteur enterrée sous le sol. Un bâtiment est un bloc à fond plat posé sur un
+ * terrain en pente : sans cette jupe, le coin aval décollerait du sol. On
+ * l'enfonce donc franchement — c'est invisible et ça marche sur toutes les pentes.
+ */
+const SKIRT = 8
 
 // Palette sobre : quelques tons de façade, choisis de façon déterministe.
 const FACADES = ['#d8cdb8', '#cdbfa6', '#c8c4b9', '#d3c3a4', '#bfb4a0', '#c9b79a']
@@ -56,9 +62,13 @@ function buildOne(b: Building): THREE.BufferGeometry | null {
   for (let i = 1; i < b.pts.length; i++) shape.lineTo(b.pts[i][0], -b.pts[i][1])
   shape.closePath()
 
+  // Le bloc part sous le sol (jupe) et monte jusqu'à sa hauteur au-dessus du
+  // terrain, pris au CENTRE de l'emprise : un bâtiment a un sol horizontal.
   const height = Math.max(MIN_HEIGHT, b.h)
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+  const base = terrainHeight(b.cx, b.cz)
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: SKIRT + height, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
+  geo.translate(0, base - SKIRT, 0)
 
   // Une seule couleur par bloc : on peint les sommets, ce qui permet de fusionner
   // toute la tuile en UN seul objet (1 draw call) au lieu d'un matériau par maison.

@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 18,
+      "kind": "show",
+      "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 18,
+      "kind": "show",
+      "show": "Chronique"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 21,
+      "kind": "show",
+      "show": "LGR"
+    }
+  ]
+}

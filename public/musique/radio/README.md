@@ -75,13 +75,36 @@ Un prefixe d'identifiant a l'ancienne (`R01-T01 Titre.wav`) est reconnu et retir
 
 ## Programmation
 
-- Hors emission, la station enchaine les fichiers de `Musiques/` en boucle.
-- Les emissions commencent a **18h00** (temps du jeu), dans l'ordre alphabetique des dossiers.
-- Une emission dure **ce que dure vraiment son episode du jour** — plus une tranche d'une heure
-  imposee. Quand l'episode est fini, la station repasse en musique.
-- En revanche, une emission **ne mord jamais sur la suivante** : si tu en places deux a une heure
-  d'ecart et que la premiere est trop longue, elle sera coupee. La grille de programmation
-  (a venir) permettra de placer les creneaux proprement.
+### 🎛️ La Regie : ou tu remplis le planning
+
+La programmation n'est plus deduite des noms de dossiers : elle vit dans une **grille
+7 jours x 24 heures** que tu remplis toi-meme.
+
+```bash
+npm run dev
+```
+
+Puis ouvre **http://localhost:5173/regie.html**.
+
+- Une case = **une heure de jeu** d'une station. Tu y poses une **emission**, de la **musique**,
+  de la **pub**, ou une **coupure d'antenne**. Une case vide vaut « musique ».
+- Le bouton **⇥ semaine** copie une journee sur les sept.
+- **Enregistrer** reecrit `src/data/radioSchedule.json` et le jeu se recharge tout seul.
+- La Regie affiche la **duree reelle** de chaque emission et **jusqu'ou elle deborde** (cases
+  hachurees). C'est important : une heure de jeu ne valant que 2 min 30, une emission de
+  14 minutes occupe pres de 6 heures de grille.
+
+> La Regie est un **outil de developpement** : elle n'existe qu'en `npm run dev` et ne part pas
+> dans le jeu compile.
+
+### Les regles de diffusion
+
+- Hors emission, la station enchaine les fichiers de `Musiques/`.
+- L'ordre de la playlist est **melange differemment chaque jour** (et differemment d'une station a
+  l'autre). Aucun morceau ne repasse tant qu'on n'a pas fait le tour de la playlist.
+- Une emission demarre a l'heure de sa case et dure **ce que dure vraiment son episode du jour**.
+  Elle **deborde** sur les cases vides ou « musique » qui suivent. Seules une **autre emission**,
+  une case **pub**, une case **antenne coupee** ou **minuit** l'interrompent.
 - Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle.
 
 ⏱️ **Attention a l'echelle de temps.** Un jour de jeu dure une heure reelle, donc **une heure de jeu

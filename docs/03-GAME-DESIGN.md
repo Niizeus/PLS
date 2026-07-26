@@ -339,10 +339,22 @@ ses parties **s'enchainent sans interruption**. La regle de rangement est deduit
 fichiers poses dans le dossier de l'emission forment un seul episode en plusieurs parties, tandis
 que des sous-dossiers donnent un episode chacun (voir `public/musique/radio/README.md`).
 
-Les emissions commencent a **18h00** (temps du jeu), dans l'ordre alphabetique des dossiers, et
-durent **ce que dure vraiment l'episode du jour** — sans jamais mordre sur l'emission suivante.
-Quand l'episode est fini, la station repasse en musique. Un episode est choisi par jour de jeu,
-dans l'ordre, puis la liste boucle.
+**La grille de programmation.** Les horaires ne sont plus deduits des noms de dossiers : ils vivent
+dans `src/data/radioSchedule.json`, une grille **7 jours x 24 heures** par station, remplie depuis
+la page **Regie** (`npm run dev`, puis `localhost:5173/regie.html` — outil de developpement, absent
+du jeu compile). Une case porte une **emission**, de la **musique**, de la **pub** ou une **coupure
+d'antenne** ; une case vide vaut musique.
+
+Une emission demarre a l'heure de sa case et dure **ce que dure vraiment l'episode du jour** : elle
+deborde sur les cases suivantes jusqu'a sa fin. Seules une autre emission, une pub, une coupure
+d'antenne ou minuit l'interrompent. La Regie affiche ce debordement, sinon on programmerait a
+l'aveugle. Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle.
+
+**La playlist ne se repete pas.** Elle est **melangee differemment chaque jour** et pour chaque
+station, avec un tirage reproductible dont la graine est (jour, station). C'est plus fort qu'un
+historique des derniers titres — aucun morceau ne repasse tant qu'on n'a pas fait le tour — et
+surtout ca preserve la propriete la plus precieuse du systeme : la station **tourne toute seule
+sans auditeur**, parce que sa position se CALCULE au lieu d'etre memorisee.
 
 ⏱️ Un jour de jeu dure une heure reelle : **une heure de jeu ne vaut que 2 min 30 d'audio**. Une
 emission de 14 minutes occupe donc pres de 6 heures de jeu.

@@ -1,5 +1,12 @@
-import { getDayNumber, getMinuteOfDay, MINUTES_PER_DAY, REAL_SECONDS_PER_GAME_DAY } from '../gameplay/time/gameTimeStore'
+import {
+  getDayIndex,
+  getDayNumber,
+  getMinuteOfDay,
+  MINUTES_PER_DAY,
+  REAL_SECONDS_PER_GAME_DAY,
+} from '../gameplay/time/gameTimeStore'
 import type { RadioEpisode, RadioStation, RadioTrack, ScheduledRadioProgram } from './radioCatalog'
+import { findShowOnAir, getSlot, nextShowHour } from './radioSchedule'
 
 /**
  * 📻 OÙ EN EST UNE STATION, À UN INSTANT DONNÉ.
@@ -10,7 +17,7 @@ import type { RadioEpisode, RadioStation, RadioTrack, ScheduledRadioProgram } fr
  * chanson a avancé. Comme une vraie radio.
  */
 
-export type RadioTimelineContent = 'music' | 'show'
+export type RadioTimelineContent = 'music' | 'show' | 'ads'
 
 export interface RadioTimelinePosition {
   track: RadioTrack
@@ -39,6 +46,11 @@ export function getRadioTimelinePosition(
   availableTracks: RadioTrack[],
 ): RadioTimelinePosition | null {
   const available = new Map(availableTracks.map((track) => [track.id, track]))
+  const day = getDayIndex(totalGameMinutes)
+  const hour = Math.floor(getMinuteOfDay(totalGameMinutes) / 60)
+
+  // Antenne coupée : il ne reste que le souffle du poste.
+  if (getSlot(station.id, day, hour)?.kind === 'off') return null
 
   const active = getActiveProgram(station, totalGameMinutes, available)
   if (active) {
@@ -46,7 +58,12 @@ export function getRadioTimelinePosition(
     if (position) return position
   }
 
-  return getMusicPosition(station, totalGameMinutes, availableTracks)
+  if (getSlot(station.id, day, hour)?.kind === 'ads') {
+    const position = getRotationPosition(station.ads, 'ads', station.id, totalGameMinutes, availableTracks)
+    if (position) return position
+  }
+
+  return getRotationPosition(station.musicTracks, 'music', station.id, totalGameMinutes, availableTracks)
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +73,8 @@ export function getRadioTimelinePosition(
 interface ActiveProgram {
   program: ScheduledRadioProgram
   episode: RadioEpisode
+  /** Minute du jour à laquelle l'émission a pris l'antenne. */
+  startMinute: number
 }
 
 /**
@@ -71,25 +90,32 @@ function getActiveProgram(
   totalGameMinutes: number,
   available: Map<string, RadioTrack>,
 ): ActiveProgram | null {
+  const day = getDayIndex(totalGameMinutes)
   const minuteOfDay = getMinuteOfDay(totalGameMinutes)
+  const hour = Math.floor(minuteOfDay / 60)
 
-  for (let i = 0; i < station.scheduledPrograms.length; i++) {
-    const program = station.scheduledPrograms[i]
-    const episode = episodeOfTheDay(program, totalGameMinutes, available)
-    if (!episode) continue
+  // Quelle émission a l'antenne d'après la grille ? On remonte dans la journée,
+  // car une émission posée à 18h peut encore jouer à 21h (voir radioSchedule.ts).
+  const onAir = findShowOnAir(station.id, day, hour)
+  if (!onAir) return null
 
-    // Longueur réelle de l'épisode, convertie en minutes de jeu.
-    let lengthMinutes = episode.durationSeconds / GAME_SECONDS_PER_GAME_MINUTE
-    // Une émission ne déborde jamais sur la suivante : c'est elle qui prend l'antenne.
-    const next = station.scheduledPrograms[i + 1]
-    if (next) lengthMinutes = Math.min(lengthMinutes, next.startMinute - program.startMinute)
+  const program = station.scheduledPrograms.find((p) => p.folder === onAir.show)
+  if (!program) return null
 
-    if (getSlotOffsetMinutes(minuteOfDay, program.startMinute) < lengthMinutes) {
-      return { program, episode }
-    }
-  }
+  const episode = episodeOfTheDay(program, totalGameMinutes, available)
+  if (!episode) return null
 
-  return null
+  const startMinute = onAir.startHour * 60
+  // Longueur réelle de l'épisode, convertie en minutes de jeu.
+  let lengthMinutes = episode.durationSeconds / GAME_SECONDS_PER_GAME_MINUTE
+  // Une émission ne déborde ni sur la suivante, ni sur le lendemain.
+  const nextHour = nextShowHour(station.id, day, onAir.startHour)
+  if (nextHour !== null) lengthMinutes = Math.min(lengthMinutes, nextHour * 60 - startMinute)
+  lengthMinutes = Math.min(lengthMinutes, MINUTES_PER_DAY - startMinute)
+
+  if (minuteOfDay - startMinute >= lengthMinutes) return null
+
+  return { program, episode, startMinute }
 }
 
 /** Un épisode par jour, dans l'ordre ; passé le dernier, la liste boucle. */
@@ -130,9 +156,8 @@ function episodeOfTheDay(
  * `null` et la station repasse en musique.
  */
 function getProgramPosition(active: ActiveProgram, totalGameMinutes: number): RadioTimelinePosition | null {
-  const { program, episode } = active
-  const slotOffsetMinutes = getSlotOffsetMinutes(getMinuteOfDay(totalGameMinutes), program.startMinute)
-  let cursor = slotOffsetMinutes * GAME_SECONDS_PER_GAME_MINUTE
+  const { program, episode, startMinute } = active
+  let cursor = (getMinuteOfDay(totalGameMinutes) - startMinute) * GAME_SECONDS_PER_GAME_MINUTE
 
   for (let i = 0; i < episode.parts.length; i++) {
     const part = episode.parts[i]
@@ -158,42 +183,80 @@ function getProgramPosition(active: ActiveProgram, totalGameMinutes: number): Ra
 // Musique
 // ---------------------------------------------------------------------------
 
-function getMusicPosition(
-  station: RadioStation,
+/**
+ * 🎲 La playlist, MÉLANGÉE différemment chaque jour.
+ *
+ * On voulait « ne pas rejouer un morceau joué récemment ». Un historique
+ * casserait la propriété la plus précieuse du système : la station tourne toute
+ * seule sans auditeur, parce que sa position se CALCULE. Mémoriser ce qui a été
+ * joué obligerait quelqu'un à écouter pour que ça avance.
+ *
+ * On mélange donc la playlist avec un tirage reproductible, dont la graine est
+ * (jour, station). C'est plus fort qu'un historique de trois titres :
+ *
+ *  - **aucune répétition** tant qu'on n'a pas fait le tour de la playlist ;
+ *  - un **ordre différent chaque jour**, et différent d'une station à l'autre ;
+ *  - et ça reste calculable depuis l'heure seule.
+ */
+function getRotationPosition(
+  catalogue: RadioTrack[],
+  content: RadioTimelineContent,
+  stationId: string,
   totalGameMinutes: number,
   availableTracks: RadioTrack[],
 ): RadioTimelinePosition | null {
-  const musicTracks = filterAvailable(station.musicTracks, availableTracks)
-  if (musicTracks.length === 0) return null
+  const tracks = filterAvailable(catalogue, availableTracks)
+  if (tracks.length === 0) return null
 
-  const totalDuration = musicTracks.reduce((sum, track) => sum + Math.max(1, track.durationSeconds), 0)
+  const totalDuration = tracks.reduce((sum, track) => sum + Math.max(1, track.durationSeconds), 0)
   if (totalDuration <= 0) return null
 
-  const seedOffset = STATION_SEED_OFFSETS_SECONDS[station.id] ?? 0
+  const dayNumber = getDayNumber(totalGameMinutes)
+  const ordered = shuffleWithSeed(tracks, hashSeed(`${stationId}|${content}|${dayNumber}`))
+
+  const seedOffset = STATION_SEED_OFFSETS_SECONDS[stationId] ?? 0
   let cursor = (Math.floor(totalGameMinutes * GAME_SECONDS_PER_GAME_MINUTE) + seedOffset) % totalDuration
 
-  for (const track of musicTracks) {
+  for (const track of ordered) {
     const duration = Math.max(1, track.durationSeconds)
     if (cursor < duration) {
-      return {
-        track,
-        offsetSeconds: cursor,
-        content: 'music',
-        label: track.title,
-        remainingSeconds: duration - cursor,
-      }
+      return { track, offsetSeconds: cursor, content, label: track.title, remainingSeconds: duration - cursor }
     }
     cursor -= duration
   }
 
-  const first = musicTracks[0]
+  const first = ordered[0]
   return {
     track: first,
     offsetSeconds: 0,
-    content: 'music',
+    content,
     label: first.title,
     remainingSeconds: Math.max(1, first.durationSeconds),
   }
+}
+
+/** Mélange de Fisher-Yates, mais avec un hasard REPRODUCTIBLE (même graine = même ordre). */
+function shuffleWithSeed<T>(items: T[], seed: number): T[] {
+  const out = items.slice()
+  let state = seed || 1
+  for (let i = out.length - 1; i > 0; i--) {
+    // Générateur congruentiel simple : largement suffisant pour brasser une playlist.
+    state = (state * 1664525 + 1013904223) >>> 0
+    const j = state % (i + 1)
+    const tmp = out[i]
+    out[i] = out[j]
+    out[j] = tmp
+  }
+  return out
+}
+
+function hashSeed(text: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
 }
 
 /**
@@ -203,8 +266,4 @@ function getMusicPosition(
 function filterAvailable(tracks: RadioTrack[], availableTracks: RadioTrack[]): RadioTrack[] {
   const availableById = new Map(availableTracks.map((track) => [track.id, track]))
   return tracks.map((track) => availableById.get(track.id)).filter((track): track is RadioTrack => track !== undefined)
-}
-
-function getSlotOffsetMinutes(minuteOfDay: number, startMinute: number): number {
-  return (minuteOfDay - startMinute + MINUTES_PER_DAY) % MINUTES_PER_DAY
 }

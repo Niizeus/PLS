@@ -3,7 +3,6 @@ import type { RadioManifestFile, RadioManifestStation } from '../../vite/radioMa
 
 export type RadioStationId = 'R01' | 'R02' | 'R03' | 'R04' | 'R05'
 export type RadioContentType = 'music' | 'jingle' | 'ad' | 'show'
-export type RadioEpisodeMode = 'daily-sequence'
 
 export interface RadioTrack {
   id: string
@@ -36,9 +35,6 @@ export interface ScheduledRadioProgram {
   id: string
   title: string
   folder: string
-  startMinute: number
-  durationMinutes: number
-  episodeMode: RadioEpisodeMode
   episodes: RadioEpisode[]
 }
 
@@ -61,9 +57,6 @@ const DEFAULT_SHORT_SECONDS = 15
 const DEFAULT_AD_SECONDS = 30
 const DEFAULT_SHOW_SECONDS = 150
 
-/** Premiere emission du soir a 18h00 (temps du jeu) ; les suivantes s'enchainent par tranches d'une heure. */
-const EVENING_PROGRAMS_START_MINUTE = 18 * 60
-const PROGRAM_SLOT_MINUTES = 60
 
 /**
  * Identite des cinq stations, telle que definie dans
@@ -158,13 +151,10 @@ function toStation(id: RadioStationId, manifest: RadioManifestStation | undefine
     musicTracks: toTracks(id, 'music', 'Musiques', manifest?.musiques ?? [], DEFAULT_MUSIC_SECONDS),
     jingles: toTracks(id, 'jingle', 'Jingles', manifest?.jingles ?? [], DEFAULT_SHORT_SECONDS),
     ads: toTracks(id, 'ad', 'Publicites', manifest?.publicites ?? [], DEFAULT_AD_SECONDS),
-    scheduledPrograms: (manifest?.programmes ?? []).map((program, index) => ({
+    scheduledPrograms: (manifest?.programmes ?? []).map((program) => ({
       id: `${id}/Emissions/${program.folder}`,
       title: program.title,
       folder: program.folder,
-      startMinute: EVENING_PROGRAMS_START_MINUTE + index * PROGRAM_SLOT_MINUTES,
-      durationMinutes: PROGRAM_SLOT_MINUTES,
-      episodeMode: 'daily-sequence',
       episodes: program.episodes.map((episode) => {
         const category = `Emissions/${program.folder}${episode.folder ? '/' + episode.folder : ''}`
         const parts = toTracks(id, 'show', category, episode.parts, DEFAULT_SHOW_SECONDS)

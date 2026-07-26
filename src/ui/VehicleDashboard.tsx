@@ -4,25 +4,31 @@ import { getRadioStation } from '../audio/radioCatalog'
 import { useRadioStore } from '../audio/radioStore'
 import { HUD, kbd, panel } from './hudStyle'
 
-const MAX_DIAL_KMH = 140
 const NEEDLE_MIN = -118
 const NEEDLE_MAX = 118
+/** Nombre de graduations sur le cadran (le pas depend du vehicule). */
+const DIAL_TICKS = 7
 
 export default function VehicleDashboard() {
   const riding = useVehicleTelemetryStore((s) => s.riding)
   const kind = useVehicleTelemetryStore((s) => s.kind)
   const speedKmh = useVehicleTelemetryStore((s) => s.speedKmh)
+  const dialMaxKmh = useVehicleTelemetryStore((s) => s.dialMaxKmh)
+  const gear = useVehicleTelemetryStore((s) => s.gear)
+  const rpmRatio = useVehicleTelemetryStore((s) => s.rpmRatio)
   const fuelPercent = useVehicleTelemetryStore((s) => s.fuelPercent)
   const stationId = useRadioStore((s) => s.currentStationId)
   const contentLabel = useRadioStore((s) => s.currentContentLabel)
 
   if (!riding) return null
 
-  const clampedSpeed = Math.min(MAX_DIAL_KMH, speedKmh)
-  const needle = NEEDLE_MIN + (clampedSpeed / MAX_DIAL_KMH) * (NEEDLE_MAX - NEEDLE_MIN)
+  const clampedSpeed = Math.min(dialMaxKmh, speedKmh)
+  const needle = NEEDLE_MIN + (clampedSpeed / dialMaxKmh) * (NEEDLE_MAX - NEEDLE_MIN)
   const speedText = Math.round(speedKmh).toString().padStart(3, '0')
   const fuel = Math.round(fuelPercent)
   const station = stationId ? getRadioStation(stationId) : null
+  // Le scooter a un variateur : il n'y a pas de rapport a afficher.
+  const gearText = gear > 0 ? String(gear) : 'CVT'
 
   return (
     <div style={panelStyle}>
@@ -30,8 +36,20 @@ export default function VehicleDashboard() {
         <svg viewBox="0 0 140 100" style={svgStyle} aria-hidden>
           <path d="M 20 80 A 52 52 0 0 1 120 80" fill="none" stroke="rgba(226,232,240,0.22)" strokeWidth="8" />
           <path d="M 20 80 A 52 52 0 0 1 120 80" fill="none" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" />
-          {[0, 20, 40, 60, 80, 100, 120, 140].map((mark) => {
-            const a = ((NEEDLE_MIN + (mark / MAX_DIAL_KMH) * (NEEDLE_MAX - NEEDLE_MIN)) - 90) * (Math.PI / 180)
+          {/* Compte-tours : l'arc se remplit avec le regime, et vire au rouge
+              en approchant de la zone rouge. C'est lui qui rend les passages de
+              rapport lisibles — l'aiguille de vitesse, elle, ne retombe pas. */}
+          <path
+            d="M 20 80 A 52 52 0 0 1 120 80"
+            fill="none"
+            stroke={rpmRatio > 0.92 ? '#ef4444' : '#f97316'}
+            strokeWidth="4"
+            strokeLinecap="round"
+            pathLength={1}
+            strokeDasharray={`${rpmRatio} 1`}
+          />
+          {Array.from({ length: DIAL_TICKS + 1 }, (_, i) => (i * dialMaxKmh) / DIAL_TICKS).map((mark) => {
+            const a = (NEEDLE_MIN + (mark / dialMaxKmh) * (NEEDLE_MAX - NEEDLE_MIN) - 90) * (Math.PI / 180)
             const x1 = 70 + Math.cos(a) * 42
             const y1 = 80 + Math.sin(a) * 42
             const x2 = 70 + Math.cos(a) * 51
@@ -45,6 +63,7 @@ export default function VehicleDashboard() {
         </svg>
         <div style={digitalStyle}>{speedText}</div>
         <div style={unitStyle}>km/h</div>
+        <div style={gearStyle}>{gearText}</div>
       </div>
 
       <div style={sideStyle}>
@@ -109,6 +128,18 @@ const unitStyle: CSSProperties = {
   font: '800 10px system-ui, sans-serif',
   color: '#94a3b8',
   letterSpacing: 0.8,
+}
+
+/** Rapport engagé, en haut du cadran (« CVT » pour le scooter). */
+const gearStyle: CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  top: 18,
+  textAlign: 'center',
+  font: '900 15px ui-monospace, monospace',
+  color: '#fbbf24',
+  letterSpacing: 1,
 }
 
 const sideStyle: CSSProperties = { display: 'grid', gap: 7, alignContent: 'center' }

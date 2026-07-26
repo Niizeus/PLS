@@ -285,9 +285,40 @@ circuler, fuir la police, faire des missions ou provoquer le chaos.
 
 **Deja en place :** un **scooter** et une **voiture prototype** conduisibles (`src/entities/vehicles/`).
 On s'en approche et on monte/descend avec **E** ; conduite a ZQSD (accelere, freine/recule, braque).
-La voiture sert de premier test d'echelle et de feeling : conduite arcade plus lourde, direction lissee,
-freinage plus progressif et rebond amorti contre les obstacles. Les vehicules partagent un noyau de
-conduite commun (`vehicleDriving.ts`) avec des reglages propres a chaque type.
+Les vehicules partagent un noyau de physique commun (`vehicleDriving.ts` + `vehicleEngine.ts`) avec
+des reglages propres a chaque type.
+
+**Physique.** Le vehicule a un vrai **vecteur vitesse**, decompose a chaque image dans son repere :
+la part longitudinale est celle que les roues poussent, la part laterale est la derive, que
+l'adherence mange progressivement. Le braquage suit le **modele bicyclette** (vitesse de rotation
+= vitesse / empattement x tan(braquage)), plafonne par une limite d'adherence laterale. Deux
+consequences : **on ne tourne plus a l'arret** (fini l'effet tourelle), et le sous-virage a haute
+vitesse apparait tout seul. Mesure : rayon de braquage de **5,8 m a 15 km/h** et **115 m a 120 km/h**.
+
+**Chocs.** Ils utilisent la normale du mur rendue par la collision : la part de vitesse qui rentre
+dans le mur est renvoyee avec un petit rebond, celle qui longe le mur est presque entierement
+gardee. Autrement dit **froler ne coute presque rien, percuter coute tout**, sans aucun cas
+particulier. Un choc pris sur une aile fait en plus pivoter la caisse (bras de levier), alors qu'un
+choc a plat de face ne la fait pas tourner. Mesure a 100 km/h : on garde **96 %** de la vitesse a 3°,
+**91 %** a 10° (avec le nez devie de 9° pour s'aligner sur la facade), **58 %** a 30°, **22 %** de plein
+fouet. Le frottement est compte **par seconde**, donc identique a 30, 60 ou 144 images/s.
+
+**Moteur et boite (`vehicleEngine.ts`).** L'acceleration n'est pas une rampe : il y a une **courbe de
+couple** (creux en bas, pic au milieu, chute a la zone rouge), des **rapports** qui multiplient ce
+couple, et un **trou de 0,22 s a chaque passage** — c'est lui qu'on sent. La resistance de l'air
+croit avec le carre de la vitesse.
+
+> 👉 **La vitesse maxi n'est pas un reglage : elle sort du calcul**, a l'equilibre entre la poussee
+> du dernier rapport et la trainee. On calibre donc la trainee, et la progressivite vient toute seule.
+
+| | Vitesse maxi | Transmission | 0-100 | Passages de rapport |
+|---|---|---|---|---|
+| **Voiture** | **210 km/h** | boite 6 rapports | ~6,0 s | 46 / 74 / 108 / 143 / 179 km/h |
+| **Scooter** | **75 km/h** | variateur (CVT) | — | aucun (regime tenu a ~7 200 tr/min) |
+
+La voiture met **22 s pour atteindre 180 km/h** et **33 s pour 200** : la fin de la plage est longue,
+comme dans la vraie vie. Pour la rendre plus rapide, baisse `DRAG` dans `carConfig.ts` ; pour qu'elle
+reprenne mieux, monte `PEAK_TORQUE` ou raccourcis les rapports.
 **Collisions.** Le joueur est un **cercle**, chaque vehicule une **caisse orientee**, et les deux sont
 testes contre les **aretes de mur** des batiments (`movementCollision.ts` + `forEachWallNear()`).
 On connait donc la distance exacte au mur ET sa normale, ce qui donne trois choses :
@@ -297,7 +328,9 @@ coince dans un batiment ; et un choc **frontal** coute beaucoup de vitesse la ou
 n'en coute presque pas. Le deplacement est decoupe en sous-pas plus courts que le corps :
 aucune traversee de facade, meme a pleine vitesse.
 Quand le joueur conduit, un tableau de bord affiche la vitesse reelle en km/h avec aiguille et
-compteur numerique, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
+compteur numerique, le **rapport engage** (« CVT » pour le scooter), un **compte-tours** qui vire au
+rouge en zone rouge, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
+Le cadran se gradue **selon le vehicule** (~80 km/h pour le scooter, ~220 pour la voiture).
 Chaque vehicule garde sa station radio attribuee : au premier demarrage, une des cinq radios est choisie aleatoirement, puis elle reste la meme quand on descend et qu'on remonte. **La touche R change de station** (elle tourne en boucle sur les cinq) ; le choix est memorise sur le vehicule, donc chaque caisse garde SA station. La touche est rappelee sur le tableau de bord, a cote du nom de la station. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
 Le contenu des stations est **detecte sur disque**, pas ecrit en dur : chaque fichier audio depose dans `public/musique/radio/RXX_Nom/` entre dans la programmation, quel que soit son nom. Le titre affiche sur le tableau de bord est deduit du nom du fichier. Voir `public/musique/radio/README.md`.
 

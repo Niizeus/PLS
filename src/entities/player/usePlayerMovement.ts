@@ -14,8 +14,14 @@ import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
 import { useCarStore } from '../vehicles/carStore'
 import { CAR } from '../vehicles/carConfig'
-import { createVehicleDriveState, driveVehicle, stopVehicle } from '../vehicles/vehicleDriving'
-import { useVehicleTelemetryStore } from '../vehicles/vehicleTelemetryStore'
+import {
+  createVehicleDriveState,
+  driveVehicle,
+  stopVehicle,
+  type VehicleDriveConfig,
+  type VehicleDriveState,
+} from '../vehicles/vehicleDriving'
+import { useVehicleTelemetryStore, type VehicleKind } from '../vehicles/vehicleTelemetryStore'
 import { useRadioStore } from '../../audio/radioStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { moveCircle } from '../movementCollision'
@@ -195,16 +201,14 @@ export function usePlayerMovement(
       if (Math.abs(scooterDrive.current.speed) > 0.2) {
         scooterState.consumeFuel((Math.abs(scooterDrive.current.speed) * 0.000009 + (k.forward ? 0.000015 : 0)) * delta)
       }
-      const fuelRatio = scooterState.fuelCapacityLiters > 0 ? scooterState.fuelLiters / scooterState.fuelCapacityLiters : 0
-      useVehicleTelemetryStore.getState().setTelemetry('scooter', scooterDrive.current.speed, fuelRatio)
+      publishTelemetry('scooter', scooterDrive.current, SCOOTER, scooterState)
     } else if (activeCar) {
       const carState = useCarStore.getState()
       driveVehicle(group, carState.fuelLiters > 0 ? k : withoutThrottle(k), carDrive.current, CAR, delta)
       if (Math.abs(carDrive.current.speed) > 0.2) {
         carState.consumeFuel((Math.abs(carDrive.current.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
       }
-      const fuelRatio = carState.fuelCapacityLiters > 0 ? carState.fuelLiters / carState.fuelCapacityLiters : 0
-      useVehicleTelemetryStore.getState().setTelemetry('car', carDrive.current.speed, fuelRatio)
+      publishTelemetry('car', carDrive.current, CAR, carState)
     } else {
       useVehicleTelemetryStore.getState().clearTelemetry()
     }
@@ -385,6 +389,23 @@ export function usePlayerMovement(
  */
 function withoutThrottle(k: KeyboardState): KeyboardState {
   return { ...k, forward: false }
+}
+
+/** Pousse l'etat du vehicule vers le tableau de bord (vitesse, regime, rapport, essence). */
+function publishTelemetry(
+  kind: VehicleKind,
+  drive: VehicleDriveState,
+  config: VehicleDriveConfig,
+  tank: { fuelLiters: number; fuelCapacityLiters: number },
+) {
+  useVehicleTelemetryStore.getState().setTelemetry(kind, {
+    speed: drive.speed,
+    rpm: drive.rpm,
+    gear: drive.gear,
+    maxRpm: config.ENGINE.MAX_RPM,
+    maxSpeed: config.MAX_SPEED,
+    fuelRatio: tank.fuelCapacityLiters > 0 ? tank.fuelLiters / tank.fuelCapacityLiters : 0,
+  })
 }
 
 function smoothGroundY(current: number | null, target: number, delta: number): number {

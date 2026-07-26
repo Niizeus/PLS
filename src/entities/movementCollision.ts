@@ -51,6 +51,13 @@ export interface MoveResult {
    */
   normalX: number
   normalZ: number
+  /**
+   * Point du mur touché, en coordonnées monde. Sert de BRAS DE LEVIER : un choc
+   * pris sur l'aile avant droite ne doit pas avoir le même effet qu'un choc pile
+   * au milieu du pare-chocs — le premier fait pivoter la caisse.
+   */
+  contactX: number
+  contactZ: number
   /** Profondeur totale corrigée (m) : jauge la violence du contact. */
   push: number
 }
@@ -73,6 +80,9 @@ let posZ = 0
 let bestDepth = 0
 let bestNX = 0
 let bestNZ = 0
+/** Point du mur correspondant à cette correction (bras de levier de l'impact). */
+let bestPX = 0
+let bestPZ = 0
 
 /** Forme testée : cercle si `probeRadius > 0`, sinon boîte orientée. */
 let probeRadius = 0
@@ -155,6 +165,10 @@ function sweep(
   let sumNX = 0
   let sumNZ = 0
   let push = 0
+  // Point de contact retenu : celui du choc le plus profond de tout le trajet.
+  let deepest = 0
+  let contactX = 0
+  let contactZ = 0
 
   for (let i = 0; i < steps; i++) {
     posX += sx
@@ -165,6 +179,11 @@ function sweep(
       sumNX += bestNX * bestDepth
       sumNZ += bestNZ * bestDepth
       push += bestDepth
+      if (bestDepth > deepest) {
+        deepest = bestDepth
+        contactX = bestPX
+        contactZ = bestPZ
+      }
     }
   }
 
@@ -179,6 +198,8 @@ function sweep(
     hit: push > 0,
     normalX: length > 1e-6 ? sumNX / length : 0,
     normalZ: length > 1e-6 ? sumNZ / length : 0,
+    contactX,
+    contactZ,
     push,
   }
 }
@@ -205,8 +226,10 @@ function circleProbe(ax: number, az: number, bx: number, bz: number) {
   // Point du mur le plus proche du centre du cercle.
   let t = ((posX - ax) * ex + (posZ - az) * ez) / len2
   t = t < 0 ? 0 : t > 1 ? 1 : t
-  const dx = posX - (ax + ex * t)
-  const dz = posZ - (az + ez * t)
+  const qx = ax + ex * t
+  const qz = az + ez * t
+  const dx = posX - qx
+  const dz = posZ - qz
   const d2 = dx * dx + dz * dz
   if (d2 >= probeRadius * probeRadius) return
 
@@ -229,6 +252,8 @@ function circleProbe(ax: number, az: number, bx: number, bz: number) {
     bestDepth = depth
     bestNX = nx
     bestNZ = nz
+    bestPX = qx
+    bestPZ = qz
   }
 }
 
@@ -283,9 +308,66 @@ function boxProbe(ax: number, az: number, bx: number, bz: number) {
     bestDepth = depth
     bestNX = nx
     bestNZ = nz
+    contactOf(nx, nz, ax, az, bx, bz)
   }
 }
 
+/**
+ * Point de contact = **moyenne des coins de la caisse qui sont entrés dans le mur**.
+ *
+ * ⚠️ Surtout PAS « le point du mur le plus proche du centre » : ce point est par
+ * construction dans l'axe de la normale, donc son bras de levier est nul et
+ * aucun choc ne ferait jamais pivoter la caisse.
+ *
+ * Avec la moyenne des coins pénétrants, les deux cas se règlent tout seuls :
+ *  - choc à plat de face → les DEUX coins avant entrent, leur milieu est dans
+ *    l'axe du véhicule → aucun pivot, ce qui est correct ;
+ *  - choc sur une aile → un seul coin entre, le bras de levier est décalé → la
+ *    caisse est déviée.
+ */
+function contactOf(nx: number, nz: number, ax: number, az: number, bx: number, bz: number) {
+  // Position de la face du mur le long de la normale de poussée.
+  const limit = Math.max(ax * nx + az * nz, bx * nx + bz * nz)
+
+  let sumX = 0
+  let sumZ = 0
+  let count = 0
+  let deepest = Infinity
+  let deepX = posX
+  let deepZ = posZ
+
+  for (let i = 0; i < 4; i++) {
+    const sl = i < 2 ? 1 : -1
+    const sw = i % 2 === 0 ? 1 : -1
+    const cx = posX + sl * boxHalfL * boxUX + sw * boxHalfW * boxRX
+    const cz = posZ + sl * boxHalfL * boxUZ + sw * boxHalfW * boxRZ
+    const along = cx * nx + cz * nz
+    if (along < limit) {
+      sumX += cx
+      sumZ += cz
+      count++
+    }
+    if (along < deepest) {
+      deepest = along
+      deepX = cx
+      deepZ = cz
+    }
+  }
+
+  bestPX = count > 0 ? sumX / count : deepX
+  bestPZ = count > 0 ? sumZ / count : deepZ
+}
+
+/**
+ * Chevauchement des deux projections sur un axe, et de quel côté pousser.
+ *
+ * ⚠️ On mesure bien la **correction minimale** pour séparer les deux formes, PAS
+ * la longueur de leur intersection. La nuance est vitale ici : un mur est un
+ * segment, donc d'épaisseur nulle. Sur l'axe perpendiculaire au mur, sa
+ * projection est un POINT — la longueur d'intersection y vaut donc toujours
+ * zéro, et l'axe passerait à tort pour séparateur. Aucun véhicule ne serait
+ * jamais arrêté.
+ */
 function testAxis(nx: number, nz: number, ax: number, az: number, bx: number, bz: number) {
   const center = posX * nx + posZ * nz
   const reach = boxHalfL * Math.abs(boxUX * nx + boxUZ * nz) + boxHalfW * Math.abs(boxRX * nx + boxRZ * nz)
@@ -294,11 +376,15 @@ function testAxis(nx: number, nz: number, ax: number, az: number, bx: number, bz
   const segMin = pa < pb ? pa : pb
   const segMax = pa < pb ? pb : pa
 
-  const high = Math.min(center + reach, segMax)
-  const low = Math.max(center - reach, segMin)
-  axisOverlap = high - low
-  // Sens de la poussée : toujours du mur VERS le centre de la boîte.
-  axisSign = center >= (segMin + segMax) * 0.5 ? 1 : -1
+  // De combien il faudrait reculer / avancer la boîte pour dégager le segment.
+  const back = center + reach - segMin
+  const forth = segMax - (center - reach)
+  if (back <= 0 || forth <= 0) {
+    axisOverlap = 0 // axe séparateur : les deux formes ne se touchent pas
+    return
+  }
+  axisOverlap = Math.min(back, forth)
+  axisSign = back < forth ? -1 : 1
 }
 
 // ---------------------------------------------------------------------------

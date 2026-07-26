@@ -17,12 +17,22 @@
  */
 
 /**
- * Niveau nominal du souffle. Très bas : environ 30 dB sous la musique, donc on
- * l'entend dans les passages calmes et jamais par-dessus un morceau.
+ * 🔊 Niveau nominal du souffle — **le réglage à toucher s'il gêne**.
+ *
+ * Il vise environ **45 dB sous la musique**, ce qui correspond au souffle d'une
+ * bande magnétique : présent quand on tend l'oreille, invisible sous un morceau.
+ *
+ * ⚠️ Un premier réglage à `0.024` sortait le souffle à **−22 dB**, et il mangeait
+ * les musiques. C'est le piège du bruit large bande : à niveau égal, il masque
+ * infiniment plus qu'un son musical, parce qu'il occupe TOUTES les fréquences à
+ * la fois. Un souffle « discret » se règle donc beaucoup plus bas que l'intuition
+ * ne le suggère.
+ *
+ * Pour l'ajuster : `0` le supprime, `0.005` le rend franchement audible.
  */
-const HISS_LEVEL = 0.024
+const HISS_LEVEL = 0.0018
 /** Cadence à laquelle le souffle change d'intensité (ms). */
-const HISS_BREATH_MS = 700
+const HISS_BREATH_MS = 900
 /** Durée d'une bouffée de zapping (s). */
 const ZAP_SECONDS = 0.38
 
@@ -49,12 +59,18 @@ export function createRadioNoise(context: AudioContext, destination: AudioNode):
 
   // Passe-haut + passe-bas : le bruit blanc brut est agressif, on ne garde que
   // la bande où souffle un poste de radio.
+  //
+  // ⚠️ La bande a été REMONTÉE (elle allait de 1,2 à 6,5 kHz). C'est exactement
+  // là que vit le corps d'un morceau — voix, caisse claire, synthés : le souffle
+  // se posait donc pile dessus et le masquait, même à faible niveau. En le
+  // plaçant au-dessus, il s'entend comme un souffle de poste sans jamais entrer
+  // en concurrence avec la musique.
   const hissHigh = context.createBiquadFilter()
   hissHigh.type = 'highpass'
-  hissHigh.frequency.value = 1200
+  hissHigh.frequency.value = 3800
   const hissLow = context.createBiquadFilter()
   hissLow.type = 'lowpass'
-  hissLow.frequency.value = 6500
+  hissLow.frequency.value = 9500
 
   const hissSource = context.createBufferSource()
   hissSource.buffer = noiseBuffer
@@ -69,15 +85,24 @@ export function createRadioNoise(context: AudioContext, destination: AudioNode):
 
   // La respiration : plutôt qu'un oscillateur régulier (qui s'entend comme un
   // battement mécanique), on tire un niveau au hasard et on y glisse doucement.
+  // La plupart du temps le souffle reste sous son niveau nominal ; il ne monte
+  // au-dessus que de temps en temps. C'est ce que veut dire « un petit grain
+  // parfois » : une nappe constante s'entend comme un défaut, une nappe qui
+  // respire s'entend comme un poste.
   const breathId = window.setInterval(() => {
     if (hissLevel <= 0) return
-    const target = hissLevel * HISS_LEVEL * (0.35 + Math.random() * 1.5)
-    hissGain.gain.setTargetAtTime(target, context.currentTime, 0.4)
+    const swell = Math.random() < 0.25 ? 0.9 + Math.random() * 0.5 : 0.15 + Math.random() * 0.5
+    hissGain.gain.setTargetAtTime(hissLevel * HISS_LEVEL * swell, context.currentTime, 0.5)
   }, HISS_BREATH_MS)
 
   return {
     setHiss(level) {
-      hissLevel = Math.max(0, level)
+      const next = Math.max(0, level)
+      // ⚠️ Sans ce garde-fou, la régie rappelait `setHiss` toutes les 250 ms et
+      // écrasait à chaque fois l'automation de la respiration : le souffle
+      // restait collé à son niveau nominal au lieu de vivre.
+      if (next === hissLevel) return
+      hissLevel = next
       hissGain.gain.setTargetAtTime(hissLevel * HISS_LEVEL, context.currentTime, 0.25)
     },
 

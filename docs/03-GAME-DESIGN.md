@@ -371,8 +371,16 @@ lentement et au hasard, et une **bouffee de zapping** au changement de station :
 bande passante balaie le spectre, double d'un sifflement qui glisse — une molette qu'on tourne.
 Tout est synthetise, **aucun fichier audio a fournir**, ce qui fait aussi que deux zappings ne
 sonnent jamais pareil. Niveaux mesures contre une vraie musique de la station : le zap sort a
-**+2 dB** (200 ms), le souffle reste **23 dB en dessous** — on l'entend dans les passages calmes,
-jamais par-dessus un morceau. Le filtre « poste pourri » (deja en place) pousse le souffle avec lui.
+**+2 dB** (200 ms), le souffle nominal reste **43 dB en dessous**, avec des creux vers -55 dB et des
+bouffees occasionnelles vers -40 dB. Le filtre « poste pourri » (deja en place) pousse le souffle
+avec lui.
+
+> ⚠️ **Un souffle se regle beaucoup plus bas que l'intuition ne le suggere.** Un premier reglage a
+> -22 dB mangeait litteralement les musiques. Le bruit large bande masque infiniment plus qu'un son
+> musical a niveau egal, parce qu'il occupe TOUTES les frequences a la fois. Sa bande a aussi ete
+> remontee (3,8-9,5 kHz au lieu de 1,2-6,5 kHz) : en dessous, elle se posait pile sur le corps du
+> morceau — voix, caisse claire, synthes. Le reglage a toucher s'il gene est `HISS_LEVEL`, en tete
+> de `src/audio/radioNoise.ts` ; `0` le supprime.
 
 ---
 

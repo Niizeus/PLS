@@ -17,7 +17,7 @@ import { createVehicleDriveState, driveVehicle, stopVehicle } from '../vehicles/
 import { useVehicleTelemetryStore } from '../vehicles/vehicleTelemetryStore'
 import { useRadioStore } from '../../audio/radioStore'
 import { groundHeight } from '../../world/beauvais/roadway'
-import { moveWithCollision } from '../movementCollision'
+import { moveCircle } from '../movementCollision'
 import { zoneAt } from '../../world/beauvais/zones'
 import { PLAYER } from './playerConfig'
 
@@ -324,13 +324,14 @@ export function usePlayerMovement(
       const effectiveStats = getEffectiveStats(characterStats, inventory.equipped, characterStats.activeEffects)
       const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
       const speed = (crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED) * speedMultiplier
-      // Collision robuste avec sous-pas : evite de traverser les facades a haute vitesse.
-      const move = moveWithCollision(
+      // Collision cercle contre murs : glisse le long des façades en biais au
+      // lieu d'avancer en escalier (voir `movementCollision.ts`).
+      const move = moveCircle(
         group.position.x,
         group.position.z,
         moveDir.current.x * speed * delta,
         moveDir.current.z * speed * delta,
-        0.34,
+        PLAYER.BODY_RADIUS,
       )
       group.position.x = move.x
       group.position.z = move.z

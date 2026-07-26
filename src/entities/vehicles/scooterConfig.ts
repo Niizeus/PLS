@@ -16,14 +16,13 @@ export const SCOOTER = {
   STEER_RESPONSE: 10,
   /** Part de braquage conservee a basse vitesse. */
   MIN_STEER_FACTOR: 0.35,
-  /** Rebond amorti quand on touche un obstacle. */
-  COLLISION_BRAKE: 0.12,
-  /** Rayon autour de chaque point de contact de l'empreinte scooter. */
-  COLLISION_RADIUS: 0.22,
-  /** Demi-longueur testee contre les murs. */
-  COLLISION_HALF_LENGTH: 0.52,
-  /** Demi-largeur testee contre les murs. */
-  COLLISION_HALF_WIDTH: 0.18,
+  /** Caisse de collision, calee sur le visuel du scooter (~1,5 m x 0,6 m). */
+  COLLISION_HALF_LENGTH: 0.78,
+  COLLISION_HALF_WIDTH: 0.3,
+  /** Choc de plein fouet : un deux-roues s'arrete net. */
+  IMPACT_LOSS: 0.92,
+  /** Frottement quand on rase un mur (part perdue par seconde). */
+  SCRAPE_DRAG: 1.2,
   /** Hauteur du perso quand il est assis dessus. */
   SEAT_HEIGHT: 1.15,
   /** Distance à laquelle on peut monter sur le scooter (mètres). */

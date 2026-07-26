@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
 import { vehicleGroundHeight } from '../../world/beauvais/roadway'
-import { moveWithCollision, type CollisionOffset } from '../movementCollision'
+import { moveBox } from '../movementCollision'
+import type { GroundSampleOffset } from '../../world/beauvais/roadway'
 
 export interface VehicleDriveConfig {
   ACCEL: number
@@ -12,11 +13,15 @@ export interface VehicleDriveConfig {
   STEER: number
   STEER_RESPONSE: number
   MIN_STEER_FACTOR: number
-  COLLISION_BRAKE: number
   SEAT_HEIGHT: number
-  COLLISION_RADIUS: number
-  COLLISION_HALF_LENGTH?: number
-  COLLISION_HALF_WIDTH?: number
+  /** Demi-longueur de la caisse de collision (m). */
+  COLLISION_HALF_LENGTH: number
+  /** Demi-largeur de la caisse de collision (m). */
+  COLLISION_HALF_WIDTH: number
+  /** Part de vitesse perdue dans un choc parfaitement frontal (0 → 1). */
+  IMPACT_LOSS: number
+  /** Frottement continu quand on rase un mur (part de vitesse perdue par seconde). */
+  SCRAPE_DRAG: number
 }
 
 export interface VehicleDriveState {
@@ -61,12 +66,29 @@ export function driveVehicle(
   const dx = Math.sin(group.rotation.y) * state.speed * delta
   const dz = Math.cos(group.rotation.y) * state.speed * delta
   const offsets = vehicleCollisionOffsets(group.rotation.y, config)
-  const result = moveWithCollision(group.position.x, group.position.z, dx, dz, config.COLLISION_RADIUS, offsets)
+  const result = moveBox(
+    group.position.x,
+    group.position.z,
+    dx,
+    dz,
+    group.rotation.y,
+    config.COLLISION_HALF_LENGTH,
+    config.COLLISION_HALF_WIDTH,
+  )
   group.position.x = result.x
   group.position.z = result.z
 
-  if (result.hit && Math.abs(state.speed) > 0.05) {
-    state.speed *= result.movedX || result.movedZ ? 0.35 : -config.COLLISION_BRAKE
+  if (result.hit) {
+    // Frôler un mur ne doit presque rien coûter, le taper de face doit tout
+    // coûter. On mesure donc à quel point le choc était FRONTAL : c'est la part
+    // de la trajectoire qui pointait dans le mur (1 = pleine face, 0 = rasant).
+    const distance = Math.hypot(dx, dz)
+    const frontal =
+      distance > 1e-6 ? Math.max(0, -((dx / distance) * result.normalX + (dz / distance) * result.normalZ)) : 0
+    state.speed *= 1 - frontal * config.IMPACT_LOSS
+    // Le reste, c'est du frottement de carrosserie : léger, et proportionnel au
+    // temps écoulé (sinon le comportement changerait avec le nombre d'images/s).
+    state.speed *= Math.max(0, 1 - config.SCRAPE_DRAG * delta)
   }
 
   const targetY = vehicleGroundHeight(group.position.x, group.position.z, offsets) + config.SEAT_HEIGHT
@@ -110,20 +132,22 @@ function approach(value: number, target: number, step: number): number {
   return target
 }
 
-function vehicleCollisionOffsets(rotationY: number, config: VehicleDriveConfig): CollisionOffset[] {
-  const halfLength = config.COLLISION_HALF_LENGTH ?? 0
-  const halfWidth = config.COLLISION_HALF_WIDTH ?? 0
-  if (halfLength <= 0 && halfWidth <= 0) return []
+/**
+ * Les 4 points de CONTACT AU SOL (les roues), pour calculer l'assiette.
+ *
+ * ⚠️ Ce ne sont plus des points de collision : les murs sont gérés par la caisse
+ * orientée (`moveBox`). Ici on ne cherche que la hauteur du sol, et les roues
+ * sont un peu rentrées dans l'emprise — comme sur un vrai véhicule.
+ */
+function vehicleCollisionOffsets(rotationY: number, config: VehicleDriveConfig): GroundSampleOffset[] {
+  const halfLength = config.COLLISION_HALF_LENGTH * 0.68
+  const halfWidth = config.COLLISION_HALF_WIDTH * 0.8
 
   const forwardX = Math.sin(rotationY)
   const forwardZ = Math.cos(rotationY)
   const rightX = Math.cos(rotationY)
   const rightZ = -Math.sin(rotationY)
   return [
-    { x: forwardX * halfLength, z: forwardZ * halfLength },
-    { x: -forwardX * halfLength, z: -forwardZ * halfLength },
-    { x: rightX * halfWidth, z: rightZ * halfWidth },
-    { x: -rightX * halfWidth, z: -rightZ * halfWidth },
     { x: forwardX * halfLength + rightX * halfWidth, z: forwardZ * halfLength + rightZ * halfWidth },
     { x: forwardX * halfLength - rightX * halfWidth, z: forwardZ * halfLength - rightZ * halfWidth },
     { x: -forwardX * halfLength + rightX * halfWidth, z: -forwardZ * halfLength + rightZ * halfWidth },

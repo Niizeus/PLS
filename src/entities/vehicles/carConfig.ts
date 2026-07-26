@@ -16,14 +16,16 @@ export const CAR = {
   STEER_RESPONSE: 5.5,
   /** La voiture peut manoeuvrer doucement meme presque a l'arret. */
   MIN_STEER_FACTOR: 0.5,
-  /** Petit rebond amorti contre les murs. */
-  COLLISION_BRAKE: 0.08,
-  /** Rayon autour de chaque point de contact de l'empreinte voiture. */
-  COLLISION_RADIUS: 0.28,
-  /** Demi-longueur testee contre les murs, un peu sous le visuel pour garder du jeu. */
-  COLLISION_HALF_LENGTH: 1.62,
-  /** Demi-largeur testee contre les murs. */
-  COLLISION_HALF_WIDTH: 0.68,
+  /**
+   * Caisse de collision, calee sur le visuel (chassis 3,9 m x 1,8 m dans Car.tsx),
+   * avec quelques centimetres de jeu pour ne pas accrocher au moindre pixel.
+   */
+  COLLISION_HALF_LENGTH: 1.9,
+  COLLISION_HALF_WIDTH: 0.86,
+  /** Choc de plein fouet : on perd 85 % de la vitesse. */
+  IMPACT_LOSS: 0.85,
+  /** Frottement de carrosserie quand on rase un mur (part perdue par seconde). */
+  SCRAPE_DRAG: 0.9,
   /** Hauteur du joueur en position assise dans la voiture. */
   SEAT_HEIGHT: 1.05,
   /** Distance a laquelle on peut monter dans la voiture. */

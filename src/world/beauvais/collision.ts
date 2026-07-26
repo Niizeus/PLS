@@ -42,6 +42,57 @@ for (let i = 0; i < BUILDINGS.length; i++) {
   }
 }
 
+/** Rappel appelé pour chaque arête (mur) de bâtiment proche du point demandé. */
+export type WallVisitor = (ax: number, az: number, bx: number, bz: number) => void
+
+/**
+ * Anti-doublon SANS allocation.
+ *
+ * Un bâtiment est référencé dans TOUTES les cases que son emprise touche : une
+ * requête qui balaie 4 cases le verrait donc 4 fois. Plutôt qu'un `Set` (alloué
+ * à chaque frame, donc du travail pour le ramasse-miettes), on tamponne chaque
+ * bâtiment avec le numéro de la requête en cours.
+ */
+const visitStamp = new Int32Array(BUILDINGS.length)
+let visitTick = 0
+
+/**
+ * 🧱 Parcourt les MURS (arêtes de contour) des bâtiments autour de (x, z).
+ *
+ * C'est la brique de base des collisions précises : `isBlocked()` répond juste
+ * « dedans / dehors », ce qui ne dit ni de combien on est rentré ni dans quelle
+ * direction est le mur. Avec les arêtes, `movementCollision.ts` peut calculer
+ * une vraie distance et une vraie normale — donc repousser proprement et faire
+ * glisser le long d'une façade en biais.
+ *
+ * On réutilise la grille des bâtiments : aucune donnée supplémentaire en
+ * mémoire. Une requête typique balaie 1 à 4 cases et quelques dizaines d'arêtes.
+ */
+export function forEachWallNear(x: number, z: number, radius: number, visit: WallVisitor) {
+  const cx0 = Math.floor((x - radius) / CELL)
+  const cx1 = Math.floor((x + radius) / CELL)
+  const cz0 = Math.floor((z - radius) / CELL)
+  const cz1 = Math.floor((z + radius) / CELL)
+  const tick = ++visitTick
+
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cz = cz0; cz <= cz1; cz++) {
+      const list = grid.get(keyOf(cx, cz))
+      if (!list) continue
+      for (const i of list) {
+        if (visitStamp[i] === tick) continue
+        visitStamp[i] = tick
+        const pts = BUILDINGS[i].pts
+        // Contour FERMÉ : on part du dernier point pour ne pas oublier l'arête
+        // qui referme le polygone.
+        for (let p = 0, q = pts.length - 1; p < pts.length; q = p++) {
+          visit(pts[q][0], pts[q][1], pts[p][0], pts[p][1])
+        }
+      }
+    }
+  }
+}
+
 /** Le point (x, z) est-il à l'intérieur d'un bâtiment ? (rapide grâce à la grille) */
 export function isBlocked(x: number, z: number): boolean {
   const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))

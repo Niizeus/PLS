@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { groundHeight } from '../../world/beauvais/roadway'
+import { FRAME } from '../../core/framePriority'
 import { CAR, CAR_COLORS } from './carConfig'
 import { useCarStore } from './carStore'
 
@@ -27,7 +28,8 @@ export default function Car() {
       g.position.set(parkedX, groundHeight(parkedX, parkedZ), parkedZ)
       g.rotation.y = parkedRot
     }
-  })
+    // ATTACHED : on lit la position du joueur, donc APRES qu'il ait bouge.
+  }, FRAME.ATTACHED)
 
   const outline = <Outlines thickness={0.035} color="#17171d" />
 

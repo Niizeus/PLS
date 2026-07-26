@@ -6,6 +6,7 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { useScooterStore } from './scooterStore'
+import { FRAME } from '../../core/framePriority'
 import { SCOOTER, SCOOTER_COLORS } from './scooterConfig'
 
 /**
@@ -35,7 +36,8 @@ export default function Scooter() {
       g.position.set(parkedX, groundHeight(parkedX, parkedZ), parkedZ)
       g.rotation.y = parkedRot
     }
-  })
+    // ATTACHED : on lit la position du joueur, donc APRES qu'il ait bouge.
+  }, FRAME.ATTACHED)
 
   const outline = <Outlines thickness={0.03} color="#1a1a1a" />
 

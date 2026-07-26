@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import Lights from './Lights'
 import FollowCamera from './FollowCamera'
+import SceneRenderer from './SceneRenderer'
 import GradientSky from './GradientSky'
 import TimeFog from './TimeFog'
 import World from '../world/World'
@@ -41,6 +42,9 @@ export default function GameCanvas() {
       <Characters />
 
       <FollowCamera />
+
+      {/* Rend l'image en dernier — voir core/framePriority.ts. */}
+      <SceneRenderer />
     </Canvas>
   )
 }

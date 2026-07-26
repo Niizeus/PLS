@@ -74,6 +74,34 @@ modifier dans GameCanvas.
 > `useXxxStore.getState()` **dans `useFrame`**, pas via le hook réactif : on évite ainsi
 > tout re-render React à chaque image / mouvement de souris.
 
+### ⏱️ L'ordre des `useFrame` est FIXÉ — `core/framePriority.ts`
+
+Par défaut tous les `useFrame` ont la priorité 0 : leur ordre est celui du **montage** des
+composants. Déplacer une ligne dans `GameCanvas.tsx` suffisait donc à faire calculer la caméra
+AVANT le joueur — elle visait alors la position de l'image précédente, ce qui produit une saccade
+proportionnelle à la vitesse (invisible à pied, très visible en voiture).
+
+L'ordre est maintenant explicite, via les constantes de `FRAME` :
+
+| Priorité | Qui | Quoi |
+|---|---|---|
+| `INPUT` (0) | `useMouse` | applique la souris accumulée depuis l'image précédente |
+| `LOGIC` (1) | `usePlayerMovement` | déplace le joueur / conduit le véhicule |
+| `ATTACHED` (2) | `Car`, `Scooter` | place ce qui est accroché au joueur |
+| `CAMERA` (3) | `FollowCamera` | vise une position déjà à jour |
+| `RENDER` (10) | `SceneRenderer` | dessine l'image |
+
+> ⚠️ **Piège à connaître.** Dès qu'un `useFrame` a une priorité > 0, React Three Fiber **arrête
+> de rendre tout seul** (il considère qu'on prend la main sur la boucle). C'est pour ça que
+> `core/SceneRenderer.tsx` existe et appelle `gl.render()` en dernier. Si un jour on enlève
+> toutes les priorités, il faut enlever `SceneRenderer` en même temps — sinon plus rien
+> ne s'affiche, ou la scène est rendue deux fois.
+
+> 🖱️ La souris est **mise en file** (`queueRotation`) et appliquée **une seule fois par image**
+> (`flushRotation`). Les événements souris n'arrivent pas au rythme des images : une souris
+> 125 Hz sur un jeu à 60 im/s livre 2 événements sur une image et 1 sur la suivante, ce qui
+> faisait vibrer la rotation en permanence.
+
 > Règle : si tu te retrouves à devoir éditer `GameCanvas.tsx`, demande-toi d'abord
 > si ça n'irait pas plutôt dans `World.tsx`, `Characters.tsx` ou le store.
 

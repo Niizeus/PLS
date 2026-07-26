@@ -7,6 +7,7 @@ import { useScooterStore } from '../entities/vehicles/scooterStore'
 import { buildingHeightAt } from '../world/beauvais/collision'
 import { terrainHeight } from '../world/beauvais/cityData'
 import { useCameraStore } from './cameraStore'
+import { FRAME } from './framePriority'
 
 interface CameraRig {
   distance: number
@@ -40,12 +41,24 @@ const CAR_RIG: CameraRig = {
   wallMargin: 0.55,
 }
 
-const COLLISION_STEPS = 36
+/**
+ * 🧱 Recherche du mur devant la caméra.
+ *
+ * On balaie grossièrement le rayon qui va du perso à la caméra (`COLLISION_STEPS`),
+ * puis on AFFINE par dichotomie autour du premier point bloqué (`COLLISION_REFINE`).
+ *
+ * L'affinage n'est pas un luxe : sans lui, la distance trouvée ne pouvait valoir
+ * que 1/36e, 2/36e… de la distance nominale. Elle sautait donc d'un cran entier
+ * d'une image à l'autre, et la caméra "pompait" en longeant une rangée
+ * d'immeubles. Avec la dichotomie, la distance varie de façon CONTINUE.
+ * Bonus : 12 pas + 5 affinages coûtent deux fois moins cher que les 36 d'avant.
+ */
+const COLLISION_STEPS = 12
+const COLLISION_REFINE = 5
 const CAMERA_RADIUS = 0.35
 const LOOK_AHEAD = 0.45
 const DISTANCE_CLOSE_SPEED = 28
 const DISTANCE_RELEASE_SPEED = 3.2
-const ROTATION_LAG = 10
 
 /**
  * Regarder vers le haut, sans enterrer la caméra.
@@ -67,24 +80,16 @@ export default function FollowCamera() {
   const desiredPos = useRef(new THREE.Vector3())
   const lookAt = useRef(new THREE.Vector3())
   const currentDistance = useRef<number | null>(null)
-  const smoothYaw = useRef<number | null>(null)
-  const smoothPitch = useRef<number | null>(null)
   const target = usePlayerStore((s) => s.playerObject)
 
   useFrame((_, delta) => {
     if (!target) return
 
     const rig = currentRig()
-    const rawCamera = useCameraStore.getState()
-    if (smoothYaw.current === null || smoothPitch.current === null) {
-      smoothYaw.current = rawCamera.yaw
-      smoothPitch.current = rawCamera.pitch
-    } else {
-      smoothYaw.current = dampAngle(smoothYaw.current, rawCamera.yaw, ROTATION_LAG, delta)
-      smoothPitch.current += (rawCamera.pitch - smoothPitch.current) * (1 - Math.exp(-ROTATION_LAG * delta))
-    }
-    const yaw = smoothYaw.current
-    const pitch = smoothPitch.current
+    // Orientation BRUTE, sans lissage : la souris est déjà synchronisée à l'image
+    // (voir cameraStore.ts). L'amortissement qui existait ici ne compensait que
+    // cette irrégularité — il ne servait plus qu'à ajouter du retard au regard.
+    const { yaw, pitch } = useCameraStore.getState()
 
     const ox = target.position.x
     const oy = target.position.y + rig.lookHeight
@@ -95,16 +100,23 @@ export default function FollowCamera() {
     const dirZ = Math.cos(yaw) * horiz
     const upY = Math.sin(pitch) * rig.distance
 
+    const obstructedAt = (t: number) => cameraObstructed(ox + dirX * t, oy + upY * t, oz + dirZ * t)
+
     let targetDistance = rig.distance
     for (let s = 1; s <= COLLISION_STEPS; s++) {
       const t = s / COLLISION_STEPS
-      const sx = ox + dirX * t
-      const sz = oz + dirZ * t
-      const sy = oy + upY * t
-      if (cameraObstructed(sx, sy, sz)) {
-        targetDistance = Math.max(rig.minDistance, rig.distance * t - rig.wallMargin)
-        break
+      if (!obstructedAt(t)) continue
+      // Dichotomie entre le dernier point libre et le premier point bloqué :
+      // on obtient une distance continue, donc pas de saut d'une image à l'autre.
+      let free = (s - 1) / COLLISION_STEPS
+      let blocked = t
+      for (let r = 0; r < COLLISION_REFINE; r++) {
+        const mid = (free + blocked) * 0.5
+        if (obstructedAt(mid)) blocked = mid
+        else free = mid
       }
+      targetDistance = Math.max(rig.minDistance, rig.distance * free - rig.wallMargin)
+      break
     }
 
     if (currentDistance.current === null || currentDistance.current > rig.distance + 1.5) {
@@ -135,7 +147,7 @@ export default function FollowCamera() {
       oz - Math.cos(yaw) * LOOK_AHEAD,
     )
     camera.lookAt(lookAt.current)
-  })
+  }, FRAME.CAMERA)
 
   return null
 }
@@ -162,11 +174,4 @@ function cameraObstructed(x: number, y: number, z: number): boolean {
     blocked(x, z + CAMERA_RADIUS) ||
     blocked(x, z - CAMERA_RADIUS)
   )
-}
-
-function dampAngle(current: number, target: number, speed: number, delta: number): number {
-  let diff = target - current
-  diff = Math.atan2(Math.sin(diff), Math.cos(diff))
-  const t = 1 - Math.exp(-speed * delta)
-  return current + diff * t
 }

@@ -9,6 +9,7 @@ import { getEffectiveStats, getMovementSpeedMultiplier } from '../../gameplay/st
 import { usePlayerStore, type AttackMove, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { getCombatStyle } from './combatStyle'
 import { useCameraStore } from '../../core/cameraStore'
+import { FRAME } from '../../core/framePriority'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { SCOOTER } from '../vehicles/scooterConfig'
 import { useCarStore } from '../vehicles/carStore'
@@ -373,7 +374,7 @@ export function usePlayerMovement(
 
     if (usePlayerStore.getState().action !== action) setAction(action)
     if (usePlayerStore.getState().isDefending !== isDefending) setDefending(isDefending)
-  })
+  }, FRAME.LOGIC)
 
   return motion
 }

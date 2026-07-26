@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { MOUSE } from './keyMap'
 import { useCameraStore } from '../../core/cameraStore'
+import { FRAME } from '../../core/framePriority'
 
 /**
  * Entrées souris du jeu :
@@ -20,6 +22,10 @@ export interface MouseState {
 
 export function useMouse() {
   const mouse = useRef<MouseState>({ attackQueued: false, defending: false })
+
+  // Les mouvements souris sont accumulés à l'arrivée et appliqués ICI, une fois
+  // par image, AVANT tout le reste (voir cameraStore.ts pour le pourquoi).
+  useFrame(() => useCameraStore.getState().flushRotation(), FRAME.INPUT)
 
   useEffect(() => {
     const canvas = () => document.querySelector('canvas')
@@ -42,7 +48,7 @@ export function useMouse() {
     }
     const onMove = (e: MouseEvent) => {
       // On ne tourne la caméra que curseur capturé (sinon la souris fait autre chose).
-      if (isLocked()) useCameraStore.getState().rotate(e.movementX, e.movementY)
+      if (isLocked()) useCameraStore.getState().queueRotation(e.movementX, e.movementY)
     }
     // On bloque le menu contextuel du clic droit : sinon il s'ouvre à chaque défense.
     const onContext = (e: MouseEvent) => e.preventDefault()

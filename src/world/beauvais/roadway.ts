@@ -801,24 +801,31 @@ export function drivableRoadHeightAt(x: number, z: number): number {
   return best
 }
 
-/** Surface physique pour les vehicules : bitume moyen sous les contacts, sinon terrain nu. */
+/**
+ * 🚗 Surface physique pour les véhicules : l'assiette moyenne sous les roues.
+ *
+ * ⚠️ Chaque point de contact pèse PAREIL, qu'il trouve du bitume ou non — un
+ * point qui sort de la chaussée retombe sur le terrain nu au lieu de DISPARAÎTRE
+ * de la moyenne. C'est le point important : avant, on ne comptait que les points
+ * posés sur du bitume, donc le diviseur changeait dès qu'une roue quittait la
+ * route (5 échantillons puis 4…) et la hauteur SAUTAIT d'un coup. Le lissage
+ * derrière rattrapait ensuite le saut sur plusieurs images : c'est ce qui faisait
+ * "flotter" la voiture en bord de route, et ce que la caméra donnait à voir.
+ */
 export function vehicleGroundHeight(x: number, z: number, offsets: GroundSampleOffset[] = []): number {
   let sum = 0
   let count = 0
 
   const sample = (sx: number, sz: number) => {
-    const h = drivableRoadHeightAt(sx, sz)
-    if (h !== -Infinity) {
-      sum += h
-      count++
-    }
+    const road = drivableRoadHeightAt(sx, sz)
+    sum += road !== -Infinity ? road : terrainHeight(sx, sz)
+    count++
   }
 
   sample(x, z)
   for (const offset of offsets) sample(x + offset.x, z + offset.z)
 
-  if (count > 0) return sum / count
-  return terrainHeight(x, z)
+  return sum / count
 }
 
 export function groundHeight(x: number, z: number): number {

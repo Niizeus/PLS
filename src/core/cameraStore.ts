@@ -31,8 +31,13 @@ export const PITCH_MAX = 1.35 // ≈ 77° : vue quasi verticale
 interface CameraState {
   yaw: number
   pitch: number
-  /** Applique un déplacement souris (dx, dy en pixels) à l'orientation. */
-  rotate: (dx: number, dy: number) => void
+  /**
+   * Met un mouvement souris (dx, dy en pixels) EN ATTENTE.
+   * Il ne sera appliqué qu'au début de l'image suivante — voir `flushRotation`.
+   */
+  queueRotation: (dx: number, dy: number) => void
+  /** Applique la souris accumulée. À appeler UNE seule fois par image. */
+  flushRotation: () => void
 }
 
 const SENSITIVITY = 0.0025 // radians par pixel de souris
@@ -42,12 +47,37 @@ const INVERT_Y = true
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
+/**
+ * 🖱️ Pourquoi la souris est mise en attente au lieu d'être appliquée tout de suite.
+ *
+ * Les événements souris n'arrivent PAS au rythme des images : une souris à
+ * 125 Hz sur un jeu à 60 images/s livre parfois 2 événements sur une image et 1
+ * sur la suivante. En appliquant chaque événement à l'arrivée, la rotation
+ * avançait donc de 2 crans puis 1 cran puis 2 — une micro-saccade permanente,
+ * indépendante du reste du jeu.
+ *
+ * On accumule donc les mouvements ici (hors du store, pour ne déclencher aucun
+ * rendu React) et on les applique en UNE fois au début de chaque image.
+ */
+let pendingX = 0
+let pendingY = 0
+
 export const useCameraStore = create<CameraState>((set) => ({
   yaw: 0,
   pitch: 0.5,
-  rotate: (dx, dy) =>
+  queueRotation: (dx, dy) => {
+    pendingX += dx
+    pendingY += dy
+  },
+  flushRotation: () => {
+    if (pendingX === 0 && pendingY === 0) return
+    const dx = pendingX
+    const dy = pendingY
+    pendingX = 0
+    pendingY = 0
     set((s) => ({
       yaw: s.yaw - dx * SENSITIVITY, // souris à droite → la vue tourne à droite
       pitch: clamp(s.pitch + (INVERT_Y ? 1 : -1) * dy * SENSITIVITY, PITCH_MIN, PITCH_MAX),
-    })),
+    }))
+  },
 }))

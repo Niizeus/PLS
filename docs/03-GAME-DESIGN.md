@@ -366,6 +366,15 @@ morceau voulait dire ecraser sa source, donc une coupure nette. Le morceau suiva
 une seconde, et on lance le fondu pendant que le morceau courant joue encore. Fini le silence entre
 deux titres. Zapper de station utilise un fondu plus court et plus franc, pour que ca s'entende.
 
+> ⚠️ **La regie ne court PAS apres l'horloge du jeu.** La timeline choisit quoi jouer et ou
+> demarrer ; ensuite le morceau se deroule tout seul. C'est indispensable : `GameTimeTicker` avance
+> avec `requestAnimationFrame` en plafonnant son pas a 0,25 s, donc l'heure du jeu prend du retard a
+> chaque a-coup et gele carrement quand la fenetre passe en arriere-plan — un retard qui ne se
+> rattrape jamais. Avec un recalage serre, la regie repositionnait le lecteur toutes les 250 ms, ce
+> qui annulait le chargement du fichier a chaque fois : sur des `.wav` de 30 Mo, plus aucune musique
+> ne demarrait, alors que le zapping (synthetise) continuait de fonctionner. Le recalage n'est donc
+> plus qu'un filet de securite, tres large et espace.
+
 **Le bruit du poste (`radioNoise.ts`).** Un **souffle** de fond permanent, dont l'intensite respire
 lentement et au hasard, et une **bouffee de zapping** au changement de station : du bruit dont la
 bande passante balaie le spectre, double d'un sifflement qui glisse — une molette qu'on tourne.

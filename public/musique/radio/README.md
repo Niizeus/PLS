@@ -69,6 +69,15 @@ du nom du fichier (`Hartetek _ 01.wav` devient `Hartetek 01`), donc autant nomme
 
 Formats acceptes : `.wav`, `.mp3`, `.ogg`, `.opus`, `.m4a`, `.aac`, `.flac`, `.webm`.
 
+> ⚠️ **Le `.wav` est tres lourd — pense a convertir tes musiques.** Un morceau de 10 minutes pese
+> ~30 Mo en WAV contre ~1,5 Mo en `.ogg`, pour une difference inaudible en jeu. Aujourd'hui le
+> dossier `radio/` fait pres d'**1 Go**, qui partira tel quel dans le `.exe`.
+>
+> Le WAV garde un avantage : sa duree est lue instantanement au scan (voir plus bas). Les autres
+> formats sont sondes par le navigateur au chargement, ce qui est un peu plus lent mais sans
+> consequence. **Pour les emissions**, garde le WAV si tu veux ; pour les **musiques**, l'`.ogg`
+> est nettement preferable.
+
 L'ordre de la playlist suit l'ordre alphabetique naturel des noms de fichiers (`T2` avant `T10`).
 Si tu veux maitriser l'ordre, prefixe les fichiers : `01 - Titre.wav`, `02 - Titre.wav`.
 Un prefixe d'identifiant a l'ancienne (`R01-T01 Titre.wav`) est reconnu et retire du titre affiche.

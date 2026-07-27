@@ -40,8 +40,32 @@ const POLL_MS = 250
  */
 const LOOK_AHEAD_GAME_MINUTES = TRACK_FADE / GAME_SECONDS_PER_GAME_MINUTE
 
-/** Au-delà de cet écart, on se recale (changement d'onglet, pause du jeu...). */
-const DRIFT_TOLERANCE_SECONDS = 2.5
+/**
+ * 🕰️ Écart toléré entre l'horloge du JEU et le morceau qui joue — très large,
+ * et c'est volontaire.
+ *
+ * ## Pourquoi il ne faut PAS courir après l'horloge
+ *
+ * La timeline dit quoi jouer à partir du **temps de jeu**, mais un fichier audio
+ * avance en **temps réel**. Or les deux divergent forcément :
+ * `GameTimeTicker` avance avec `requestAnimationFrame` et **plafonne son pas à
+ * 0,25 s**. Chaque image longue (chargement, à-coup) lui fait donc perdre du
+ * temps, et si la fenêtre passe en arrière-plan `requestAnimationFrame` s'arrête
+ * carrément. Ce retard **ne se rattrape jamais**.
+ *
+ * Avec une tolérance serrée, l'écart finissait par la dépasser en permanence :
+ * la régie repositionnait le lecteur toutes les 250 ms, ce qui annulait à chaque
+ * fois le chargement du fichier en cours. Sur des `.wav` de 30 Mo, le morceau ne
+ * démarrait tout simplement plus — alors que le bruit de zapping, lui, continuait
+ * de marcher puisqu'il est synthétisé. C'était exactement le bug « plus aucune
+ * musique mais le zapping fonctionne ».
+ *
+ * 👉 La timeline choisit donc **quoi** jouer et **où démarrer** ; ensuite le
+ * morceau se déroule tout seul. Le recalage n'est plus qu'un filet de sécurité
+ * pour les gros décrochages (longue mise en veille). Quelques secondes de
+ * décalage ne s'entendent pas sur une radio ; un morceau muet, si.
+ */
+const DRIFT_TOLERANCE_SECONDS = 45
 
 export default function RadioAudioSystem() {
   const stationId = useRadioStore((state) => state.currentStationId)

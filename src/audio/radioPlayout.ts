@@ -63,10 +63,28 @@ interface Deck {
   src: string | null
   /** Minuterie qui met le lecteur en pause une fois son fondu sortant terminé. */
   stopTimer: number | null
+  /** Horodatage du dernier saut dans le fichier — voir `RESYNC_MIN_SECONDS`. */
+  lastSeekAt: number
 }
 
 /** Un fondu ne descend jamais tout à fait à zéro : `exponentialRamp` l'interdit. */
 const SILENCE = 0.0001
+
+/**
+ * ⏳ Délai minimum entre deux sauts dans un même fichier (s).
+ *
+ * **C'est un garde-fou vital, pas un détail de confort.** Les musiques du jeu
+ * sont des `.wav` de plusieurs dizaines de mégaoctets, et la station dépose
+ * l'auditeur au MILIEU du morceau. Le navigateur doit donc charger le fichier
+ * jusqu'à cet endroit avant de pouvoir sortir un son.
+ *
+ * Or chaque saut ANNULE ce chargement et en relance un ailleurs. En recalant à
+ * chaque passage de la régie (toutes les 250 ms), on empêchait purement et
+ * simplement le morceau de démarrer : le lecteur passait son temps à chercher
+ * sa place et ne jouait jamais. Résultat en jeu : le bruit de zapping
+ * fonctionnait (il est synthétisé) mais plus aucune musique ne sortait.
+ */
+const RESYNC_MIN_SECONDS = 20
 
 export function createRadioPlayout(): RadioPlayout {
   const decks: Deck[] = [createDeck(), createDeck()]
@@ -172,7 +190,8 @@ export function createRadioPlayout(): RadioPlayout {
       cancelStop(next)
       next.src = request.src
       next.audio.src = request.src
-      seek(next.audio, request.offsetSeconds)
+      seekWhenReady(next, request.offsetSeconds)
+      next.lastSeekAt = ctx.currentTime
       next.gain?.gain.setValueAtTime(SILENCE, ctx.currentTime)
       void next.audio.play().catch(() => undefined)
       fade(next, 1, fadeSeconds)
@@ -187,9 +206,17 @@ export function createRadioPlayout(): RadioPlayout {
 
     resync(offsetSeconds, toleranceSeconds) {
       const deck = decks[active]
-      if (!deck.src || deck.audio.readyState === 0) return
-      if (Math.abs(deck.audio.currentTime - offsetSeconds) <= toleranceSeconds) return
-      seek(deck.audio, offsetSeconds)
+      if (!deck.src || !context) return
+
+      const audio = deck.audio
+      // Tant que le lecteur cherche sa place ou n'a pas de quoi jouer, on ne le
+      // dérange PAS : un saut de plus annulerait le chargement en cours.
+      if (audio.seeking || audio.readyState < HAVE_FUTURE_DATA) return
+      if (context.currentTime - deck.lastSeekAt < RESYNC_MIN_SECONDS) return
+      if (Math.abs(audio.currentTime - offsetSeconds) <= toleranceSeconds) return
+
+      deck.lastSeekAt = context.currentTime
+      seek(audio, offsetSeconds)
     },
 
     setVolume(next) {
@@ -237,11 +264,43 @@ export function createRadioPlayout(): RadioPlayout {
   }
 }
 
+/** `HTMLMediaElement.HAVE_FUTURE_DATA` : de quoi jouer au moins l'instant suivant. */
+const HAVE_FUTURE_DATA = 3
+
 function createDeck(): Deck {
   const audio = new Audio()
   audio.preload = 'auto'
   audio.loop = false
-  return { audio, gain: null, src: null, stopTimer: null }
+  return { audio, gain: null, src: null, stopTimer: null, lastSeekAt: -Infinity }
+}
+
+/**
+ * Se place dans le morceau, en attendant que le fichier soit ouvrable.
+ *
+ * ⚠️ Écrire `currentTime` juste après avoir posé `src` échoue : le navigateur ne
+ * connaît pas encore la durée du fichier. L'ancien code se contentait d'avaler
+ * l'erreur, et la lecture repartait donc du début — puis le recalage suivant
+ * sautait, relançant le chargement. Sur des `.wav` de 30 Mo, ça tournait en rond.
+ * On attend donc simplement les métadonnées.
+ */
+function seekWhenReady(deck: Deck, seconds: number) {
+  const audio = deck.audio
+  const wanted = deck.src
+
+  if (audio.readyState >= 1) {
+    seek(audio, seconds)
+    return
+  }
+
+  audio.addEventListener(
+    'loadedmetadata',
+    () => {
+      // Le lecteur a pu être réaffecté à un autre morceau entre-temps.
+      if (deck.src !== wanted) return
+      seek(audio, seconds)
+    },
+    { once: true },
+  )
 }
 
 function seek(audio: HTMLAudioElement, seconds: number) {
@@ -249,8 +308,7 @@ function seek(audio: HTMLAudioElement, seconds: number) {
   try {
     audio.currentTime = desired
   } catch {
-    // Le fichier n'est pas encore assez chargé pour qu'on puisse s'y déplacer :
-    // on repassera au prochain recalage.
+    // Fichier pas encore ouvrable : le recalage suivant s'en chargera.
   }
 }
 

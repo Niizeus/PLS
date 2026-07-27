@@ -35,11 +35,25 @@ export const useRadioStore = create<RadioState>()(
       vehicleStations: {},
       volume: 0.48,
       radioFilterEnabled: false,
+      /**
+       * Attribue une station à un véhicule, la première fois qu'on y monte.
+       *
+       * ⚠️ On ne tire QUE parmi les stations qui ont de la musique. Avant, le
+       * tirage prenait les cinq au hasard — or une station sans un seul fichier
+       * dans `Musiques/` est muette hors de ses émissions. Comme le choix est
+       * ensuite MÉMORISÉ pour ce véhicule, une caisse sur cinq restait
+       * définitivement silencieuse, et ça ressemblait à une radio cassée.
+       *
+       * On peut toujours zapper dessus avec R : c'est alors un choix, pas un
+       * mauvais tirage.
+       */
       assignStationToVehicle: (vehicleId) => {
         const existing = get().vehicleStations[vehicleId]
         if (existing) return existing
 
-        const stationId = RADIO_STATION_IDS[Math.floor(Math.random() * RADIO_STATION_IDS.length)]
+        const withMusic = RADIO_STATION_IDS.filter((id) => getRadioStation(id).musicTracks.length > 0)
+        const pool = withMusic.length > 0 ? withMusic : RADIO_STATION_IDS
+        const stationId = pool[Math.floor(Math.random() * pool.length)]
         set((state) => ({
           vehicleStations: {
             ...state.vehicleStations,

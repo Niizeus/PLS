@@ -17,7 +17,7 @@
       "station": "R01",
       "day": 0,
       "hour": 2,
-      "kind": "ads"
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -41,7 +41,7 @@
       "station": "R01",
       "day": 0,
       "hour": 6,
-      "kind": "ads"
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -65,7 +65,7 @@
       "station": "R01",
       "day": 0,
       "hour": 10,
-      "kind": "ads"
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -77,20 +77,50 @@
       "station": "R01",
       "day": 0,
       "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 0,
+      "hour": 18,
       "kind": "show",
       "show": "La_Zone_Libre"
     },
     {
       "station": "R01",
       "day": 0,
-      "hour": 18,
-      "kind": "music"
-    },
-    {
-      "station": "R01",
-      "day": 0,
       "hour": 19,
-      "kind": "ads"
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -114,7 +144,115 @@
       "station": "R01",
       "day": 0,
       "hour": 23,
-      "kind": "ads"
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -125,10 +263,286 @@
     },
     {
       "station": "R01",
+      "day": 1,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 1,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
       "day": 2,
       "hour": 18,
       "kind": "show",
       "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 2,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -139,10 +553,286 @@
     },
     {
       "station": "R01",
+      "day": 3,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 3,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
       "day": 4,
       "hour": 18,
       "kind": "show",
       "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 4,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R01",
@@ -153,10 +843,2302 @@
     },
     {
       "station": "R01",
+      "day": 5,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 5,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
       "day": 6,
       "hour": 18,
       "kind": "show",
       "show": "La_Zone_Libre"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R01",
+      "day": 6,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 0,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 1,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 2,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 3,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 4,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 5,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R02",
+      "day": 6,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 0,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 1,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 2,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 3,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 4,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 5,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R03",
+      "day": 6,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -168,9 +3150,141 @@
     {
       "station": "R04",
       "day": 0,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 0,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -182,9 +3296,141 @@
     {
       "station": "R04",
       "day": 1,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 1,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -196,9 +3442,141 @@
     {
       "station": "R04",
       "day": 2,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 2,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -210,9 +3588,141 @@
     {
       "station": "R04",
       "day": 3,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 3,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -224,9 +3734,141 @@
     {
       "station": "R04",
       "day": 4,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 4,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -238,9 +3880,141 @@
     {
       "station": "R04",
       "day": 5,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 5,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 17,
+      "kind": "music"
     },
     {
       "station": "R04",
@@ -252,9 +4026,1041 @@
     {
       "station": "R04",
       "day": 6,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
       "hour": 21,
       "kind": "show",
       "show": "LGR"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R04",
+      "day": 6,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 0,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 1,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 2,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 3,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 4,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 5,
+      "hour": 23,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 0,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 1,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 2,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 3,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 4,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 5,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 6,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 7,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 8,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 9,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 10,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 11,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 12,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 13,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 14,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 15,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 16,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 17,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 18,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 19,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 20,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 21,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 22,
+      "kind": "music"
+    },
+    {
+      "station": "R05",
+      "day": 6,
+      "hour": 23,
+      "kind": "music"
     }
   ]
 }

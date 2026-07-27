@@ -107,6 +107,14 @@ Puis ouvre **http://localhost:5173/regie.html**.
   une case **pub**, une case **antenne coupee** ou **minuit** l'interrompent.
 - Un episode est choisi par jour de jeu, dans l'ordre, puis la liste boucle.
 
+> ⚠️ **Une station sans fichier dans `Musiques/` est MUETTE hors de ses emissions.** Il n'y a rien
+> a jouer, aucune programmation ne peut le rattraper. C'est le cas de `R04_Lys_France` aujourd'hui :
+> elle ne diffuse que ses deux emissions du soir, et se tait le reste du temps.
+>
+> Pour eviter que ca ressemble a une radio cassee, la station attribuee automatiquement a un
+> vehicule est tiree **uniquement parmi celles qui ont de la musique**. On peut toujours zapper
+> sur une station muette avec **R** — c'est alors un choix.
+
 ⏱️ **Attention a l'echelle de temps.** Un jour de jeu dure une heure reelle, donc **une heure de jeu
 ne vaut que 2 minutes 30 d'audio reel**. Une emission de 14 minutes occupe donc pres de 6 heures
 de jeu. C'est normal, mais ca surprend quand on remplit le planning.

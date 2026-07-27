@@ -192,12 +192,23 @@ function readAudioDuration(filePath: string): number {
     // Un WAV est une suite de blocs : 4 lettres de nom, 4 octets de taille,
     // puis le contenu. On cherche `fmt ` (qui donne le débit) et `data`
     // (qui donne le volume d'audio). durée = octets de son / octets par seconde.
+    //
+    // ⚠️ Position du débit dans le bloc `fmt ` — piège coûteux. Le contenu du
+    // bloc commence à `offset + 8`, et s'organise ainsi :
+    //   +0  format        +2  canaux
+    //   +4  échantillons/s          ← ce N'EST PAS le débit
+    //   +8  OCTETS/s (byteRate)     ← c'est celui-là qu'il faut
+    // Lire le premier donnait des durées 2 à 4 fois trop longues (selon le
+    // nombre de canaux et la profondeur). L'antenne croyait alors qu'un morceau
+    // durait 11 minutes au lieu de 3 : le fichier se terminait bien avant, et
+    // comme la station n'était pas censée changer de morceau, on réentendait le
+    // même en boucle.
     let byteRate = 0
     let offset = 12
     while (offset + 8 <= read) {
       const chunkId = header.toString('ascii', offset, offset + 4)
       const chunkSize = header.readUInt32LE(offset + 4)
-      if (chunkId === 'fmt ' && offset + 16 <= read) byteRate = header.readUInt32LE(offset + 12)
+      if (chunkId === 'fmt ' && offset + 20 <= read) byteRate = header.readUInt32LE(offset + 16)
       if (chunkId === 'data') return byteRate > 0 ? chunkSize / byteRate : 0
       // Les blocs sont alignés sur un nombre pair d'octets.
       offset += 8 + chunkSize + (chunkSize % 2)

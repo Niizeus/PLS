@@ -1,3 +1,5 @@
+import { createRadioNoise, type RadioNoise } from './radioNoise'
+
 /**
  * 🎛️ LA RÉGIE AUDIO — deux lecteurs qui s'enchaînent en fondu.
  *
@@ -11,6 +13,20 @@
  * finit en fondu sortant, l'autre démarre en fondu entrant. C'est exactement le
  * fonctionnement d'une régie de radio.
  *
+ * ## ⚠️ On se place dans le morceau UNE SEULE FOIS
+ *
+ * Se brancher sur une station en cours de diffusion oblige forcément à démarrer
+ * au milieu d'un fichier — c'est tout l'intérêt : on entend ce que la station
+ * diffuse, pas un morceau qui recommence pour nous.
+ *
+ * Mais ce placement n'a lieu qu'**une fois**, à l'instant où on se branche.
+ * Ensuite, l'antenne et le lecteur avancent sur la **même horloge** (le temps
+ * réel) : il n'y a plus rien à rattraper. C'est la version précédente qui
+ * plantait, parce qu'elle recalait le lecteur toutes les 250 ms sur l'heure du
+ * JEU — laquelle dérive. Or chaque replacement annule le chargement en cours :
+ * sur des `.wav` de 30 Mo, le morceau ne démarrait jamais, alors que le zapping
+ * (synthétisé) continuait de fonctionner.
+ *
  * ## Le graphe audio
  *
  * ```text
@@ -20,32 +36,54 @@
  *                    souffle + zapping ─────────────────┘
  * ```
  *
- * Le bruit se branche **après** le filtre du programme : il a déjà son propre
- * timbre (voir `radioNoise.ts`), le colorer une seconde fois l'étoufferait. En
- * revanche il passe bien par le volume — c'est le poste entier qu'on baisse.
- *
  * Les gains A et B ne servent QU'au fondu (0 → 1). Le volume du joueur vit sur
  * le gain final : régler le volume ne perturbe donc jamais un fondu en cours.
+ * Le bruit se branche **après** le filtre du programme : il a déjà son propre
+ * timbre (voir `radioNoise.ts`), le colorer une seconde fois l'étoufferait.
  *
  * ⚠️ Le contexte audio est construit **au premier son**, pas au chargement : les
  * navigateurs refusent de démarrer un `AudioContext` tant que le joueur n'a rien
  * touché. Tant qu'il est suspendu, on réessaie simplement au coup suivant.
  */
 
-import { createRadioNoise, type RadioNoise } from './radioNoise'
-
 export interface PlayoutRequest {
-  /** URL du fichier à diffuser. */
   src: string
-  /** Où en être dans ce fichier, en secondes. */
+  /**
+   * Où se placer dans le fichier, en secondes.
+   *
+   * ⚠️ N'est appliqué qu'**une seule fois**, au moment où on se branche sur ce
+   * fichier. Ensuite le lecteur se déroule tout seul : l'antenne et lui avancent
+   * sur la même horloge (le temps réel), il n'y a donc rien à rattraper.
+   */
   offsetSeconds: number
 }
 
 export interface RadioPlayout {
-  /** Diffuse `request`, en fondu si la source change. `null` = antenne coupée. */
+  /** Se branche sur ce fichier, en fondu. `null` = antenne coupée. */
   play: (request: PlayoutRequest | null, fadeSeconds: number) => void
-  /** Recale la lecture si elle a dérivé de plus de `toleranceSeconds`. */
-  resync: (offsetSeconds: number, toleranceSeconds: number) => void
+  /**
+   * Temps restant sur le morceau en cours, en secondes.
+   * `null` tant que la durée n'est pas connue — on ne décide rien dans ce cas.
+   */
+  remaining: () => number | null
+  /** Vrai si le morceau en cours est en erreur (fichier illisible, réseau...). */
+  failed: () => boolean
+  /**
+   * Vrai si le morceau en cours est arrivé au bout.
+   *
+   * Sert de filet : si la durée annoncée par le catalogue était fausse,
+   * l'antenne croirait le morceau encore en cours alors que le lecteur s'est
+   * tu. On la fait alors avancer, au lieu de rester bloqué sur un silence.
+   */
+  ended: () => boolean
+  /**
+   * Relance la lecture si le lecteur s'est arrêté tout seul.
+   *
+   * Un navigateur peut refuser `play()` tant que le joueur n'a rien touché.
+   * Sans ce rattrapage, l'antenne resterait muette pour toujours alors que tout
+   * le reste fonctionne — exactement le genre de panne silencieuse à éviter ici.
+   */
+  ensurePlaying: () => void
   setVolume: (volume: number) => void
   setFilterEnabled: (enabled: boolean) => void
   /** Souffle de fond permanent. `0` = antenne coupée, `1` = niveau nominal. */
@@ -63,28 +101,10 @@ interface Deck {
   src: string | null
   /** Minuterie qui met le lecteur en pause une fois son fondu sortant terminé. */
   stopTimer: number | null
-  /** Horodatage du dernier saut dans le fichier — voir `RESYNC_MIN_SECONDS`. */
-  lastSeekAt: number
 }
 
 /** Un fondu ne descend jamais tout à fait à zéro : `exponentialRamp` l'interdit. */
 const SILENCE = 0.0001
-
-/**
- * ⏳ Délai minimum entre deux sauts dans un même fichier (s).
- *
- * **C'est un garde-fou vital, pas un détail de confort.** Les musiques du jeu
- * sont des `.wav` de plusieurs dizaines de mégaoctets, et la station dépose
- * l'auditeur au MILIEU du morceau. Le navigateur doit donc charger le fichier
- * jusqu'à cet endroit avant de pouvoir sortir un son.
- *
- * Or chaque saut ANNULE ce chargement et en relance un ailleurs. En recalant à
- * chaque passage de la régie (toutes les 250 ms), on empêchait purement et
- * simplement le morceau de démarrer : le lecteur passait son temps à chercher
- * sa place et ne jouait jamais. Résultat en jeu : le bruit de zapping
- * fonctionnait (il est synthétisé) mais plus aucune musique ne sortait.
- */
-const RESYNC_MIN_SECONDS = 20
 
 export function createRadioPlayout(): RadioPlayout {
   const decks: Deck[] = [createDeck(), createDeck()]
@@ -98,7 +118,7 @@ export function createRadioPlayout(): RadioPlayout {
   let noise: RadioNoise | null = null
   let volume = 1
   let filterEnabled = false
-  /** Souffle demandé avant que le contexte n'existe : on l'appliquera à l'ouverture. */
+  /** Souffle demandé avant que le contexte n'existe : appliqué à l'ouverture. */
   let hissLevel = 0
 
   function ensureGraph(): AudioContext | null {
@@ -177,7 +197,9 @@ export function createRadioPlayout(): RadioPlayout {
       if (!ctx) return
       if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined)
 
-      // Déjà la bonne source : on s'assure juste que ça joue.
+      // Déjà la bonne source : on s'assure juste que ça joue. Surtout, on ne
+      // touche PAS à `currentTime` — c'est ce harcèlement qui empêchait les gros
+      // fichiers de démarrer.
       if (current.src === request.src) {
         cancelStop(current)
         fade(current, 1, fadeSeconds)
@@ -191,7 +213,6 @@ export function createRadioPlayout(): RadioPlayout {
       next.src = request.src
       next.audio.src = request.src
       seekWhenReady(next, request.offsetSeconds)
-      next.lastSeekAt = ctx.currentTime
       next.gain?.gain.setValueAtTime(SILENCE, ctx.currentTime)
       void next.audio.play().catch(() => undefined)
       fade(next, 1, fadeSeconds)
@@ -204,26 +225,38 @@ export function createRadioPlayout(): RadioPlayout {
       active = 1 - active
     },
 
-    resync(offsetSeconds, toleranceSeconds) {
+    remaining() {
+      const audio = decks[active].audio
+      if (!decks[active].src) return null
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return null
+      return audio.duration - audio.currentTime
+    },
+
+    failed() {
       const deck = decks[active]
-      if (!deck.src || !context) return
+      return Boolean(deck.src && deck.audio.error)
+    },
 
-      const audio = deck.audio
-      // Tant que le lecteur cherche sa place ou n'a pas de quoi jouer, on ne le
-      // dérange PAS : un saut de plus annulerait le chargement en cours.
-      if (audio.seeking || audio.readyState < HAVE_FUTURE_DATA) return
-      if (context.currentTime - deck.lastSeekAt < RESYNC_MIN_SECONDS) return
-      if (Math.abs(audio.currentTime - offsetSeconds) <= toleranceSeconds) return
+    ensurePlaying() {
+      const deck = decks[active]
+      if (!deck.src || deck.audio.error || !deck.audio.paused) return
+      // ⚠️ NE JAMAIS relancer un morceau terminé : appeler `play()` sur un
+      // lecteur arrivé au bout le fait repartir de ZÉRO. C'est ce qui faisait
+      // réentendre la même musique en boucle au lieu de passer à la suivante.
+      // Un morceau fini, c'est à l'antenne de le remplacer, pas à nous.
+      if (deck.audio.ended) return
+      if (context?.state === 'suspended') void context.resume().catch(() => undefined)
+      void deck.audio.play().catch(() => undefined)
+    },
 
-      deck.lastSeekAt = context.currentTime
-      seek(audio, offsetSeconds)
+    ended() {
+      const deck = decks[active]
+      return Boolean(deck.src && deck.audio.ended)
     },
 
     setVolume(next) {
       volume = Math.min(1, Math.max(0, next))
-      if (master && context) {
-        master.gain.setTargetAtTime(volume, context.currentTime, 0.05)
-      }
+      if (master && context) master.gain.setTargetAtTime(volume, context.currentTime, 0.05)
     },
 
     setFilterEnabled(enabled) {
@@ -264,52 +297,46 @@ export function createRadioPlayout(): RadioPlayout {
   }
 }
 
-/** `HTMLMediaElement.HAVE_FUTURE_DATA` : de quoi jouer au moins l'instant suivant. */
-const HAVE_FUTURE_DATA = 3
-
 function createDeck(): Deck {
   const audio = new Audio()
   audio.preload = 'auto'
   audio.loop = false
-  return { audio, gain: null, src: null, stopTimer: null, lastSeekAt: -Infinity }
+  return { audio, gain: null, src: null, stopTimer: null }
 }
 
 /**
  * Se place dans le morceau, en attendant que le fichier soit ouvrable.
  *
  * ⚠️ Écrire `currentTime` juste après avoir posé `src` échoue : le navigateur ne
- * connaît pas encore la durée du fichier. L'ancien code se contentait d'avaler
- * l'erreur, et la lecture repartait donc du début — puis le recalage suivant
- * sautait, relançant le chargement. Sur des `.wav` de 30 Mo, ça tournait en rond.
- * On attend donc simplement les métadonnées.
+ * connaît pas encore la durée du fichier. L'ancien code avalait l'erreur, la
+ * lecture repartait donc de zéro, et le recalage suivant sautait — un tourniquet
+ * dont les gros fichiers ne sortaient jamais. On attend les métadonnées, et on
+ * ne se place qu'une seule fois.
  */
 function seekWhenReady(deck: Deck, seconds: number) {
   const audio = deck.audio
   const wanted = deck.src
 
-  if (audio.readyState >= 1) {
-    seek(audio, seconds)
-    return
+  const apply = () => {
+    try {
+      audio.currentTime = Math.max(0, seconds)
+    } catch {
+      // Fichier décidément pas ouvrable : on laisse jouer depuis le début.
+    }
   }
 
+  if (audio.readyState >= 1) {
+    apply()
+    return
+  }
   audio.addEventListener(
     'loadedmetadata',
     () => {
       // Le lecteur a pu être réaffecté à un autre morceau entre-temps.
-      if (deck.src !== wanted) return
-      seek(audio, seconds)
+      if (deck.src === wanted) apply()
     },
     { once: true },
   )
-}
-
-function seek(audio: HTMLAudioElement, seconds: number) {
-  const desired = Math.max(0, seconds)
-  try {
-    audio.currentTime = desired
-  } catch {
-    // Fichier pas encore ouvrable : le recalage suivant s'en chargera.
-  }
 }
 
 function applyFilter(filter: BiquadFilterNode | null, enabled: boolean) {

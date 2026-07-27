@@ -1,72 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
 import { getRadioStation, getStationPlayableTracks, type RadioStationId, type RadioTrack } from './radioCatalog'
-import { getRadioTimelinePosition } from './radioTimeline'
+import { getBroadcast, skipCurrent } from './radioBroadcast'
 import { createRadioPlayout, type RadioPlayout } from './radioPlayout'
 import { useRadioStore } from './radioStore'
-import {
-  MINUTES_PER_DAY,
-  REAL_SECONDS_PER_GAME_DAY,
-  useGameTimeStore,
-} from '../gameplay/time/gameTimeStore'
+import { useGameTimeStore } from '../gameplay/time/gameTimeStore'
 
 type StationAvailability = Partial<Record<RadioStationId, RadioTrack[]>>
 
-/** 1 minute de jeu = 2,5 secondes réelles. */
-const GAME_SECONDS_PER_GAME_MINUTE = REAL_SECONDS_PER_GAME_DAY / MINUTES_PER_DAY
-
 /** Durée d'un fondu enchaîné entre deux morceaux (s). */
 const TRACK_FADE = 0.9
-/** Fondu plus franc quand on change de station ou qu'on coupe l'antenne. */
+/** Fondu plus franc quand on change de station ou qu'on coupe le poste. */
 const STATION_FADE = 0.35
-
-/**
- * Cadence à laquelle on redemande « qu'est-ce qui devrait passer ? ».
- *
- * L'ancienne version interrogeait la timeline toutes les **1 000 ms**, et
- * attendait la fin d'un morceau pour découvrir le suivant : il y avait donc
- * jusqu'à une seconde de silence à chaque enchaînement.
- */
+/** Cadence à laquelle le récepteur interroge l'antenne. */
 const POLL_MS = 250
 
 /**
- * ⏱️ On demande à la timeline ce qui passera dans `TRACK_FADE` secondes, pas ce
- * qui passe maintenant.
+ * ⏱️ On demande à l'antenne ce qui passera dans `TRACK_FADE` secondes.
  *
- * C'est l'astuce qui rend l'enchaînement propre : la timeline étant une simple
- * fonction du temps, on peut la consulter dans le futur. Quand la fin d'un
- * morceau approche, elle annonce donc le suivant AVANT qu'il ne commence — on a
- * tout le temps de lancer le fondu, et au moment où il se termine le nouveau
- * morceau est exactement là où il devrait être.
+ * L'antenne étant une fonction du temps, on peut la consulter dans le futur.
+ * Quand la fin d'un morceau approche, elle annonce donc le suivant AVANT qu'il
+ * ne commence — on a tout le temps de lancer le fondu, et au moment où il se
+ * termine le nouveau morceau est exactement là où il doit être.
  */
-const LOOK_AHEAD_GAME_MINUTES = TRACK_FADE / GAME_SECONDS_PER_GAME_MINUTE
+const LOOK_AHEAD_MS = TRACK_FADE * 1000
 
 /**
- * 🕰️ Écart toléré entre l'horloge du JEU et le morceau qui joue — très large,
- * et c'est volontaire.
+ * 📻 UN RÉCEPTEUR branché sur l'antenne.
  *
- * ## Pourquoi il ne faut PAS courir après l'horloge
+ * Ce composant ne décide de rien : il demande à `radioBroadcast` ce que la
+ * station diffuse **maintenant**, et se cale dessus. C'est ce qui fait que
+ * plusieurs sources — l'autoradio, un magasin, un bar — réglées sur la même
+ * station diffusent **la même musique au même instant**. On sort de la voiture
+ * en pleine chanson, on entre dans le magasin : c'est la même chanson.
  *
- * La timeline dit quoi jouer à partir du **temps de jeu**, mais un fichier audio
- * avance en **temps réel**. Or les deux divergent forcément :
- * `GameTimeTicker` avance avec `requestAnimationFrame` et **plafonne son pas à
- * 0,25 s**. Chaque image longue (chargement, à-coup) lui fait donc perdre du
- * temps, et si la fenêtre passe en arrière-plan `requestAnimationFrame` s'arrête
- * carrément. Ce retard **ne se rattrape jamais**.
- *
- * Avec une tolérance serrée, l'écart finissait par la dépasser en permanence :
- * la régie repositionnait le lecteur toutes les 250 ms, ce qui annulait à chaque
- * fois le chargement du fichier en cours. Sur des `.wav` de 30 Mo, le morceau ne
- * démarrait tout simplement plus — alors que le bruit de zapping, lui, continuait
- * de marcher puisqu'il est synthétisé. C'était exactement le bug « plus aucune
- * musique mais le zapping fonctionne ».
- *
- * 👉 La timeline choisit donc **quoi** jouer et **où démarrer** ; ensuite le
- * morceau se déroule tout seul. Le recalage n'est plus qu'un filet de sécurité
- * pour les gros décrochages (longue mise en veille). Quelques secondes de
- * décalage ne s'entendent pas sur une radio ; un morceau muet, si.
+ * Le seul moment où l'on se place dans un fichier est **l'allumage du poste**.
+ * Ensuite l'antenne et le lecteur avancent sur la même horloge — le temps réel —
+ * et il n'y a plus rien à synchroniser.
  */
-const DRIFT_TOLERANCE_SECONDS = 45
-
 export default function RadioAudioSystem() {
   const stationId = useRadioStore((state) => state.currentStationId)
   const activeSource = useRadioStore((state) => state.activeSource)
@@ -75,8 +45,6 @@ export default function RadioAudioSystem() {
 
   const playoutRef = useRef<RadioPlayout | null>(null)
   const [availability, setAvailability] = useState<StationAvailability>({})
-  /** Station diffusée à l'image précédente : sert à détecter un zapping. */
-  const previousStationRef = useRef<RadioStationId | null>(null)
 
   const sourceKey = activeSource ? `${activeSource.kind}:${activeSource.id}` : null
 
@@ -97,7 +65,7 @@ export default function RadioAudioSystem() {
     playoutRef.current?.setFilterEnabled(radioFilterEnabled)
   }, [radioFilterEnabled])
 
-  // --- Disponibilité des fichiers de la station (une fois par station) ---
+  // --- Quels fichiers de la station sont réellement lisibles ---
   useEffect(() => {
     if (!stationId || availability[stationId]) return
     let alive = true
@@ -116,55 +84,62 @@ export default function RadioAudioSystem() {
     }
   }, [stationId, availability])
 
-  // --- La régie : on interroge la timeline et on suit ---
+  // --- Le poste : on se branche sur l'antenne et on suit ---
   useEffect(() => {
     const playout = playoutRef.current
     if (!playout) return
 
+    const tracks = stationId ? availability[stationId] : undefined
+
+    if (!stationId || !sourceKey) {
+      playout.play(null, STATION_FADE)
+      playout.setHiss(0)
+      useRadioStore.getState().setCurrentContentLabel(null)
+      return
+    }
+    // Sondage encore en cours : on attend, sans couper ce qui joue.
+    if (!tracks) return
+
+    const station = getRadioStation(stationId)
+    // Allumage du poste : coup de molette.
+    playout.zap()
+    playout.setHiss(1)
+
+    /** Vrai tant qu'on n'a pas encore accroché la station : premier calage. */
+    let tuning = true
+
     const tick = () => {
-      const stopped = !stationId || !sourceKey
-      const tracks = stationId ? availability[stationId] : undefined
+      // Filet de sécurité : si le navigateur a refusé de démarrer la lecture
+      // (autorisation audio pas encore acquise), on retente à chaque passage.
+      playout.ensurePlaying()
 
-      if (stopped || !tracks || tracks.length === 0) {
-        // `undefined` = sondage en cours : on ne coupe pas l'antenne pour si peu.
-        if (stopped || tracks) {
-          playout.play(null, STATION_FADE)
-          playout.setHiss(0)
-          useRadioStore.getState().setCurrentContentLabel(null)
-          previousStationRef.current = null
-        }
-        return
-      }
+      const nowMs = Date.now() + LOOK_AHEAD_MS
+      const gameMinutes = useGameTimeStore.getState().totalMinutes
 
-      const station = getRadioStation(stationId)
-      const totalMinutes = useGameTimeStore.getState().totalMinutes
-      const position = getRadioTimelinePosition(station, totalMinutes + LOOK_AHEAD_GAME_MINUTES, tracks)
+      // Filet : un fichier illisible, ou un morceau qui se termine alors que
+      // l'antenne le croyait encore en cours (durée annoncée fausse), la
+      // bloquerait sur un silence. On la fait avancer.
+      if (playout.failed() || playout.ended()) skipCurrent(station, tracks, nowMs, gameMinutes)
 
+      const position = getBroadcast(station, tracks, nowMs, gameMinutes)
       if (!position) {
         playout.play(null, STATION_FADE)
         useRadioStore.getState().setCurrentContentLabel(null)
         return
       }
 
-      useRadioStore.getState().setCurrentContentLabel(position.label)
+      useRadioStore.getState().setCurrentContentLabel(position.item.label)
 
-      // Zapper doit s'entendre : bouffée de bruit + fondu court et net, pas un
-      // enchaînement doux comme entre deux titres.
-      const zapped = previousStationRef.current !== null && previousStationRef.current !== stationId
-      // Le poste s'allume aussi avec un coup de molette.
-      if (zapped || previousStationRef.current === null) playout.zap()
-      previousStationRef.current = stationId
-      playout.setHiss(1)
+      // Déjà branché sur ce fichier : on ne touche à RIEN. Surtout pas à sa
+      // position — c'est ce harcèlement qui empêchait les gros fichiers de
+      // démarrer.
+      if (playout.currentSrc() === position.item.track.src) return
 
-      const request = { src: position.track.src, offsetSeconds: position.offsetSeconds }
-
-      if (playout.currentSrc() === request.src) {
-        playout.resync(request.offsetSeconds, DRIFT_TOLERANCE_SECONDS)
-        playout.play(request, TRACK_FADE)
-        return
-      }
-
-      playout.play(request, zapped ? STATION_FADE : TRACK_FADE)
+      playout.play(
+        { src: position.item.track.src, offsetSeconds: position.offsetSeconds },
+        tuning ? STATION_FADE : TRACK_FADE,
+      )
+      tuning = false
     }
 
     tick()
@@ -186,8 +161,6 @@ const METADATA_TIMEOUT_MS = 10_000
  * ne declenche aucune requete.
  */
 function probeTrack(track: RadioTrack): Promise<RadioTrack | null> {
-  // Duree deja MESUREE au scan : le fichier existe forcement, puisque Vite l'a
-  // lu sur le disque. Rien a telecharger.
   if (track.durationKnown) return Promise.resolve(track)
 
   return new Promise((resolve) => {

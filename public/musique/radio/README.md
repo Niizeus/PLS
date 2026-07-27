@@ -69,14 +69,25 @@ du nom du fichier (`Hartetek _ 01.wav` devient `Hartetek 01`), donc autant nomme
 
 Formats acceptes : `.wav`, `.mp3`, `.ogg`, `.opus`, `.m4a`, `.aac`, `.flac`, `.webm`.
 
-> ⚠️ **Le `.wav` est tres lourd — pense a convertir tes musiques.** Un morceau de 10 minutes pese
-> ~30 Mo en WAV contre ~1,5 Mo en `.ogg`, pour une difference inaudible en jeu. Aujourd'hui le
-> dossier `radio/` fait pres d'**1 Go**, qui partira tel quel dans le `.exe`.
+> ⚠️ **Le `.wav` est tres lourd — convertis tes musiques en `.ogg`.** Mesure sur un vrai morceau du
+> jeu (11 min, 48 kHz stereo) : **30,2 Mo en WAV contre 2,4 Mo en `.ogg`** a `-q:a 4`, pour une
+> difference inaudible en musique de fond. Le dossier `radio/` fait aujourd'hui pres d'**1 Go**, qui
+> partira tel quel dans le `.exe` ; il tomberait vers **80 Mo**.
 >
-> Le WAV garde un avantage : sa duree est lue instantanement au scan (voir plus bas). Les autres
-> formats sont sondes par le navigateur au chargement, ce qui est un peu plus lent mais sans
-> consequence. **Pour les emissions**, garde le WAV si tu veux ; pour les **musiques**, l'`.ogg`
-> est nettement preferable.
+> Ce n'est pas qu'une question de poids : **se brancher sur une station en cours de diffusion oblige
+> a demarrer au milieu d'un fichier**, donc a le charger jusque-la. Plus le fichier est leger, plus
+> l'allumage du poste est immediat.
+>
+> ```bash
+> find public/musique/radio -path "*/Musiques/*.wav" -print0 | while IFS= read -r -d '' f; do ffmpeg -loglevel error -y -i "$f" -c:a libvorbis -q:a 4 "${f%.wav}.ogg" && rm "$f"; done
+> ```
+>
+> ⚠️ **Supprime bien les `.wav` apres conversion** (la commande ci-dessus le fait) : sinon le scan
+> verrait les deux, et chaque morceau passerait en double dans la playlist.
+>
+> Le WAV garde un avantage : sa duree est lue instantanement au scan (voir plus bas), alors que les
+> autres formats sont sondes par le navigateur au chargement. C'est sans consequence. Pour les
+> **emissions** tu peux garder le WAV ; pour les **musiques**, l'`.ogg` est nettement preferable.
 
 L'ordre de la playlist suit l'ordre alphabetique naturel des noms de fichiers (`T2` avant `T10`).
 Si tu veux maitriser l'ordre, prefixe les fichiers : `01 - Titre.wav`, `02 - Titre.wav`.

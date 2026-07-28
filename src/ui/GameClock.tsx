@@ -13,6 +13,8 @@ export default function GameClock() {
   const dayName = getDayName(displayMinute)
   const dayNumber = getDayNumber(displayMinute)
   const phase = getDayPhaseLabel(getDayPhase(displayMinute))
+  const timeScale = useGameTimeStore((state) => state.timeScale)
+  const isPaused = useGameTimeStore((state) => state.isPaused)
 
   return (
     // Position gérée par la colonne droite du HUD (`Hud.tsx`).
@@ -23,7 +25,10 @@ export default function GameClock() {
       <div style={{ marginTop: 1, fontSize: 24, lineHeight: 1, fontWeight: 900 }}>
         {formatGameTime(displayMinute)}
       </div>
-      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 800, color: '#93c5fd' }}>{phase}</div>
+      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 800, color: '#93c5fd' }}>
+        {phase}
+        {import.meta.env.DEV && (isPaused || timeScale !== 1) ? ` x${isPaused ? 0 : timeScale}` : ''}
+      </div>
     </div>
   )
 }

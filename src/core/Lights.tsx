@@ -2,12 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
-import {
-  getDaylightFactor,
-  getMinuteOfDay,
-  getSolarElevationFactor,
-  useGameTimeStore,
-} from '../gameplay/time/gameTimeStore'
+import { getCelestialCycle, writeSunLightOffset } from '../gameplay/time/celestialCycle'
+import { useGameTimeStore } from '../gameplay/time/gameTimeStore'
 
 /**
  * Éclairage de la scène, pensé "cartoon" : lumière franche + remplissage doux.
@@ -118,26 +114,17 @@ export default function Lights() {
     const p = usePlayerStore.getState().playerObject
     if (!p || !light.current) return
     const totalMinutes = useGameTimeStore.getState().totalMinutes
-    const minuteOfDay = getMinuteOfDay(totalMinutes)
-    const hour = minuteOfDay / 60
-    const daylight = getDaylightFactor(totalMinutes)
-    const solarElevation = getSolarElevationFactor(totalMinutes)
-    const dayAngle = ((hour - 6) / 12) * Math.PI
-    const nightAngle = ((hour - 18) / 12) * Math.PI
-    const isSunVisible = daylight > 0.03
-    const orbitAngle = isSunVisible ? dayAngle : nightAngle
-    const orbitRadius = isSunVisible ? 34 : 22
-    const height = isSunVisible ? 12 + solarElevation * 46 : 24
-    const lightColor = DAY_LIGHT_COLOR.clone().lerp(NIGHT_LIGHT_COLOR, 1 - daylight)
+    const cycle = getCelestialCycle(totalMinutes)
+    const lightColor = DAY_LIGHT_COLOR.clone().lerp(NIGHT_LIGHT_COLOR, 1 - cycle.daylight)
 
-    if (hour >= 5 && hour < 8) {
+    if (cycle.hour >= 5 && cycle.hour < 8) {
       lightColor.lerp(DAWN_LIGHT_COLOR, 0.35)
-    } else if (hour >= 17 && hour < 20) {
+    } else if (cycle.hour >= 17 && cycle.hour < 20) {
       lightColor.lerp(DAWN_LIGHT_COLOR, 0.45)
     }
 
     // Position du soleil PAR RAPPORT au joueur (il tourne au fil des heures).
-    scratch.sunOffset.set(Math.cos(orbitAngle) * orbitRadius, height, Math.sin(orbitAngle) * orbitRadius)
+    writeSunLightOffset(totalMinutes, scratch.sunOffset)
 
     // Le centre de la zone d'ombre saute de texel en texel au lieu de glisser
     // → plus de clignotement sur la route quand le joueur se déplace.
@@ -153,17 +140,17 @@ export default function Lights() {
     // Le soleil garde exactement le même décalage : sa DIRECTION ne change pas,
     // seul le cadrage de la zone d'ombre est arrondi.
     light.current.position.addVectors(scratch.center, scratch.sunOffset)
-    light.current.intensity = 0.32 + daylight * (0.85 + solarElevation * 1.1)
+    light.current.intensity = 0.22 + cycle.daylight * (0.9 + cycle.solarElevation * 1.15)
     light.current.color.copy(lightColor)
 
     if (hemisphere.current) {
-      hemisphere.current.intensity = 0.28 + daylight * 0.34
-      hemisphere.current.color.copy(HEMISPHERE_NIGHT_SKY).lerp(HEMISPHERE_DAY_SKY, daylight)
+      hemisphere.current.intensity = 0.16 + cycle.daylight * 0.46
+      hemisphere.current.color.copy(HEMISPHERE_NIGHT_SKY).lerp(HEMISPHERE_DAY_SKY, cycle.daylight)
       hemisphere.current.groundColor.copy(HEMISPHERE_GROUND)
     }
 
     if (ambient.current) {
-      ambient.current.intensity = 0.16 + daylight * 0.12
+      ambient.current.intensity = 0.09 + cycle.daylight * 0.19
     }
 
     // La cible reprend le MÊME centre arrondi que le soleil (sinon la direction

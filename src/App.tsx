@@ -2,6 +2,7 @@ import GameCanvas from './core/GameCanvas'
 import RadioAudioSystem from './audio/RadioAudioSystem'
 import RadioControls from './audio/RadioControls'
 import GameTimeTicker from './gameplay/time/GameTimeTicker'
+import TimeDevControls from './gameplay/time/TimeDevControls'
 import NeedsTicker from './gameplay/stats/NeedsTicker'
 import Hud from './ui/Hud'
 
@@ -11,6 +12,7 @@ export default function App() {
   return (
     <>
       <GameTimeTicker />
+      <TimeDevControls />
       <NeedsTicker />
       <RadioAudioSystem />
       <RadioControls />

@@ -169,9 +169,9 @@ const DAY_PHASE_LABELS: Record<DayPhase, string> = {
 }
 
 const DAY_SKY: SkyColors = {
-  top: '#8ea7c6',
-  horizon: '#cdd6e0',
-  fog: '#cdd6e0',
+  top: '#6f9ed4',
+  horizon: '#d6e8ee',
+  fog: '#d6e8ee',
 }
 
 const DAWN_SKY: SkyColors = {

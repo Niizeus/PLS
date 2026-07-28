@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import Lights from './Lights'
 import FollowCamera from './FollowCamera'
 import SceneRenderer from './SceneRenderer'
-import GradientSky from './GradientSky'
+import DynamicSky from './DynamicSky'
 import TimeFog from './TimeFog'
 import World from '../world/World'
 import Characters from '../entities/Characters'
@@ -32,8 +32,8 @@ export default function GameCanvas() {
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 5, 8], fov: 55, near: 0.1, far: 220 }}
     >
-      {/* Ciel en dégradé + brouillard assorti à l'horizon (climat océanique, cf docs/04). */}
-      <GradientSky />
+      {/* Ciel dynamique + brouillard assorti à l'horizon (climat océanique, cf docs/04). */}
+      <DynamicSky />
       <TimeFog />
 
       <Lights />

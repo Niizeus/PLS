@@ -41,7 +41,7 @@ import { getSlot } from './radioSchedule'
  * antenne qui n'aurait jamais cessé, et ça ne coûte rien quand personne n'écoute.
  */
 
-export type BroadcastKind = 'music' | 'show' | 'ads'
+export type BroadcastKind = 'music' | 'jingle' | 'show' | 'ads'
 
 export interface BroadcastItem {
   track: RadioTrack
@@ -63,6 +63,8 @@ export interface BroadcastPosition {
 const MAX_CATCH_UP_MS = 6 * 60 * 60 * 1000
 /** Garde-fou contre une boucle infinie si des durées étaient aberrantes. */
 const MAX_STEPS = 2000
+/** Nombre de musiques laissees entre deux jingles d'habillage. */
+const MUSIC_BEFORE_JINGLE = 2
 
 interface Antenna {
   item: BroadcastItem | null
@@ -71,6 +73,11 @@ interface Antenna {
   /** Ordre de passage courant de la playlist, et où on en est. */
   order: RadioTrack[]
   cursor: number
+  /** Rotation des jingles de la station. */
+  jingleOrder: RadioTrack[]
+  jingleCursor: number
+  /** Nombre de vrais morceaux joues depuis le dernier jingle. */
+  musicSinceJingle: number
   /** Parties restantes de l'émission en cours. */
   parts: RadioTrack[]
   showTitle: string
@@ -92,6 +99,9 @@ function getAntenna(id: RadioStationId): Antenna {
       startedAtMs: 0,
       order: [],
       cursor: 0,
+      jingleOrder: [],
+      jingleCursor: 0,
+      musicSinceJingle: 0,
       parts: [],
       showTitle: '',
       partIndex: 0,
@@ -121,6 +131,7 @@ export function getBroadcast(
   const keep = (tracks: RadioTrack[]) => tracks.filter((track) => track && has.has(track.id))
 
   const music = keep(station.musicTracks)
+  const jingles = keep(station.jingles)
   const ads = keep(station.ads)
 
   // --- Une émission doit-elle prendre l'antenne ? ---
@@ -136,7 +147,7 @@ export function getBroadcast(
 
   // --- Rien encore diffusé, ou absence trop longue : on (r)allume ---
   if (!antenna.item || nowMs - antenna.startedAtMs > MAX_CATCH_UP_MS) {
-    antenna.item = nextItem(station, antenna, music, ads, gameMinutes)
+    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes)
     antenna.startedAtMs = nowMs
   }
 
@@ -146,7 +157,7 @@ export function getBroadcast(
     const length = Math.max(1, antenna.item.track.durationSeconds) * 1000
     if (nowMs - antenna.startedAtMs < length) break
     antenna.startedAtMs += length
-    antenna.item = nextItem(station, antenna, music, ads, gameMinutes)
+    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes)
   }
 
   if (!antenna.item) return null
@@ -162,7 +173,7 @@ export function skipCurrent(station: RadioStation, available: RadioTrack[], nowM
   const antenna = getAntenna(station.id)
   const has = new Set(available.map((track) => track.id))
   const keep = (tracks: RadioTrack[]) => tracks.filter((track) => track && has.has(track.id))
-  antenna.item = nextItem(station, antenna, keep(station.musicTracks), keep(station.ads), gameMinutes)
+  antenna.item = nextItem(station, antenna, keep(station.musicTracks), keep(station.jingles), keep(station.ads), gameMinutes)
   antenna.startedAtMs = nowMs
 }
 
@@ -213,6 +224,7 @@ function nextItem(
   station: RadioStation,
   antenna: Antenna,
   music: RadioTrack[],
+  jingles: RadioTrack[],
   ads: RadioTrack[],
   gameMinutes: number,
 ): BroadcastItem | null {
@@ -231,16 +243,43 @@ function nextItem(
     return { track, kind: 'ads', label: track.title }
   }
 
-  // 4. Sinon, et par défaut : de la musique, en boucle, toujours.
+  // 4. Sinon, et par défaut : deux musiques, puis un jingle d'habillage.
   if (music.length === 0) return null
+  if (antenna.musicSinceJingle >= MUSIC_BEFORE_JINGLE && jingles.length > 0) {
+    return nextJingle(station, antenna, jingles, gameMinutes)
+  }
+
   if (antenna.cursor >= antenna.order.length) {
-    // Playlist mélangée, tirage reproductible par jour : aucun morceau ne
-    // repasse tant qu'on n'a pas fait le tour, et l'ordre change chaque jour.
-    antenna.order = shuffle(music, seedOf(`${station.id}|${getDayNumber(gameMinutes)}`))
+    // Playlist mélangée, puis tournée depuis un point de départ aléatoire :
+    // entrer dans un véhicule ne retombe pas toujours sur le même premier titre,
+    // mais aucun morceau ne repasse tant qu'on n'a pas fait le tour.
+    antenna.order = randomStart(shuffle(music, seedOf(`${station.id}|${getDayNumber(gameMinutes)}`)))
     antenna.cursor = 0
   }
   const track = antenna.order[antenna.cursor++]
+  antenna.musicSinceJingle++
   return { track, kind: 'music', label: track.title }
+}
+
+function nextJingle(
+  station: RadioStation,
+  antenna: Antenna,
+  jingles: RadioTrack[],
+  gameMinutes: number,
+): BroadcastItem {
+  if (antenna.jingleCursor >= antenna.jingleOrder.length) {
+    antenna.jingleOrder = shuffle(jingles, seedOf(`${station.id}|jingles|${getDayNumber(gameMinutes)}`))
+    antenna.jingleCursor = 0
+  }
+  const track = antenna.jingleOrder[antenna.jingleCursor++]
+  antenna.musicSinceJingle = 0
+  return { track, kind: 'jingle', label: track.title }
+}
+
+function randomStart<T>(items: T[]): T[] {
+  if (items.length <= 1) return items
+  const start = Math.floor(Math.random() * items.length)
+  return [...items.slice(start), ...items.slice(0, start)]
 }
 
 /** Mélange de Fisher-Yates, avec un hasard REPRODUCTIBLE (même graine = même ordre). */

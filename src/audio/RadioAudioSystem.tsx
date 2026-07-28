@@ -135,9 +135,12 @@ export default function RadioAudioSystem() {
       // démarrer.
       if (playout.currentSrc() === position.item.track.src) return
 
+      const fadeSeconds = tuning ? STATION_FADE : TRACK_FADE
       playout.play(
         { src: position.item.track.src, offsetSeconds: position.offsetSeconds },
-        tuning ? STATION_FADE : TRACK_FADE,
+        position.item.kind === 'jingle'
+          ? { inSeconds: 0, outSeconds: fadeSeconds }
+          : fadeSeconds,
       )
       tuning = false
     }

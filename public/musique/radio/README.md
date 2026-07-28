@@ -93,6 +93,15 @@ L'ordre de la playlist suit l'ordre alphabetique naturel des noms de fichiers (`
 Si tu veux maitriser l'ordre, prefixe les fichiers : `01 - Titre.wav`, `02 - Titre.wav`.
 Un prefixe d'identifiant a l'ancienne (`R01-T01 Titre.wav`) est reconnu et retire du titre affiche.
 
+## Comment ajouter un jingle
+
+1. Copie le fichier dans `Jingles/` de la station voulue.
+2. Hors emission et hors plage de pub, la station diffuse automatiquement **un jingle toutes les deux musiques**.
+
+Chaque station tourne dans ses propres jingles. Si le dossier `Jingles/` est vide, la radio garde
+simplement sa playlist musicale normale. Les jingles attaquent directement, sans fondu entrant, pour
+garder l'effet habillage radio.
+
 ## Programmation
 
 ### 🎛️ La Regie : ou tu remplis le planning
@@ -120,8 +129,11 @@ Puis ouvre **http://localhost:5173/regie.html**.
 ### Les regles de diffusion
 
 - Hors emission, la station enchaine les fichiers de `Musiques/`.
+- S'il y a des fichiers dans `Jingles/`, la station insere automatiquement **un jingle toutes les
+  deux musiques**, sans fondu entrant sur le jingle.
 - L'ordre de la playlist est **melange differemment chaque jour** (et differemment d'une station a
-  l'autre). Aucun morceau ne repasse tant qu'on n'a pas fait le tour de la playlist.
+  l'autre), puis la rotation commence sur une musique aleatoire. Aucun morceau ne repasse tant qu'on
+  n'a pas fait le tour de la playlist.
 - Une emission demarre a l'heure de sa case et dure **ce que dure vraiment son episode du jour**.
   Elle **deborde** sur les cases vides ou « musique » qui suivent. Seules une **autre emission**,
   une case **pub**, une case **antenne coupee** ou **minuit** l'interrompent.

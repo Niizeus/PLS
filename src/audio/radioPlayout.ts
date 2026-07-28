@@ -58,9 +58,16 @@ export interface PlayoutRequest {
   offsetSeconds: number
 }
 
+export interface PlayoutFade {
+  /** Fondu applique au nouveau fichier. */
+  inSeconds: number
+  /** Fondu applique au fichier precedent. */
+  outSeconds: number
+}
+
 export interface RadioPlayout {
   /** Se branche sur ce fichier, en fondu. `null` = antenne coupée. */
-  play: (request: PlayoutRequest | null, fadeSeconds: number) => void
+  play: (request: PlayoutRequest | null, fade: number | PlayoutFade) => void
   /**
    * Temps restant sur le morceau en cours, en secondes.
    * `null` tant que la durée n'est pas connue — on ne décide rien dans ce cas.
@@ -161,9 +168,13 @@ export function createRadioPlayout(): RadioPlayout {
     const now = context.currentTime
     const target = Math.max(to, SILENCE)
     deck.gain.gain.cancelScheduledValues(now)
+    if (seconds <= 0) {
+      deck.gain.gain.setValueAtTime(target, now)
+      return
+    }
     deck.gain.gain.setValueAtTime(Math.max(deck.gain.gain.value, SILENCE), now)
     // Rampe exponentielle : c'est ainsi que l'oreille perçoit un fondu régulier.
-    deck.gain.gain.exponentialRampToValueAtTime(target, now + Math.max(seconds, 0.01))
+    deck.gain.gain.exponentialRampToValueAtTime(target, now + seconds)
   }
 
   function stopAfter(deck: Deck, seconds: number) {
@@ -182,13 +193,14 @@ export function createRadioPlayout(): RadioPlayout {
   }
 
   return {
-    play(request, fadeSeconds) {
+    play(request, fadeSetting) {
+      const fadeSeconds = toFade(fadeSetting)
       const current = decks[active]
 
       if (!request) {
         if (current.src) {
-          fade(current, 0, fadeSeconds)
-          stopAfter(current, fadeSeconds)
+          fade(current, 0, fadeSeconds.outSeconds)
+          stopAfter(current, fadeSeconds.outSeconds)
         }
         return
       }
@@ -202,7 +214,7 @@ export function createRadioPlayout(): RadioPlayout {
       // fichiers de démarrer.
       if (current.src === request.src) {
         cancelStop(current)
-        fade(current, 1, fadeSeconds)
+        fade(current, 1, fadeSeconds.inSeconds)
         if (current.audio.paused) void current.audio.play().catch(() => undefined)
         return
       }
@@ -215,11 +227,11 @@ export function createRadioPlayout(): RadioPlayout {
       seekWhenReady(next, request.offsetSeconds)
       next.gain?.gain.setValueAtTime(SILENCE, ctx.currentTime)
       void next.audio.play().catch(() => undefined)
-      fade(next, 1, fadeSeconds)
+      fade(next, 1, fadeSeconds.inSeconds)
 
       if (current.src) {
-        fade(current, 0, fadeSeconds)
-        stopAfter(current, fadeSeconds)
+        fade(current, 0, fadeSeconds.outSeconds)
+        stopAfter(current, fadeSeconds.outSeconds)
       }
 
       active = 1 - active
@@ -295,6 +307,10 @@ export function createRadioPlayout(): RadioPlayout {
       context = null
     },
   }
+}
+
+function toFade(fade: number | PlayoutFade): PlayoutFade {
+  return typeof fade === 'number' ? { inSeconds: fade, outSeconds: fade } : fade
 }
 
 function createDeck(): Deck {

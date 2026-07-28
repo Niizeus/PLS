@@ -36,7 +36,11 @@ import { loadTerrain } from './beauvais/terrain'
  * Ordre = superposition au sol : sol → verdure → eau → routes, puis les volumes
  * (bâtiments) et enfin le mobilier (arbres, lampadaires).
  */
-export default function World() {
+interface WorldProps {
+  mode?: 'game' | 'editor'
+}
+
+export default function World({ mode = 'game' }: WorldProps) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -54,11 +58,11 @@ export default function World() {
 
   return (
     <>
-      <Ground />
+      <Ground mode={mode} />
       <GreenAreas />
       <Water />
-      <Roads />
-      <Beauvais />
+      <Roads mode={mode} />
+      <Beauvais mode={mode} />
       <Cathedral />
       <Trees />
       <Lamps />

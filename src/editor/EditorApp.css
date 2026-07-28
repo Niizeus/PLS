@@ -1,0 +1,423 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#editor {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #171a1d;
+  color: #eef1ea;
+  user-select: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.editor-shell {
+  display: grid;
+  grid-template:
+    "top top top" 58px
+    "left map right" minmax(0, 1fr) / 250px minmax(0, 1fr) 280px;
+  width: 100%;
+  height: 100%;
+  background: #202326;
+}
+
+.editor-topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #353a3f;
+  background: #22262a;
+}
+
+.editor-title {
+  color: #fff7dc;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.editor-subtitle {
+  margin-top: 2px;
+  color: #adb6b3;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-mode-tabs,
+.editor-tool-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #444b52;
+  border-radius: 7px;
+  background: #1a1e22;
+}
+
+.editor-mode-tabs button,
+.editor-tool-tabs button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #c5ccc7;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editor-mode-tabs button:hover,
+.editor-mode-tabs button.active,
+.editor-tool-tabs button:hover,
+.editor-tool-tabs button.active {
+  background: #3a4248;
+  color: #fff7dc;
+}
+
+.editor-actions button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #4e575f;
+  border-radius: 6px;
+  background: #30363b;
+  color: #f4f0df;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editor-actions button:hover {
+  background: #3a4248;
+}
+
+.editor-actions button.primary {
+  border-color: #6c7f55;
+  background: #49613d;
+}
+
+.editor-actions button.primary:hover {
+  background: #587448;
+}
+
+.editor-left,
+.editor-right {
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+  border-color: #353a3f;
+  background: #262b30;
+}
+
+.editor-left {
+  grid-area: left;
+  border-right: 1px solid #353a3f;
+}
+
+.editor-right {
+  grid-area: right;
+  border-left: 1px solid #353a3f;
+}
+
+.editor-left section + section,
+.editor-right section + section {
+  margin-top: 20px;
+}
+
+.editor-left h2,
+.editor-right h2 {
+  margin: 0 0 10px;
+  color: #fff7dc;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.layer-list {
+  display: grid;
+  gap: 8px;
+}
+
+.layer-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 8px;
+  border: 1px solid #3c444b;
+  border-radius: 6px;
+  background: #20252a;
+  color: #edf1e8;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.layer-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.layer-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 3px;
+}
+
+.editor-note {
+  margin: 0;
+  color: #c5ccc7;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.marker-list {
+  display: grid;
+  gap: 7px;
+}
+
+.marker-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #3c444b;
+  border-radius: 6px;
+  background: #20252a;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.marker-row:hover,
+.marker-row.active {
+  border-color: #66715e;
+  background: #293039;
+}
+
+.marker-row strong,
+.marker-row small {
+  display: block;
+}
+
+.marker-row strong {
+  color: #edf1e8;
+  font-size: 12px;
+}
+
+.marker-row small {
+  margin-top: 2px;
+  color: #aab3ae;
+  font-size: 11px;
+}
+
+.editor-map-panel {
+  position: relative;
+  grid-area: map;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #535946;
+}
+
+.editor-map-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.editor-map-canvas.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.editor-map-canvas.visible {
+  opacity: 1;
+}
+
+.editor-game-canvas {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+  touch-action: none;
+}
+
+.editor-game-canvas:active {
+  cursor: grabbing;
+}
+
+.editor-map-canvas:active {
+  cursor: grabbing;
+}
+
+.editor-map-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(24, 28, 31, 0.82);
+  color: #f4f0df;
+  font-size: 12px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+.inspector-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.inspector-list div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid #384047;
+}
+
+.inspector-list dt {
+  color: #adb6b3;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inspector-list dd {
+  margin: 0;
+  color: #f1f3ea;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.validation-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #ffb4a2;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.marker-form {
+  display: grid;
+  gap: 10px;
+}
+
+.marker-form label {
+  display: grid;
+  gap: 5px;
+  color: #adb6b3;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.marker-form input,
+.marker-form select,
+.marker-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #465057;
+  border-radius: 6px;
+  background: #1d2227;
+  color: #eef1ea;
+  padding: 7px 8px;
+  resize: vertical;
+  user-select: text;
+}
+
+.marker-form input[readonly] {
+  color: #aab3ae;
+  background: #20252a;
+}
+
+.marker-form input[type='color'] {
+  min-height: 34px;
+  padding: 3px;
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.checkbox-list {
+  display: grid;
+  gap: 6px;
+}
+
+.checkbox-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-list input {
+  width: 16px;
+  height: 16px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.form-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #5d4541;
+  border-radius: 6px;
+  background: #3c2726;
+  color: #ffd7cf;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.form-actions button:hover {
+  background: #51302d;
+}
+
+@media (max-width: 920px) {
+  .editor-shell {
+    grid-template:
+      "top top" 58px
+      "map map" minmax(0, 1fr)
+      "left right" 210px / minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .editor-left,
+  .editor-right {
+    border-top: 1px solid #353a3f;
+  }
+}

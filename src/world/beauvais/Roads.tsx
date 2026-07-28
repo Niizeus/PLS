@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { SPAWN, terrainHeight } from './cityData'
 import { ROADWAY, ROADWAY_TILE, roadwayTiles, type RoadChunk } from './roadway'
 import roadSurfaceTest from './data/road-surface-test.json'
+import { editorTileReach } from '../editorStreaming'
 
 /**
  * Routes de Beauvais en volume.
@@ -439,10 +440,12 @@ function RoadTile({ tileKey }: { tileKey: string }) {
   )
 }
 
-export default function Roads() {
+export default function Roads({ mode = 'game' }: { mode?: 'game' | 'editor' }) {
+  const { camera, size } = useThree()
   const [center, setCenter] = useState(() => ({
     tx: Math.floor(SPAWN.x / ROADWAY_TILE),
     tz: Math.floor(SPAWN.z / ROADWAY_TILE),
+    reach: REACH,
   }))
   const frame = useRef(0)
 
@@ -453,13 +456,14 @@ export default function Roads() {
     const p = usePlayerStore.getState().playerObject
     const tx = Math.floor((p ? p.position.x : SPAWN.x) / ROADWAY_TILE)
     const tz = Math.floor((p ? p.position.z : SPAWN.z) / ROADWAY_TILE)
-    setCenter((c) => (c.tx === tx && c.tz === tz ? c : { tx, tz }))
+    const reach = mode === 'editor' ? editorTileReach(camera, size, ROADWAY_TILE, REACH) : REACH
+    setCenter((c) => (c.tx === tx && c.tz === tz && c.reach === reach ? c : { tx, tz, reach }))
   })
 
   const tiles = roadwayTiles()
   const keys: string[] = []
-  for (let dx = -REACH; dx <= REACH; dx++) {
-    for (let dz = -REACH; dz <= REACH; dz++) {
+  for (let dx = -center.reach; dx <= center.reach; dx++) {
+    for (let dz = -center.reach; dz <= center.reach; dz++) {
       const key = center.tx + dx + ':' + (center.tz + dz)
       if (tiles.has(key) || hasSurfaceTile(key)) keys.push(key)
     }

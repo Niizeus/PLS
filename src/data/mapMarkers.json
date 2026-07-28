@@ -1,0 +1,114 @@
+[
+  {
+    "id": "dev_spawn_cathedrale",
+    "name": "Spawn cathédrale",
+    "type": "test",
+    "position": {
+      "x": -27.2,
+      "z": -18.7
+    },
+    "color": "#e6493f",
+    "icon": "spawn",
+    "interactionRadius": 2.5,
+    "prompt": "Point de départ de test",
+    "visibleInGame": false,
+    "visibleOnMap": true,
+    "devOnly": true,
+    "tags": [
+      "cathedrale",
+      "debug",
+      "spawn"
+    ]
+  },
+  {
+    "id": "poi_cathedrale_saint_pierre",
+    "name": "Cathédrale Saint-Pierre",
+    "type": "secret",
+    "position": {
+      "x": 0,
+      "z": 0
+    },
+    "color": "#7c5cff",
+    "icon": "landmark",
+    "interactionRadius": 5,
+    "prompt": "Observer la cathédrale",
+    "visibleInGame": false,
+    "visibleOnMap": true,
+    "devOnly": true,
+    "tags": [
+      "centre-ville",
+      "monument",
+      "repere"
+    ]
+  },
+  {
+    "id": "poi_kebab_test_centre",
+    "name": "Kebab test",
+    "type": "shop",
+    "position": {
+      "x": -76,
+      "z": 42
+    },
+    "color": "#f59f00",
+    "icon": "shop",
+    "interactionRadius": 3,
+    "prompt": "Commander un truc douteux",
+    "visibleInGame": true,
+    "visibleOnMap": true,
+    "devOnly": true,
+    "tags": [
+      "nourriture",
+      "shop",
+      "test"
+    ],
+    "openingHours": [
+      {
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat"
+        ],
+        "open": "11:00",
+        "close": "23:30"
+      }
+    ],
+    "closedMessage": "Le kebab est fermé."
+  },
+  {
+    "id": "poi_travail_test",
+    "name": "Lieu de travail test",
+    "type": "work",
+    "position": {
+      "x": 92,
+      "z": -58
+    },
+    "color": "#2f9e44",
+    "icon": "work",
+    "interactionRadius": 4,
+    "prompt": "Aller travailler",
+    "visibleInGame": true,
+    "visibleOnMap": true,
+    "devOnly": true,
+    "tags": [
+      "routine",
+      "test"
+    ],
+    "openingHours": [
+      {
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "open": "08:30",
+        "close": "17:00"
+      }
+    ],
+    "closedMessage": "Pas maintenant, miracle."
+  }
+]

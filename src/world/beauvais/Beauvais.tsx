@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toonGradient } from '../../shaders/toonGradient'
@@ -7,6 +7,7 @@ import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { BUILDINGS, SPAWN, type Building } from './cityData'
 import { buildBuilding } from './buildingMesh'
 import { CATHEDRAL } from './cathedralMesh'
+import { editorTileReach } from '../editorStreaming'
 
 /**
  * 🏙️  Beauvais, bâtiment par bâtiment.
@@ -74,11 +75,13 @@ function CityTile({ tileKey }: { tileKey: string }) {
   )
 }
 
-export default function Beauvais() {
+export default function Beauvais({ mode = 'game' }: { mode?: 'game' | 'editor' }) {
+  const { camera, size } = useThree()
   // Tuile courante du joueur : on ne recalcule la liste que quand elle CHANGE.
   const [center, setCenter] = useState(() => ({
     tx: Math.floor(SPAWN.x / TILE),
     tz: Math.floor(SPAWN.z / TILE),
+    reach: REACH,
   }))
   const frame = useRef(0)
 
@@ -90,12 +93,13 @@ export default function Beauvais() {
     const p = usePlayerStore.getState().playerObject
     const tx = Math.floor((p ? p.position.x : SPAWN.x) / TILE)
     const tz = Math.floor((p ? p.position.z : SPAWN.z) / TILE)
-    setCenter((c) => (c.tx === tx && c.tz === tz ? c : { tx, tz }))
+    const reach = mode === 'editor' ? editorTileReach(camera, size, TILE, REACH) : REACH
+    setCenter((c) => (c.tx === tx && c.tz === tz && c.reach === reach ? c : { tx, tz, reach }))
   })
 
   const keys: string[] = []
-  for (let dx = -REACH; dx <= REACH; dx++) {
-    for (let dz = -REACH; dz <= REACH; dz++) {
+  for (let dx = -center.reach; dx <= center.reach; dx++) {
+    for (let dz = -center.reach; dz <= center.reach; dz++) {
       const key = keyOf(center.tx + dx, center.tz + dz)
       if (tiles.has(key)) keys.push(key)
     }

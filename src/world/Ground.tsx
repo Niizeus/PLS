@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { toonGradient } from '../shaders/toonGradient'
 import { BOUNDS, SPAWN } from './beauvais/cityData'
 import { getHeightMap } from './beauvais/terrain'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
+import { editorTileReach } from './editorStreaming'
 
 /**
  * 🏔️  Le sol de Beauvais, avec son VRAI relief (LiDAR HD de l'IGN).
@@ -108,14 +109,16 @@ function FlatGround() {
   )
 }
 
-export default function Ground() {
+export default function Ground({ mode = 'game' }: { mode?: 'game' | 'editor' }) {
   const map = getHeightMap()
   const chunkSize = map ? CHUNK_CELLS * map.res : 1
+  const { camera, size } = useThree()
 
   // Dalle courante du joueur : on ne recalcule la liste que quand elle CHANGE.
   const [center, setCenter] = useState(() => ({
     ci: map ? Math.floor((SPAWN.x - map.x0) / chunkSize) : 0,
     cj: map ? Math.floor((SPAWN.z - map.z0) / chunkSize) : 0,
+    reach: REACH,
   }))
   const frame = useRef(0)
 
@@ -129,7 +132,8 @@ export default function Ground() {
     const pz = p ? p.position.z : SPAWN.z
     const ci = Math.floor((px - map.x0) / chunkSize)
     const cj = Math.floor((pz - map.z0) / chunkSize)
-    setCenter((c) => (c.ci === ci && c.cj === cj ? c : { ci, cj }))
+    const reach = mode === 'editor' ? editorTileReach(camera, size, chunkSize, REACH) : REACH
+    setCenter((c) => (c.ci === ci && c.cj === cj && c.reach === reach ? c : { ci, cj, reach }))
   })
 
   if (!map) return <FlatGround />
@@ -137,8 +141,8 @@ export default function Ground() {
   const chunks: { ci: number; cj: number }[] = []
   const maxCi = Math.floor((map.w - 2) / CHUNK_CELLS)
   const maxCj = Math.floor((map.h - 2) / CHUNK_CELLS)
-  for (let di = -REACH; di <= REACH; di++) {
-    for (let dj = -REACH; dj <= REACH; dj++) {
+  for (let di = -center.reach; di <= center.reach; di++) {
+    for (let dj = -center.reach; dj <= center.reach; dj++) {
       const ci = center.ci + di
       const cj = center.cj + dj
       if (ci < 0 || cj < 0 || ci > maxCi || cj > maxCj) continue

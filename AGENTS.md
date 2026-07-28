@@ -119,6 +119,7 @@ Résumé — détail complet dans [`docs/01-WORKFLOW-GIT.md`](docs/01-WORKFLOW-G
 | Structure & conventions | [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md) |
 | Concept & game design | [`docs/03-GAME-DESIGN.md`](docs/03-GAME-DESIGN.md) |
 | Le monde de Beauvais | [`docs/04-MONDE-BEAUVAIS.md`](docs/04-MONDE-BEAUVAIS.md) |
+| Vision de l'éditeur de production | [`docs/06-EDITEUR-PLS.md`](docs/06-EDITEUR-PLS.md) |
 | Règles de contribution | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 > 📝 **Ce fichier `AGENTS.md` doit lui aussi rester à jour.** Si la stack, les conventions ou les

@@ -24,6 +24,7 @@ Tu débutes sur le projet ? Lis les docs **dans l'ordre** :
 3. 🧱 [Architecture du projet](docs/02-ARCHITECTURE.md) — où ranger quoi, qui bosse sur quoi
 4. 🎨 [Game Design](docs/03-GAME-DESIGN.md) — le concept, le gameplay, le style visuel
 5. 🗺️ [Le monde de Beauvais](docs/04-MONDE-BEAUVAIS.md) — comment on reconstruit la vraie ville
+6. 🛠️ [Éditeur PLS](docs/06-EDITEUR-PLS.md) — vision de l'outil de production carte / intérieurs / gameplay
 
 👉 **Règle d'or n°1 : personne ne code sans avoir lu [le workflow Git](docs/01-WORKFLOW-GIT.md).**
 C'est ce qui évite les conflits et les fichiers "cassés".

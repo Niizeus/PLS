@@ -3,37 +3,72 @@ import {
   INTERIORS,
   INTERIOR_TYPES,
   makeInterior,
+  makeRoomShape,
   serializeInterior,
   slugifyInteriorId,
   uniqueInteriorId,
-  type InteriorType,
   validateInteriors,
   type InteriorDefinition,
-  type InteriorDoor,
-  type InteriorExit,
   type InteriorFloor,
+  type InteriorOpening,
+  type InteriorOpeningKind,
   type InteriorProp,
-  type InteriorRemovedWall,
-  type InteriorRoom,
-  type InteriorSpawnPoint,
-  type InteriorWindow,
+  type InteriorSurface,
+  type InteriorType,
+  type InteriorWall,
 } from '../data/interiors'
+import {
+  constrainAngle,
+  makeArcPolygon,
+  makeRectanglePolygon,
+  makeRegularPolygon,
+  polygonCentroid,
+  projectOnWall,
+  wallLength,
+  wallPointAt,
+  type Point2,
+} from '../data/interiorGeometry'
 import InteriorTestView from './InteriorTestView'
+import {
+  drawGrid,
+  drawMarkers,
+  drawOpeningPreview,
+  drawPolygonPreview,
+  drawSnapHint,
+  drawSurfaces,
+  drawWallPreview,
+  drawWalls,
+  wallAngleDegrees,
+  type InteriorSelection,
+} from './interiorDraw'
+import { findWallNear, hitTest, snapPoint } from './interiorTools'
 import { readNumberInput } from './editorInputs'
 import { saveData } from './editorSave'
+import { useEditorHistory } from './editorHistory'
 import { useEditorWorkspace } from './editorWorkspace'
 import { PanelToggle, type EditorPanelsApi } from './EditorPanels'
-import { getVisibleWallSegments, getWallSegments, isWallRemoved, type InteriorWallSegment } from './interiorGeometry'
 
-type InteriorTool = 'select' | 'room' | 'wall' | 'door' | 'window' | 'spawn' | 'exit' | 'prop'
-type SelectedInteriorItem =
-  | { kind: 'room'; id: string }
-  | { kind: 'wall'; roomId: string; side: InteriorWallSegment['side'] }
-  | { kind: 'door'; id: string }
-  | { kind: 'window'; id: string }
-  | { kind: 'spawn'; id: string }
-  | { kind: 'exit'; id: string }
-  | { kind: 'prop'; id: string }
+/**
+ * 🏠 Editeur d'interieurs — plan 2D.
+ *
+ * Le plan est fait de MURS (segments a n'importe quel angle) et de SOLS (polygones), pas de
+ * rectangles : voir le gros commentaire de `src/data/interiors.ts` pour le pourquoi. La piece
+ * rectangulaire existe toujours, mais comme simple raccourci qui pose 4 murs + 1 sol.
+ */
+
+type InteriorTool =
+  | 'select'
+  | 'wall'
+  | 'room'
+  | 'floor'
+  | 'shape'
+  | 'opening'
+  | 'split'
+  | 'spawn'
+  | 'exit'
+  | 'prop'
+
+type ShapeKind = 'circle' | 'half' | 'polygon'
 
 interface InteriorEditorProps {
   moduleTabs?: ReactNode
@@ -43,28 +78,43 @@ interface InteriorEditorProps {
   active: boolean
 }
 
-interface PlanPoint {
-  x: number
-  z: number
-}
-
-const MIN_ZOOM = 14
-const MAX_ZOOM = 90
-const GRID_STEP = 0.5
-const ROOM_MIN_SIZE = 0.5
-const WALL_SNAP_DISTANCE = 0.75
-const HISTORY_LIMIT = 60
-const PROP_TRANSFER_TYPE = 'application/x-pls-prop'
+const MIN_ZOOM = 8
+const MAX_ZOOM = 160
+const GRID_STEP = 0.25
+const SNAP_PIXELS = 12
+const HIT_PIXELS = 8
+const MIN_WALL_LENGTH = 0.1
 
 const toolLabels: Record<InteriorTool, string> = {
   select: 'Selection',
-  room: 'Piece',
   wall: 'Mur',
-  door: 'Porte',
-  window: 'Fenetre',
+  room: 'Piece',
+  floor: 'Sol',
+  shape: 'Forme',
+  opening: 'Ouverture',
+  split: 'Couper',
   spawn: 'Spawn',
   exit: 'Sortie',
   prop: 'Prop',
+}
+
+const toolHints: Record<InteriorTool, string> = {
+  select: 'Clic pour selectionner, glisser pour deplacer. Molette : zoom. Clic molette : deplacer la vue.',
+  wall: 'Clic pour poser le depart, clic pour poser l’arrivee — le mur continue en chaine. Maj bloque l’angle sur 15°, Echap arrete la chaine.',
+  room: 'Clic-glisser : pose 4 murs et un sol. Ensuite chaque mur se modifie tout seul.',
+  floor: 'Clic-glisser : pose un sol rectangulaire, sans aucun mur.',
+  shape: 'Clic-glisser depuis le centre : pose un sol rond, en demi-cercle ou en polygone.',
+  opening: 'Glisser le long d’un mur : perce une ouverture sur cette portion seulement, le reste du mur est conserve.',
+  split: 'Clic sur un mur : le coupe en deux murs independants a cet endroit.',
+  spawn: 'Clic : pose le point d’arrivee du joueur.',
+  exit: 'Clic : pose une sortie.',
+  prop: 'Clic : pose l’objet choisi dans la bibliotheque en bas.',
+}
+
+const openingPresets: Record<InteriorOpeningKind, { label: string; width: number; sillHeight: number; topHeight: number }> = {
+  passage: { label: 'Passage', width: 1.4, sillHeight: 0, topHeight: 2.4 },
+  door: { label: 'Porte', width: 0.9, sillHeight: 0, topHeight: 2.1 },
+  window: { label: 'Fenetre', width: 1.2, sillHeight: 0.9, topHeight: 2.1 },
 }
 
 const PLACEHOLDER_ASSETS = [
@@ -75,12 +125,10 @@ const PLACEHOLDER_ASSETS = [
   { id: 'proto_light', label: 'Lumiere', color: '#f3e36d' },
 ] as const
 
-function makeId(prefix: string) {
-  return `${prefix}_${Date.now().toString(36)}`
-}
+const PROP_TRANSFER_TYPE = 'application/x-pls-prop'
 
-function snap(value: number, step = GRID_STEP) {
-  return Math.round(value / step) * step
+function makeId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.floor(Math.random() * 1000).toString(36)}`
 }
 
 function round2(value: number) {
@@ -95,150 +143,97 @@ function getFloor(interior: InteriorDefinition, floorId: string): InteriorFloor 
   return interior.floors.find((floor) => floor.id === floorId) ?? interior.floors[0]
 }
 
-function pointInRoom(point: PlanPoint, room: InteriorRoom) {
-  return point.x >= room.x && point.x <= room.x + room.w && point.z >= room.z && point.z <= room.z + room.d
+function assetOf(assetId: string) {
+  const asset = PLACEHOLDER_ASSETS.find((item) => item.id === assetId) ?? PLACEHOLDER_ASSETS[0]
+  return { color: asset.color, label: asset.label[0] ?? 'O' }
 }
 
-function distanceToPoint(point: PlanPoint, x: number, z: number) {
-  return Math.hypot(point.x - x, point.z - z)
-}
-
-function getSelectionPoint(floor: InteriorFloor, selected: SelectedInteriorItem): PlanPoint | null {
-  if (selected.kind === 'wall') return null
-  if (selected.kind === 'room') {
-    const room = floor.rooms.find((item) => item.id === selected.id)
-    return room ? { x: room.x, z: room.z } : null
-  }
-  const item = getSelectedPointItem(floor, selected)
-  return item ? { x: item.x, z: item.z } : null
-}
-
-function getSelectedPointItem(floor: InteriorFloor, selected: SelectedInteriorItem) {
-  if (selected.kind === 'wall') return null
-  if (selected.kind === 'door') return floor.doors.find((item) => item.id === selected.id) ?? null
-  if (selected.kind === 'window') return floor.windows.find((item) => item.id === selected.id) ?? null
-  if (selected.kind === 'spawn') return floor.spawnPoints.find((item) => item.id === selected.id) ?? null
-  if (selected.kind === 'exit') return floor.exits.find((item) => item.id === selected.id) ?? null
-  if (selected.kind === 'prop') return floor.props.find((item) => item.id === selected.id) ?? null
-  return null
-}
-
-function distanceToSegment(point: PlanPoint, wall: InteriorWallSegment) {
-  const halfW = wall.w / 2
-  const halfD = wall.d / 2
-  const minX = wall.x - halfW
-  const maxX = wall.x + halfW
-  const minZ = wall.z - halfD
-  const maxZ = wall.z + halfD
-  const x = Math.min(maxX, Math.max(minX, point.x))
-  const z = Math.min(maxZ, Math.max(minZ, point.z))
-  return distanceToPoint(point, x, z)
-}
-
-function findNearestWall(floor: InteriorFloor, point: PlanPoint, maxDistance = 0.28) {
-  let best: InteriorWallSegment | null = null
-  let bestDistance = maxDistance
-  for (const room of floor.rooms) {
-    for (const wall of getWallSegments(room, 0.12)) {
-      const distance = distanceToSegment(point, wall)
-      if (distance <= bestDistance) {
-        best = wall
-        bestDistance = distance
-      }
-    }
-  }
-  return best
-}
-
-function snapToNearestWall(point: PlanPoint, floor: InteriorFloor): { x: number; z: number; rotation: number } {
-  let best: { x: number; z: number; rotation: number; distance: number } | null = null
-
-  for (const room of floor.rooms) {
-    const candidates = [
-      { x: Math.min(room.x + room.w, Math.max(room.x, point.x)), z: room.z, rotation: 0 },
-      { x: Math.min(room.x + room.w, Math.max(room.x, point.x)), z: room.z + room.d, rotation: 0 },
-      { x: room.x, z: Math.min(room.z + room.d, Math.max(room.z, point.z)), rotation: Math.PI / 2 },
-      { x: room.x + room.w, z: Math.min(room.z + room.d, Math.max(room.z, point.z)), rotation: Math.PI / 2 },
-    ]
-    for (const candidate of candidates) {
-      const distance = distanceToPoint(point, candidate.x, candidate.z)
-      if (distance <= WALL_SNAP_DISTANCE && (!best || distance < best.distance)) best = { ...candidate, distance }
-    }
-  }
-
-  if (!best) return { x: round2(snap(point.x)), z: round2(snap(point.z)), rotation: 0 }
-  return { x: round2(snap(best.x)), z: round2(snap(best.z)), rotation: best.rotation }
-}
-
-function findSelection(floor: InteriorFloor, point: PlanPoint): SelectedInteriorItem | null {
-  for (const spawn of floor.spawnPoints) if (distanceToPoint(point, spawn.x, spawn.z) <= 0.35) return { kind: 'spawn', id: spawn.id }
-  for (const exit of floor.exits) if (distanceToPoint(point, exit.x, exit.z) <= 0.35) return { kind: 'exit', id: exit.id }
-  for (const prop of floor.props) if (distanceToPoint(point, prop.x, prop.z) <= 0.35) return { kind: 'prop', id: prop.id }
-  for (const door of floor.doors) if (distanceToPoint(point, door.x, door.z) <= 0.35) return { kind: 'door', id: door.id }
-  for (const windowItem of floor.windows) {
-    if (distanceToPoint(point, windowItem.x, windowItem.z) <= 0.35) return { kind: 'window', id: windowItem.id }
-  }
-  for (let index = floor.rooms.length - 1; index >= 0; index -= 1) {
-    const room = floor.rooms[index]
-    if (pointInRoom(point, room)) return { kind: 'room', id: room.id }
-  }
-  return null
+/** Compte tout ce qu'un etage contient, pour l'inspecteur. */
+function countFloorItems(floor: InteriorFloor | null) {
+  if (!floor) return 0
+  const openings = floor.walls.reduce((total, wall) => total + wall.openings.length, 0)
+  return floor.walls.length + floor.surfaces.length + openings + floor.props.length + floor.spawnPoints.length + floor.exits.length
 }
 
 export default function InteriorEditor({ moduleTabs, panels, active }: InteriorEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const cameraRef = useRef({ cx: 0, cz: 0, zoom: 32 })
-  const interiorsRef = useRef<InteriorDefinition[]>(cloneInteriors(INTERIORS))
-  const activeInteriorIdRef = useRef(INTERIORS[0]?.id ?? '')
-  const activeFloorIdRef = useRef(INTERIORS[0]?.floors[0]?.id ?? '')
-  const toolRef = useRef<InteriorTool>('select')
-  const selectedRef = useRef<SelectedInteriorItem | null>(null)
-  const undoStackRef = useRef<InteriorDefinition[][]>([])
-  const redoStackRef = useRef<InteriorDefinition[][]>([])
-  const moveHistoryRef = useRef<InteriorDefinition[] | null>(null)
-  const pendingPropAssetIdRef = useRef<(typeof PLACEHOLDER_ASSETS)[number]['id']>('proto_cube')
-  const dragRef = useRef<
-    | { mode: 'pan'; pointerId: number; x: number; y: number; moved: boolean }
-    | { mode: 'room'; pointerId: number; start: PlanPoint; current: PlanPoint }
-    | { mode: 'move'; pointerId: number; selected: SelectedInteriorItem; start: PlanPoint; origin: PlanPoint; moved: boolean }
-    | null
-  >(null)
+  const cameraRef = useRef({ cx: 0, cz: 0, zoom: 42 })
 
-  // Liste et interieur actif viennent de l'atelier partage : le module Carte peut creer un
-  // interieur et l'ouvrir ici directement (voir editorWorkspace.ts).
   const interiors = useEditorWorkspace((state) => state.interiors)
   const setInteriors = useEditorWorkspace((state) => state.setInteriors)
   const activeInteriorId = useEditorWorkspace((state) => state.activeInteriorId) ?? ''
   const setActiveInteriorId = useEditorWorkspace((state) => state.setActiveInteriorId)
+  const workspaceMarkers = useEditorWorkspace((state) => state.markers)
+
   const [activeFloorId, setActiveFloorId] = useState(INTERIORS[0]?.floors[0]?.id ?? '')
   const [tool, setTool] = useState<InteriorTool>('select')
-  const [selected, setSelected] = useState<SelectedInteriorItem | null>(null)
-  const [mousePoint, setMousePoint] = useState<PlanPoint | null>(null)
+  const [selected, setSelected] = useState<InteriorSelection | null>(null)
+  const [mousePoint, setMousePoint] = useState<Point2 | null>(null)
   const [saveStatus, setSaveStatus] = useState('Aucune modification')
   const [viewInfo, setViewInfo] = useState(cameraRef.current)
   const [testMode, setTestMode] = useState(false)
-  const [pendingPropAssetId, setPendingPropAssetId] = useState<(typeof PLACEHOLDER_ASSETS)[number]['id']>('proto_cube')
-  const [, setHistoryVersion] = useState(0)
-  /**
-   * Photo du dernier etat ecrit sur le disque, PAR interieur.
-   * Un seul instantane global ne marcherait pas : on sauvegarde un interieur a la fois, et
-   * enregistrer le bar ne doit pas faire croire que l'appartement est sauvegarde lui aussi.
-   * Un interieur cree dans la session n'a pas d'entree ici : il est donc "a sauver".
-   */
+  const [pendingPropAssetId, setPendingPropAssetId] = useState<string>('proto_cube')
+  const [openingKind, setOpeningKind] = useState<InteriorOpeningKind>('passage')
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('circle')
+  const [shapeSegments, setShapeSegments] = useState(16)
+  const [shapeSides, setShapeSides] = useState(6)
+  const [snapEnabled, setSnapEnabled] = useState(true)
   const [savedInteriorsJson, setSavedInteriorsJson] = useState<Record<string, string>>(() =>
     Object.fromEntries(INTERIORS.map((interior) => [interior.id, JSON.stringify(serializeInterior(interior))])),
   )
 
-  const workspaceMarkers = useEditorWorkspace((state) => state.markers)
+  const history = useEditorHistory<InteriorDefinition[]>()
+
+  const interiorsRef = useRef(interiors)
+  const activeInteriorIdRef = useRef(activeInteriorId)
+  const activeFloorIdRef = useRef(activeFloorId)
+  const toolRef = useRef(tool)
+  const selectedRef = useRef(selected)
+  const activeRef = useRef(active)
+  const shiftRef = useRef(false)
+  const snapRef = useRef(snapEnabled)
+  const pendingPropRef = useRef(pendingPropAssetId)
+  const openingKindRef = useRef(openingKind)
+  const shapeRef = useRef({ kind: shapeKind, segments: shapeSegments, sides: shapeSides })
+  /** Depart de la chaine de murs en cours, ou `null` si on n'est pas en train de tracer. */
+  const chainStartRef = useRef<Point2 | null>(null)
+  const [chainStart, setChainStart] = useState<Point2 | null>(null)
+  const actionsRef = useRef<{
+    createWall: (from: Point2, to: Point2) => void
+    createRoom: (x: number, z: number, w: number, d: number) => void
+    createFloorSurface: (pts: [number, number][], name: string) => void
+    createOpening: (wallId: string, offset: number, width: number) => void
+    splitWall: (wallId: string, distance: number) => void
+    addPointItem: (point: Point2, assetId?: string) => void
+    moveSelection: (selection: InteriorSelection, point: Point2, record: boolean) => void
+    record: (key?: string) => void
+  }>({
+    createWall: () => {},
+    createRoom: () => {},
+    createFloorSurface: () => {},
+    createOpening: () => {},
+    splitWall: () => {},
+    addPointItem: () => {},
+    moveSelection: () => {},
+    record: () => {},
+  })
+
+  const dragRef = useRef<
+    | { mode: 'pan'; pointerId: number; x: number; y: number; moved: boolean }
+    | { mode: 'move'; pointerId: number; selection: InteriorSelection; grab: Point2; origin: Point2; moved: boolean }
+    | { mode: 'rect'; pointerId: number; start: Point2; current: Point2; kind: 'room' | 'floor' }
+    | { mode: 'shape'; pointerId: number; center: Point2; current: Point2 }
+    | { mode: 'opening'; pointerId: number; wallId: string; from: number; to: number }
+    | null
+  >(null)
 
   const activeInterior = interiors.find((interior) => interior.id === activeInteriorId) ?? interiors[0]
-  /** Point de la carte qui ouvre cet interieur, s'il y en a un. */
+  const activeFloor = activeInterior ? getFloor(activeInterior, activeFloorId) : null
   const linkedMarker = activeInterior
     ? (workspaceMarkers.find((marker) => marker.interiorId === activeInterior.id) ?? null)
     : null
-  const activeFloor = activeInterior ? getFloor(activeInterior, activeFloorId) : null
   const validation = useMemo(() => validateInteriors(interiors), [interiors])
-  /** Y a-t-il au moins un interieur qui differe de sa version sur le disque ? */
+
   const dirtyInteriorIds = useMemo(
     () =>
       interiors
@@ -248,305 +243,66 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
   )
   const isDirty = dirtyInteriorIds.length > 0
   const activeIsDirty = activeInterior ? dirtyInteriorIds.includes(activeInterior.id) : false
-  const selectedRoom = selected?.kind === 'room' ? activeFloor?.rooms.find((room) => room.id === selected.id) ?? null : null
-  const selectedPointItem = selected && activeFloor ? getSelectedPointItem(activeFloor, selected) : null
+
+  const selectedWall =
+    selected?.kind === 'wall' || selected?.kind === 'wallEnd'
+      ? (activeFloor?.walls.find((wall) => wall.id === selected.id) ?? null)
+      : null
+  const selectedOpeningWall =
+    selected?.kind === 'opening' ? (activeFloor?.walls.find((wall) => wall.id === selected.wallId) ?? null) : null
+  const selectedOpening =
+    selected?.kind === 'opening' ? (selectedOpeningWall?.openings.find((item) => item.id === selected.id) ?? null) : null
+  const selectedSurface =
+    selected?.kind === 'surface' || selected?.kind === 'surfaceVertex'
+      ? (activeFloor?.surfaces.find((surface) => surface.id === selected.id) ?? null)
+      : null
+  const selectedPointItem =
+    selected?.kind === 'spawn'
+      ? (activeFloor?.spawnPoints.find((item) => item.id === selected.id) ?? null)
+      : selected?.kind === 'exit'
+        ? (activeFloor?.exits.find((item) => item.id === selected.id) ?? null)
+        : selected?.kind === 'prop'
+          ? (activeFloor?.props.find((item) => item.id === selected.id) ?? null)
+          : null
 
   useEffect(() => {
     interiorsRef.current = interiors
   }, [interiors])
-
   useEffect(() => {
     activeInteriorIdRef.current = activeInteriorId
   }, [activeInteriorId])
-
   useEffect(() => {
     activeFloorIdRef.current = activeFloorId
   }, [activeFloorId])
-
   useEffect(() => {
     toolRef.current = tool
+    // Changer d'outil interrompt une chaine de murs en cours.
+    chainStartRef.current = null
+    setChainStart(null)
   }, [tool])
-
   useEffect(() => {
     selectedRef.current = selected
   }, [selected])
-
   useEffect(() => {
-    pendingPropAssetIdRef.current = pendingPropAssetId
+    activeRef.current = active
+  }, [active])
+  useEffect(() => {
+    snapRef.current = snapEnabled
+  }, [snapEnabled])
+  useEffect(() => {
+    pendingPropRef.current = pendingPropAssetId
   }, [pendingPropAssetId])
-
-  const pushHistory = (snapshot = cloneInteriors(interiorsRef.current)) => {
-    undoStackRef.current = [...undoStackRef.current, snapshot].slice(-HISTORY_LIMIT)
-    redoStackRef.current = []
-    setHistoryVersion((version) => version + 1)
-  }
-
-  const restoreInteriors = (nextInteriors: InteriorDefinition[], status: string) => {
-    const restored = cloneInteriors(nextInteriors)
-    const nextInterior = restored.find((interior) => interior.id === activeInteriorIdRef.current) ?? restored[0]
-    const nextFloor = nextInterior?.floors.find((floor) => floor.id === activeFloorIdRef.current) ?? nextInterior?.floors[0]
-
-    interiorsRef.current = restored
-    setInteriors(restored)
-    if (nextInterior) setActiveInteriorId(nextInterior.id)
-    if (nextFloor) setActiveFloorId(nextFloor.id)
-    setSelected(null)
-    setSaveStatus(status)
-  }
-
-  const undo = () => {
-    const previous = undoStackRef.current.pop()
-    if (!previous) return
-    redoStackRef.current = [...redoStackRef.current, cloneInteriors(interiorsRef.current)].slice(-HISTORY_LIMIT)
-    setHistoryVersion((version) => version + 1)
-    restoreInteriors(previous, 'Annulation locale, sauvegarde requise')
-  }
-
-  const redo = () => {
-    const next = redoStackRef.current.pop()
-    if (!next) return
-    undoStackRef.current = [...undoStackRef.current, cloneInteriors(interiorsRef.current)].slice(-HISTORY_LIMIT)
-    setHistoryVersion((version) => version + 1)
-    restoreInteriors(next, 'Retablissement local, sauvegarde requise')
-  }
-
-  // ⚠️ IMPORTANT : `recipe` est appliquee TOUT DE SUITE, pas dans le callback passe a
-  // setInteriors. React n'execute ce callback qu'au rendu suivant : les champs de
-  // l'inspecteur y liraient un `event.currentTarget` deja remis a null -> TypeError en
-  // plein rendu -> l'editeur se demonte (page blanche). Ca evite aussi d'appeler
-  // setSelected() depuis la phase de rendu (duplicateSelectedItem le fait).
-  const updateActiveInterior = (recipe: (interior: InteriorDefinition) => InteriorDefinition, recordHistory = true) => {
-    if (recordHistory) pushHistory()
-    const current = interiorsRef.current.find((interior) => interior.id === activeInteriorId)
-    if (!current) return
-    const next = serializeInterior(recipe(current))
-    const list = interiorsRef.current.map((interior) => (interior.id === activeInteriorId ? next : interior))
-    interiorsRef.current = list // garde le ref a jour meme entre deux rendus (drag souris)
-    setInteriors(list)
-    setSaveStatus('Modifications non sauvegardees')
-  }
-
-  const updateActiveFloor = (recipe: (floor: InteriorFloor) => InteriorFloor, recordHistory = true) => {
-    updateActiveInterior((interior) => ({
-      ...interior,
-      floors: interior.floors.map((floor) => (floor.id === activeFloorId ? recipe(floor) : floor)),
-    }), recordHistory)
-  }
-
-  const moveSelectedItem = (selection: SelectedInteriorItem, point: PlanPoint) => {
-    if (selection.kind === 'wall') return
-    updateActiveFloor((floor) => {
-      const x = round2(snap(point.x))
-      const z = round2(snap(point.z))
-      if (selection.kind === 'room') {
-        return {
-          ...floor,
-          rooms: floor.rooms.map((room) => (room.id === selection.id ? { ...room, x, z } : room)),
-        }
-      }
-
-      if (selection.kind === 'door') {
-        const snapped = snapToNearestWall(point, floor)
-        return {
-          ...floor,
-          doors: floor.doors.map((door) => (door.id === selection.id ? { ...door, ...snapped } : door)),
-        }
-      }
-      if (selection.kind === 'window') {
-        const snapped = snapToNearestWall(point, floor)
-        return {
-          ...floor,
-          windows: floor.windows.map((windowItem) =>
-            windowItem.id === selection.id ? { ...windowItem, ...snapped } : windowItem,
-          ),
-        }
-      }
-      if (selection.kind === 'spawn') {
-        return {
-          ...floor,
-          spawnPoints: floor.spawnPoints.map((spawn) => (spawn.id === selection.id ? { ...spawn, x, z } : spawn)),
-        }
-      }
-      if (selection.kind === 'exit') {
-        return {
-          ...floor,
-          exits: floor.exits.map((exit) => (exit.id === selection.id ? { ...exit, x, z } : exit)),
-        }
-      }
-      return {
-        ...floor,
-        props: floor.props.map((prop) => (prop.id === selection.id ? { ...prop, x, z } : prop)),
-      }
-    }, false)
-  }
-
-  const deleteSelectedItem = () => {
-    const selection = selectedRef.current
-    if (!selection) return
-    if (selection.kind === 'wall') {
-      toggleWallRemoval(selection.roomId, selection.side)
-      return
-    }
-    updateActiveFloor((floor) => ({
-      ...floor,
-      rooms: selection.kind === 'room' ? floor.rooms.filter((item) => item.id !== selection.id) : floor.rooms,
-      doors: selection.kind === 'door' ? floor.doors.filter((item) => item.id !== selection.id) : floor.doors,
-      windows: selection.kind === 'window' ? floor.windows.filter((item) => item.id !== selection.id) : floor.windows,
-      props: selection.kind === 'prop' ? floor.props.filter((item) => item.id !== selection.id) : floor.props,
-      spawnPoints:
-        selection.kind === 'spawn' ? floor.spawnPoints.filter((item) => item.id !== selection.id) : floor.spawnPoints,
-      exits: selection.kind === 'exit' ? floor.exits.filter((item) => item.id !== selection.id) : floor.exits,
-    }))
-    setSelected(null)
-  }
-
-  const toggleWallRemoval = (roomId: string, side: InteriorWallSegment['side']) => {
-    const wallId = `wall_${roomId}_${side}`
-    updateActiveFloor((floor) => {
-      const removedWalls = floor.removedWalls ?? []
-      const exists = removedWalls.some((wall) => wall.roomId === roomId && wall.side === side)
-      const nextRemovedWalls: InteriorRemovedWall[] = exists
-        ? removedWalls.filter((wall) => !(wall.roomId === roomId && wall.side === side))
-        : [...removedWalls, { id: wallId, roomId, side }]
-      return { ...floor, removedWalls: nextRemovedWalls }
-    })
-    setSelected({ kind: 'wall', roomId, side })
-  }
-
-  const duplicateSelectedItem = () => {
-    const selection = selectedRef.current
-    if (!selection || selection.kind === 'wall') return
-    updateActiveFloor((floor) => {
-      if (selection.kind === 'room') {
-        const room = floor.rooms.find((item) => item.id === selection.id)
-        if (!room) return floor
-        const copy = { ...room, id: makeId('room'), name: `${room.name} copie`, x: round2(room.x + 0.5), z: round2(room.z + 0.5) }
-        setSelected({ kind: 'room', id: copy.id })
-        return { ...floor, rooms: [...floor.rooms, copy] }
-      }
-      const item = getSelectedPointItem(floor, selection)
-      if (!item) return floor
-      const copy = { ...item, id: makeId(selection.kind), name: `${item.name} copie`, x: round2(item.x + 0.5), z: round2(item.z + 0.5) }
-      setSelected({ kind: selection.kind, id: copy.id } as SelectedInteriorItem)
-      if (selection.kind === 'door') return { ...floor, doors: [...floor.doors, copy as InteriorDoor] }
-      if (selection.kind === 'window') return { ...floor, windows: [...floor.windows, copy as InteriorWindow] }
-      if (selection.kind === 'spawn') return { ...floor, spawnPoints: [...floor.spawnPoints, copy as InteriorSpawnPoint] }
-      if (selection.kind === 'exit') return { ...floor, exits: [...floor.exits, copy as InteriorExit] }
-      return { ...floor, props: [...floor.props, copy as InteriorProp] }
-    })
-  }
-
-  const addPropAt = (point: PlanPoint, assetId = pendingPropAssetIdRef.current) => {
-    const x = round2(snap(point.x))
-    const z = round2(snap(point.z))
-    const asset = PLACEHOLDER_ASSETS.find((item) => item.id === assetId) ?? PLACEHOLDER_ASSETS[0]
-    const prop: InteriorProp = { id: makeId('prop'), assetId: asset.id, name: asset.label, x, z, rotation: 0 }
-    updateActiveFloor((floor) => ({ ...floor, props: [...floor.props, prop] }))
-    setSelected({ kind: 'prop', id: prop.id })
-  }
-
-  const addPointItem = (point: PlanPoint) => {
-    const x = round2(snap(point.x))
-    const z = round2(snap(point.z))
-    if (toolRef.current === 'door') {
-      const snapped = activeFloor ? snapToNearestWall(point, activeFloor) : { x, z, rotation: 0 }
-      const door: InteriorDoor = { id: makeId('door'), name: 'Porte', ...snapped, width: 0.9 }
-      updateActiveFloor((floor) => ({ ...floor, doors: [...floor.doors, door] }))
-      setSelected({ kind: 'door', id: door.id })
-    }
-    if (toolRef.current === 'window') {
-      const snapped = activeFloor ? snapToNearestWall(point, activeFloor) : { x, z, rotation: 0 }
-      const windowItem: InteriorWindow = { id: makeId('window'), name: 'Fenetre', ...snapped, width: 1.2, sillHeight: 0.9 }
-      updateActiveFloor((floor) => ({ ...floor, windows: [...floor.windows, windowItem] }))
-      setSelected({ kind: 'window', id: windowItem.id })
-    }
-    if (toolRef.current === 'spawn') {
-      const spawnPoint: InteriorSpawnPoint = { id: makeId('spawn'), name: 'Spawn', x, z, rotation: 0 }
-      updateActiveFloor((floor) => ({ ...floor, spawnPoints: [...floor.spawnPoints, spawnPoint] }))
-      setSelected({ kind: 'spawn', id: spawnPoint.id })
-    }
-    if (toolRef.current === 'exit') {
-      const exit: InteriorExit = {
-        id: makeId('exit'),
-        name: 'Sortie',
-        x,
-        z,
-        rotation: 0,
-        target: { kind: 'exterior' },
-      }
-      updateActiveFloor((floor) => ({ ...floor, exits: [...floor.exits, exit] }))
-      setSelected({ kind: 'exit', id: exit.id })
-    }
-    if (toolRef.current === 'prop') {
-      addPropAt(point)
-    }
-  }
-
-  const addPresetRoom = (name: string, w: number, d: number) => {
-    const room: InteriorRoom = {
-      id: makeId('room'),
-      name,
-      x: round2(cameraRef.current.cx - w / 2),
-      z: round2(cameraRef.current.cz - d / 2),
-      w,
-      d,
-      floorMaterial: 'proto_floor',
-      wallMaterial: 'proto_wall',
-    }
-    updateActiveFloor((floor) => ({ ...floor, rooms: [...floor.rooms, room] }))
-    setSelected({ kind: 'room', id: room.id })
-  }
-
-  /** Interieur autonome, sans point d'interet associe. On pourra le rattacher depuis la carte. */
-  const addInterior = () => {
-    const name = 'Nouvel interieur'
-    const interior = makeInterior({
-      id: uniqueInteriorId(slugifyInteriorId(name), interiorsRef.current),
-      name,
-      type: 'shop',
-    })
-    pushHistory()
-    const list = [...interiorsRef.current, serializeInterior(interior)]
-    interiorsRef.current = list
-    setInteriors(list)
-    setActiveInteriorId(interior.id)
-    setActiveFloorId(interior.floors[0].id)
-    setSelected(null)
-    setSaveStatus('Nouvel interieur cree, sauvegarde requise')
-  }
-
-  /** Renomme / retypes l'interieur ouvert. Le nom n'est PAS l'identifiant : l'id reste fige. */
-  const updateActiveInteriorMeta = (recipe: (interior: InteriorDefinition) => InteriorDefinition) => {
-    updateActiveInterior(recipe)
-  }
-
-  const addFloor = () => {
-    if (!activeInterior) return
-    const index = activeInterior.floors.length + 1
-    const floor: InteriorFloor = {
-      id: `etage_${index}`,
-      label: `Etage ${index - 1}`,
-      elevation: round2((index - 1) * activeInterior.defaultWallHeight),
-      height: activeInterior.defaultWallHeight,
-      rooms: [],
-      removedWalls: [],
-      doors: [],
-      windows: [],
-      props: [],
-      spawnPoints: [],
-      exits: [],
-      stairs: [],
-    }
-    updateActiveInterior((interior) => ({ ...interior, floors: [...interior.floors, floor] }))
-    setActiveFloorId(floor.id)
-    setSelected(null)
-  }
+  useEffect(() => {
+    openingKindRef.current = openingKind
+  }, [openingKind])
+  useEffect(() => {
+    shapeRef.current = { kind: shapeKind, segments: shapeSegments, sides: shapeSides }
+  }, [shapeKind, shapeSegments, shapeSides])
 
   /**
-   * Garde l'etage actif coherent avec l'interieur ouvert.
-   * Indispensable depuis que le module Carte peut ouvrir un interieur de l'exterieur : sans ca,
-   * `activeFloorId` resterait sur l'etage de l'interieur precedent, et toutes les modifications
-   * seraient appliquees a un etage introuvable — donc silencieusement perdues.
+   * Garde l'etage actif coherent avec l'interieur ouvert : le module Carte peut ouvrir un
+   * interieur de l'exterieur, et un `activeFloorId` perime ferait appliquer les modifications
+   * a un etage introuvable — donc silencieusement perdues.
    */
   useEffect(() => {
     if (!activeInterior) return
@@ -556,7 +312,6 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     }
   }, [activeInterior, activeFloorId])
 
-  // Avertit avant de fermer/recharger l'onglet si l'interieur n'est pas sauvegarde.
   useEffect(() => {
     if (!isDirty) return
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -567,40 +322,502 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [isDirty])
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Module masque : les deux modules restent montes, seul celui a l'ecran ecoute le clavier.
-      if (!active) return
-      const target = event.target as HTMLElement | null
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        event.preventDefault()
-        deleteSelectedItem()
-      }
-      if (event.ctrlKey && !event.shiftKey && event.code === 'KeyZ') {
-        event.preventDefault()
-        undo()
-      }
-      if ((event.ctrlKey && event.shiftKey && event.code === 'KeyZ') || (event.ctrlKey && event.code === 'KeyY')) {
-        event.preventDefault()
-        redo()
-      }
-      if (event.ctrlKey && event.code === 'KeyD') {
-        event.preventDefault()
-        duplicateSelectedItem()
-      }
-      if (event.code === 'KeyV') setTool('select')
-      if (event.code === 'KeyR') setTool('room')
-      if (event.code === 'KeyP') setTool('door')
-      if (event.code === 'KeyF') setTool('window')
-      if (event.code === 'Escape') {
-        setSelected(null)
-        setTool('select')
+  // --- Modifications ----------------------------------------------------------------------
+
+  const applyInteriors = (list: InteriorDefinition[], status: string) => {
+    interiorsRef.current = list
+    setInteriors(list)
+    setSaveStatus(status)
+  }
+
+  const record = (coalesceKey?: string) => history.push(cloneInteriors(interiorsRef.current), coalesceKey)
+
+  /**
+   * ⚠️ `recipe` est appliquee TOUT DE SUITE, jamais dans le callback de setState : React ne
+   * l'executerait qu'au rendu suivant, ou `event.currentTarget` vaut deja null — TypeError en
+   * plein rendu, et tout l'editeur se demonte (page blanche).
+   */
+  const updateActiveFloor = (
+    recipe: (floor: InteriorFloor) => InteriorFloor,
+    options: { record?: boolean; coalesceKey?: string; status?: string } = {},
+  ) => {
+    const { record: shouldRecord = true, coalesceKey, status = 'Modifications non sauvegardees' } = options
+    const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
+    if (!interior) return
+    if (shouldRecord) record(coalesceKey)
+    const next = serializeInterior({
+      ...interior,
+      floors: interior.floors.map((floor) => (floor.id === activeFloorIdRef.current ? recipe(floor) : floor)),
+    })
+    applyInteriors(
+      interiorsRef.current.map((item) => (item.id === interior.id ? next : item)),
+      status,
+    )
+  }
+
+  const updateActiveInterior = (recipe: (interior: InteriorDefinition) => InteriorDefinition, coalesceKey?: string) => {
+    const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
+    if (!interior) return
+    record(coalesceKey)
+    const next = serializeInterior(recipe(interior))
+    applyInteriors(
+      interiorsRef.current.map((item) => (item.id === interior.id ? next : item)),
+      'Modifications non sauvegardees',
+    )
+  }
+
+  const restore = (list: InteriorDefinition[], status: string) => {
+    const restored = cloneInteriors(list)
+    interiorsRef.current = restored
+    setInteriors(restored)
+    const interior = restored.find((item) => item.id === activeInteriorIdRef.current) ?? restored[0]
+    if (interior) {
+      setActiveInteriorId(interior.id)
+      if (!interior.floors.some((floor) => floor.id === activeFloorIdRef.current)) {
+        setActiveFloorId(interior.floors[0]?.id ?? '')
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    setSelected(null)
+    setSaveStatus(status)
+  }
+
+  const undo = () => {
+    const previous = history.undo(cloneInteriors(interiorsRef.current))
+    if (previous) restore(previous, 'Annulation locale, sauvegarde requise')
+  }
+
+  const redo = () => {
+    const next = history.redo(cloneInteriors(interiorsRef.current))
+    if (next) restore(next, 'Retablissement local, sauvegarde requise')
+  }
+
+  const updateWall = (wallId: string, recipe: (wall: InteriorWall) => InteriorWall, options?: { record?: boolean; coalesceKey?: string }) => {
+    updateActiveFloor(
+      (floor) => ({ ...floor, walls: floor.walls.map((wall) => (wall.id === wallId ? recipe(wall) : wall)) }),
+      options,
+    )
+  }
+
+  const updateSurface = (
+    surfaceId: string,
+    recipe: (surface: InteriorSurface) => InteriorSurface,
+    options?: { record?: boolean; coalesceKey?: string },
+  ) => {
+    updateActiveFloor(
+      (floor) => ({ ...floor, surfaces: floor.surfaces.map((surface) => (surface.id === surfaceId ? recipe(surface) : surface)) }),
+      options,
+    )
+  }
+
+  const updateOpening = (
+    wallId: string,
+    openingId: string,
+    recipe: (opening: InteriorOpening) => InteriorOpening,
+    options?: { record?: boolean; coalesceKey?: string },
+  ) => {
+    updateWall(
+      wallId,
+      (wall) => ({ ...wall, openings: wall.openings.map((opening) => (opening.id === openingId ? recipe(opening) : opening)) }),
+      options,
+    )
+  }
+
+  // --- Creation ---------------------------------------------------------------------------
+
+  const createWall = (from: Point2, to: Point2) => {
+    const length = Math.hypot(to.x - from.x, to.z - from.z)
+    if (length < MIN_WALL_LENGTH) return
+    const wall: InteriorWall = {
+      id: makeId('mur'),
+      name: 'Mur',
+      ax: from.x,
+      az: from.z,
+      bx: to.x,
+      bz: to.z,
+      thickness: activeInterior?.defaultWallThickness ?? 0.18,
+      material: 'proto_wall',
+      openings: [],
+    }
+    updateActiveFloor((floor) => ({ ...floor, walls: [...floor.walls, wall] }), { status: 'Mur ajoute, sauvegarde requise' })
+    setSelected({ kind: 'wall', id: wall.id })
+  }
+
+  const createRoom = (x: number, z: number, w: number, d: number) => {
+    if (w < MIN_WALL_LENGTH || d < MIN_WALL_LENGTH) return
+    const shape = makeRoomShape({
+      idPrefix: makeId('piece'),
+      name: 'Piece',
+      x,
+      z,
+      w,
+      d,
+      thickness: activeInterior?.defaultWallThickness ?? 0.18,
+    })
+    updateActiveFloor(
+      (floor) => ({ ...floor, walls: [...floor.walls, ...shape.walls], surfaces: [...floor.surfaces, shape.surface] }),
+      { status: 'Piece ajoutee, sauvegarde requise' },
+    )
+    setSelected({ kind: 'surface', id: shape.surface.id })
+  }
+
+  const createFloorSurface = (pts: [number, number][], name: string) => {
+    const surface: InteriorSurface = { id: makeId('sol'), name, pts, material: 'proto_floor' }
+    updateActiveFloor((floor) => ({ ...floor, surfaces: [...floor.surfaces, surface] }), {
+      status: 'Sol ajoute, sauvegarde requise',
+    })
+    setSelected({ kind: 'surface', id: surface.id })
+  }
+
+  /**
+   * Perce une ouverture sur une PORTION de mur.
+   * C'est la reponse au probleme de depart : la separation entre deux pieces de tailles
+   * differentes s'ouvre sans emporter la partie du mur qui donne sur l'exterieur.
+   */
+  const createOpening = (wallId: string, offset: number, width: number) => {
+    const wall = activeFloor?.walls.find((item) => item.id === wallId)
+    if (!wall) return
+    const preset = openingPresets[openingKindRef.current]
+    const length = wallLength(wall)
+    const finalWidth = Math.max(0.2, Math.min(width, length))
+    const opening: InteriorOpening = {
+      id: makeId('ouverture'),
+      name: preset.label,
+      kind: openingKindRef.current,
+      offset: Math.min(length - finalWidth / 2, Math.max(finalWidth / 2, offset)),
+      width: finalWidth,
+      sillHeight: preset.sillHeight,
+      topHeight: preset.topHeight,
+    }
+    updateWall(wallId, (item) => ({ ...item, openings: [...item.openings, opening] }))
+    setSelected({ kind: 'opening', wallId, id: opening.id })
+    setSaveStatus(`${preset.label} perce, sauvegarde requise`)
+  }
+
+  /** Coupe un mur en deux murs independants, chacun gardant les ouvertures de son cote. */
+  const splitWall = (wallId: string, distance: number) => {
+    const wall = activeFloor?.walls.find((item) => item.id === wallId)
+    if (!wall) return
+    const length = wallLength(wall)
+    if (distance < MIN_WALL_LENGTH || length - distance < MIN_WALL_LENGTH) {
+      setSaveStatus('Coupe trop pres du bout du mur')
+      return
+    }
+    const cut = wallPointAt(wall, distance)
+    const first: InteriorWall = {
+      ...wall,
+      id: makeId('mur'),
+      bx: cut.x,
+      bz: cut.z,
+      openings: wall.openings.filter((opening) => opening.offset < distance),
+    }
+    const second: InteriorWall = {
+      ...wall,
+      id: makeId('mur'),
+      ax: cut.x,
+      az: cut.z,
+      openings: wall.openings
+        .filter((opening) => opening.offset >= distance)
+        .map((opening) => ({ ...opening, id: makeId('ouverture'), offset: opening.offset - distance })),
+    }
+    updateActiveFloor(
+      (floor) => ({ ...floor, walls: floor.walls.flatMap((item) => (item.id === wallId ? [first, second] : [item])) }),
+      { status: 'Mur coupe, sauvegarde requise' },
+    )
+    setSelected({ kind: 'wall', id: first.id })
+  }
+
+  const addPointItem = (point: Point2, assetId = pendingPropRef.current) => {
+    const x = round2(point.x)
+    const z = round2(point.z)
+    const current = toolRef.current
+    if (current === 'spawn') {
+      const spawn = { id: makeId('spawn'), name: 'Arrivee', x, z, rotation: 0 }
+      updateActiveFloor((floor) => ({ ...floor, spawnPoints: [...floor.spawnPoints, spawn] }))
+      setSelected({ kind: 'spawn', id: spawn.id })
+    } else if (current === 'exit') {
+      const exit = { id: makeId('sortie'), name: 'Sortie', x, z, rotation: 0, target: { kind: 'exterior' as const } }
+      updateActiveFloor((floor) => ({ ...floor, exits: [...floor.exits, exit] }))
+      setSelected({ kind: 'exit', id: exit.id })
+    } else if (current === 'prop') {
+      const asset = PLACEHOLDER_ASSETS.find((item) => item.id === assetId) ?? PLACEHOLDER_ASSETS[0]
+      const prop: InteriorProp = { id: makeId('prop'), assetId: asset.id, name: asset.label, x, z, rotation: 0 }
+      updateActiveFloor((floor) => ({ ...floor, props: [...floor.props, prop] }))
+      setSelected({ kind: 'prop', id: prop.id })
+    }
+  }
+
+  // --- Deplacement ------------------------------------------------------------------------
+
+  const moveSelection = (selection: InteriorSelection, point: Point2, shouldRecord: boolean) => {
+    const options = { record: shouldRecord, coalesceKey: 'move' }
+    if (selection.kind === 'wall') {
+      const wall = interiorsRef.current
+        .find((item) => item.id === activeInteriorIdRef.current)
+        ?.floors.find((floor) => floor.id === activeFloorIdRef.current)
+        ?.walls.find((item) => item.id === selection.id)
+      if (!wall) return
+      // On deplace le mur entier : on garde son vecteur et on repose son milieu sur le curseur.
+      const halfX = (wall.bx - wall.ax) / 2
+      const halfZ = (wall.bz - wall.az) / 2
+      updateWall(
+        selection.id,
+        (item) => ({ ...item, ax: point.x - halfX, az: point.z - halfZ, bx: point.x + halfX, bz: point.z + halfZ }),
+        options,
+      )
+      return
+    }
+    if (selection.kind === 'wallEnd') {
+      updateWall(
+        selection.id,
+        (wall) => (selection.end === 'a' ? { ...wall, ax: point.x, az: point.z } : { ...wall, bx: point.x, bz: point.z }),
+        options,
+      )
+      return
+    }
+    if (selection.kind === 'surfaceVertex') {
+      updateSurface(
+        selection.id,
+        (surface) => ({
+          ...surface,
+          pts: surface.pts.map((pt, index) => (index === selection.index ? ([point.x, point.z] as [number, number]) : pt)),
+        }),
+        options,
+      )
+      return
+    }
+    if (selection.kind === 'surface') {
+      const surface = interiorsRef.current
+        .find((item) => item.id === activeInteriorIdRef.current)
+        ?.floors.find((floor) => floor.id === activeFloorIdRef.current)
+        ?.surfaces.find((item) => item.id === selection.id)
+      if (!surface) return
+      const center = polygonCentroid(surface.pts)
+      const dx = point.x - center.x
+      const dz = point.z - center.z
+      updateSurface(
+        selection.id,
+        (item) => ({ ...item, pts: item.pts.map(([x, z]) => [x + dx, z + dz] as [number, number]) }),
+        options,
+      )
+      return
+    }
+    if (selection.kind === 'opening') {
+      const wall = interiorsRef.current
+        .find((item) => item.id === activeInteriorIdRef.current)
+        ?.floors.find((floor) => floor.id === activeFloorIdRef.current)
+        ?.walls.find((item) => item.id === selection.wallId)
+      if (!wall) return
+      const projection = projectOnWall(wall, point)
+      updateOpening(selection.wallId, selection.id, (opening) => {
+        const half = opening.width / 2
+        const length = wallLength(wall)
+        return { ...opening, offset: Math.min(length - half, Math.max(half, projection.distanceAlong)) }
+      }, options)
+      return
+    }
+    const x = round2(point.x)
+    const z = round2(point.z)
+    if (selection.kind === 'spawn') {
+      updateActiveFloor(
+        (floor) => ({ ...floor, spawnPoints: floor.spawnPoints.map((item) => (item.id === selection.id ? { ...item, x, z } : item)) }),
+        options,
+      )
+    } else if (selection.kind === 'exit') {
+      updateActiveFloor(
+        (floor) => ({ ...floor, exits: floor.exits.map((item) => (item.id === selection.id ? { ...item, x, z } : item)) }),
+        options,
+      )
+    } else if (selection.kind === 'prop') {
+      updateActiveFloor(
+        (floor) => ({ ...floor, props: floor.props.map((item) => (item.id === selection.id ? { ...item, x, z } : item)) }),
+        options,
+      )
+    }
+  }
+
+  const deleteSelection = () => {
+    const selection = selectedRef.current
+    if (!selection) return
+    updateActiveFloor(
+      (floor) => {
+        if (selection.kind === 'wall' || selection.kind === 'wallEnd') {
+          return { ...floor, walls: floor.walls.filter((wall) => wall.id !== selection.id) }
+        }
+        if (selection.kind === 'opening') {
+          return {
+            ...floor,
+            walls: floor.walls.map((wall) =>
+              wall.id === selection.wallId
+                ? { ...wall, openings: wall.openings.filter((opening) => opening.id !== selection.id) }
+                : wall,
+            ),
+          }
+        }
+        if (selection.kind === 'surface' || selection.kind === 'surfaceVertex') {
+          // Sur un sommet, on ne supprime le sol entier que s'il ne reste pas assez de points.
+          if (selection.kind === 'surfaceVertex') {
+            const surface = floor.surfaces.find((item) => item.id === selection.id)
+            if (surface && surface.pts.length > 3) {
+              return {
+                ...floor,
+                surfaces: floor.surfaces.map((item) =>
+                  item.id === selection.id ? { ...item, pts: item.pts.filter((_, index) => index !== selection.index) } : item,
+                ),
+              }
+            }
+          }
+          return { ...floor, surfaces: floor.surfaces.filter((item) => item.id !== selection.id) }
+        }
+        if (selection.kind === 'spawn') return { ...floor, spawnPoints: floor.spawnPoints.filter((item) => item.id !== selection.id) }
+        if (selection.kind === 'exit') return { ...floor, exits: floor.exits.filter((item) => item.id !== selection.id) }
+        return { ...floor, props: floor.props.filter((item) => item.id !== selection.id) }
+      },
+      { status: 'Element supprime, sauvegarde requise' },
+    )
+    setSelected(null)
+  }
+
+  const duplicateSelection = () => {
+    const selection = selectedRef.current
+    if (!selection || !activeFloor) return
+    if (selection.kind === 'wall' || selection.kind === 'wallEnd') {
+      const wall = activeFloor.walls.find((item) => item.id === selection.id)
+      if (!wall) return
+      const copy: InteriorWall = {
+        ...wall,
+        id: makeId('mur'),
+        ax: wall.ax + 0.5,
+        az: wall.az + 0.5,
+        bx: wall.bx + 0.5,
+        bz: wall.bz + 0.5,
+        openings: wall.openings.map((opening) => ({ ...opening, id: makeId('ouverture') })),
+      }
+      updateActiveFloor((floor) => ({ ...floor, walls: [...floor.walls, copy] }))
+      setSelected({ kind: 'wall', id: copy.id })
+      return
+    }
+    if (selection.kind === 'surface' || selection.kind === 'surfaceVertex') {
+      const surface = activeFloor.surfaces.find((item) => item.id === selection.id)
+      if (!surface) return
+      const copy: InteriorSurface = {
+        ...surface,
+        id: makeId('sol'),
+        name: `${surface.name} copie`,
+        pts: surface.pts.map(([x, z]) => [x + 0.5, z + 0.5] as [number, number]),
+      }
+      updateActiveFloor((floor) => ({ ...floor, surfaces: [...floor.surfaces, copy] }))
+      setSelected({ kind: 'surface', id: copy.id })
+    }
+  }
+
+  const addFloor = () => {
+    if (!activeInterior) return
+    const index = activeInterior.floors.length + 1
+    const floor: InteriorFloor = {
+      id: `etage_${index}`,
+      label: `Etage ${index - 1}`,
+      elevation: round2((index - 1) * activeInterior.defaultWallHeight),
+      height: activeInterior.defaultWallHeight,
+      walls: [],
+      surfaces: [],
+      props: [],
+      spawnPoints: [],
+      exits: [],
+      stairs: [],
+    }
+    updateActiveInterior((interior) => ({ ...interior, floors: [...interior.floors, floor] }))
+    setActiveFloorId(floor.id)
+    setSelected(null)
+  }
+
+  const addInterior = () => {
+    const name = 'Nouvel interieur'
+    const interior = makeInterior({
+      id: uniqueInteriorId(slugifyInteriorId(name), interiorsRef.current),
+      name,
+      type: 'shop',
+    })
+    record()
+    applyInteriors([...interiorsRef.current, serializeInterior(interior)], 'Nouvel interieur cree, sauvegarde requise')
+    setActiveInteriorId(interior.id)
+    setActiveFloorId(interior.floors[0].id)
+    setSelected(null)
+  }
+
+  useEffect(() => {
+    actionsRef.current = {
+      createWall,
+      createRoom,
+      createFloorSurface,
+      createOpening,
+      splitWall,
+      addPointItem,
+      moveSelection,
+      record,
+    }
   })
+
+  // --- Clavier ----------------------------------------------------------------------------
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftRef.current = true
+      if (!active) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
+
+      if (event.ctrlKey || event.metaKey) {
+        if (event.code === 'KeyZ' && !event.shiftKey) {
+          event.preventDefault()
+          undo()
+        } else if ((event.code === 'KeyZ' && event.shiftKey) || event.code === 'KeyY') {
+          event.preventDefault()
+          redo()
+        } else if (event.code === 'KeyD') {
+          event.preventDefault()
+          duplicateSelection()
+        } else if (event.code === 'KeyS') {
+          event.preventDefault()
+          if (activeIsDirty) void saveInterior()
+        }
+        return
+      }
+
+      if (event.code === 'KeyV') setTool('select')
+      if (event.code === 'KeyM') setTool('wall')
+      if (event.code === 'KeyR') setTool('room')
+      if (event.code === 'KeyG') setTool('floor')
+      if (event.code === 'KeyC') setTool('shape')
+      if (event.code === 'KeyO') setTool('opening')
+      if (event.code === 'KeyX') setTool('split')
+      if (event.code === 'Delete' || event.code === 'Backspace') {
+        event.preventDefault()
+        deleteSelection()
+      }
+      if (event.code === 'Escape') {
+        // D'abord on interrompt la chaine en cours, sinon on deselectionne.
+        if (chainStartRef.current) {
+          chainStartRef.current = null
+          setChainStart(null)
+        } else {
+          setSelected(null)
+          setTool('select')
+        }
+      }
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftRef.current = false
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  })
+
+  // --- Canvas -----------------------------------------------------------------------------
 
   useEffect(() => {
     if (testMode) return
@@ -619,14 +836,105 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
-    const toScreen = (point: PlanPoint): [number, number] => [
+    const toScreen = (point: Point2): [number, number] => [
       canvas.clientWidth / 2 + (point.x - cameraRef.current.cx) * cameraRef.current.zoom,
       canvas.clientHeight / 2 + (point.z - cameraRef.current.cz) * cameraRef.current.zoom,
     ]
-    const toPlan = (screenX: number, screenY: number): PlanPoint => ({
+    const toPlan = (screenX: number, screenY: number): Point2 => ({
       x: cameraRef.current.cx + (screenX - canvas.clientWidth / 2) / cameraRef.current.zoom,
       z: cameraRef.current.cz + (screenY - canvas.clientHeight / 2) / cameraRef.current.zoom,
     })
+    const planFromEvent = (event: PointerEvent): Point2 => {
+      const rect = canvas.getBoundingClientRect()
+      return toPlan(event.clientX - rect.left, event.clientY - rect.top)
+    }
+    const currentFloor = () => {
+      const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
+      return interior ? getFloor(interior, activeFloorIdRef.current) : null
+    }
+    /** Point accroche, en tenant compte du magnetisme et de la contrainte d'angle. */
+    const snapped = (raw: Point2, from?: Point2 | null) => {
+      const zoom = cameraRef.current.zoom
+      let point = raw
+      let label = ''
+      if (from && shiftRef.current) {
+        point = constrainAngle(from, point, 15)
+        label = 'angle 15°'
+      }
+      if (!snapRef.current) return { point, label, magnetic: Boolean(label) }
+      const result = snapPoint(currentFloor(), point, {
+        radiusMeters: SNAP_PIXELS / zoom,
+        gridStep: GRID_STEP,
+        ignoreWallIds: [],
+      })
+      // La contrainte d'angle prime : elle ne doit pas etre annulee par un aimant voisin.
+      if (label && !result.magnetic) return { point, label, magnetic: true }
+      return { point: result.point, label: label ? `${label} + ${result.label}` : result.label, magnetic: result.magnetic }
+    }
+
+    let snapHint: { point: Point2; label: string } | null = null
+
+    let raf = 0
+    const render = () => {
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        raf = requestAnimationFrame(render)
+        return
+      }
+      resize()
+      const width = canvas.clientWidth
+      const height = canvas.clientHeight
+      const floor = currentFloor()
+      const zoom = cameraRef.current.zoom
+
+      ctx.clearRect(0, 0, width, height)
+      ctx.fillStyle = '#252a2f'
+      ctx.fillRect(0, 0, width, height)
+      drawGrid(ctx, width, height, cameraRef.current, GRID_STEP)
+
+      if (floor) {
+        drawSurfaces(ctx, floor, toScreen, selectedRef.current)
+        drawWalls(ctx, floor, toScreen, zoom, selectedRef.current)
+        drawMarkers(ctx, floor, toScreen, selectedRef.current, assetOf)
+      }
+
+      const drag = dragRef.current
+      if (drag?.mode === 'rect') {
+        const x = Math.min(drag.start.x, drag.current.x)
+        const z = Math.min(drag.start.z, drag.current.z)
+        const w = Math.abs(drag.current.x - drag.start.x)
+        const d = Math.abs(drag.current.z - drag.start.z)
+        drawPolygonPreview(ctx, toScreen, makeRectanglePolygon(x, z, w, d))
+      }
+      if (drag?.mode === 'shape') {
+        const preview = buildShapePolygon(drag.center, drag.current)
+        if (preview) drawPolygonPreview(ctx, toScreen, preview)
+      }
+      if (drag?.mode === 'opening' && floor) {
+        const wall = floor.walls.find((item) => item.id === drag.wallId)
+        if (wall) {
+          const from = Math.min(drag.from, drag.to)
+          const to = Math.max(drag.from, drag.to)
+          drawOpeningPreview(ctx, toScreen, wall, { offset: (from + to) / 2, width: Math.max(0.2, to - from) }, zoom)
+        }
+      }
+      if (chainStartRef.current && mousePlanRef.current) {
+        drawWallPreview(
+          ctx,
+          toScreen,
+          chainStartRef.current,
+          mousePlanRef.current,
+          activeInterior?.defaultWallThickness ?? 0.18,
+          zoom,
+        )
+      }
+      if (snapHint) drawSnapHint(ctx, toScreen, snapHint.point, snapHint.label)
+
+      raf = requestAnimationFrame(render)
+    }
+    raf = requestAnimationFrame(render)
+
+    const mousePlanRef = { current: null as Point2 | null }
+
     const zoomAt = (screenX: number, screenY: number, factor: number) => {
       const before = toPlan(screenX, screenY)
       cameraRef.current.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, cameraRef.current.zoom * factor))
@@ -635,151 +943,275 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       setViewInfo({ ...cameraRef.current })
     }
 
-    let raf = 0
-    const render = () => {
-      // Module masque : voir le commentaire equivalent dans EditorApp.tsx.
-      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
-        raf = requestAnimationFrame(render)
-        return
-      }
-      resize()
-      const width = canvas.clientWidth
-      const height = canvas.clientHeight
-      const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
-      const floor = interior ? getFloor(interior, activeFloorIdRef.current) : null
-
-      ctx.clearRect(0, 0, width, height)
-      ctx.fillStyle = '#252a2f'
-      ctx.fillRect(0, 0, width, height)
-      drawGrid(ctx, width, height, cameraRef.current)
-
-      if (floor) drawFloor(ctx, floor, toScreen, selectedRef.current)
-
-      const drag = dragRef.current
-      if (drag?.mode === 'room') drawRoomPreview(ctx, drag.start, drag.current, toScreen)
-
-      raf = requestAnimationFrame(render)
-    }
-    raf = requestAnimationFrame(render)
-
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
       zoomAt(event.offsetX, event.offsetY, event.deltaY < 0 ? 1.12 : 1 / 1.12)
     }
+
     const onPointerDown = (event: PointerEvent) => {
+      const floor = currentFloor()
+      const zoom = cameraRef.current.zoom
+      const raw = planFromEvent(event)
+
+      // Le bouton du milieu deplace toujours la vue, quel que soit l'outil : indispensable
+      // maintenant que le clic gauche sert a tracer.
+      if (event.button === 1 || (event.button === 0 && toolRef.current === 'select' && !floor)) {
+        event.preventDefault()
+        dragRef.current = { mode: 'pan', pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
+        canvas.setPointerCapture(event.pointerId)
+        return
+      }
       if (event.button !== 0) return
-      const rect = canvas.getBoundingClientRect()
-      const point = toPlan(event.clientX - rect.left, event.clientY - rect.top)
-      if (toolRef.current === 'room') {
-        dragRef.current = { mode: 'room', pointerId: event.pointerId, start: point, current: point }
-      } else {
-        const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
-        const floor = interior ? getFloor(interior, activeFloorIdRef.current) : null
-        const hit = toolRef.current === 'select' && floor ? findSelection(floor, point) : null
+      if (!floor) return
+
+      const tolerance = HIT_PIXELS / zoom
+      const currentTool = toolRef.current
+
+      if (currentTool === 'select') {
+        const hit = hitTest(floor, raw, tolerance, selectedRef.current)
         if (hit) {
           setSelected(hit)
-          const origin = floor ? getSelectionPoint(floor, hit) : null
-          moveHistoryRef.current = cloneInteriors(interiorsRef.current)
+          const origin = originOfSelection(floor, hit)
           dragRef.current = {
             mode: 'move',
             pointerId: event.pointerId,
-            selected: hit,
-            start: point,
-            origin: origin ?? point,
+            selection: hit,
+            grab: raw,
+            origin: origin ?? raw,
             moved: false,
           }
         } else {
+          setSelected(null)
           dragRef.current = { mode: 'pan', pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
         }
+        canvas.setPointerCapture(event.pointerId)
+        return
       }
-      canvas.setPointerCapture(event.pointerId)
-    }
-    const onPointerMove = (event: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      const point = toPlan(event.clientX - rect.left, event.clientY - rect.top)
-      setMousePoint(point)
 
-      const drag = dragRef.current
-      if (!drag || drag.pointerId !== event.pointerId) return
-      if (drag.mode === 'room') {
-        drag.current = point
+      if (currentTool === 'wall') {
+        const result = snapped(raw, chainStartRef.current)
+        if (!chainStartRef.current) {
+          chainStartRef.current = result.point
+          setChainStart(result.point)
+        } else {
+          actionsRef.current.createWall(chainStartRef.current, result.point)
+          // La chaine continue depuis le point qu'on vient de poser.
+          chainStartRef.current = result.point
+          setChainStart(result.point)
+        }
         return
       }
-      if (drag.mode === 'move') {
-        if (Math.hypot(point.x - drag.start.x, point.z - drag.start.z) > 0.05) drag.moved = true
-        if (!drag.moved) return
-        moveSelectedItem(drag.selected, {
-          x: drag.origin.x + point.x - drag.start.x,
-          z: drag.origin.z + point.z - drag.start.z,
-        })
+
+      if (currentTool === 'room' || currentTool === 'floor') {
+        const result = snapped(raw)
+        dragRef.current = {
+          mode: 'rect',
+          pointerId: event.pointerId,
+          start: result.point,
+          current: result.point,
+          kind: currentTool,
+        }
+        canvas.setPointerCapture(event.pointerId)
         return
       }
-      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 2) drag.moved = true
-      cameraRef.current.cx -= (event.clientX - drag.x) / cameraRef.current.zoom
-      cameraRef.current.cz -= (event.clientY - drag.y) / cameraRef.current.zoom
-      drag.x = event.clientX
-      drag.y = event.clientY
-      setViewInfo({ ...cameraRef.current })
+
+      if (currentTool === 'shape') {
+        const result = snapped(raw)
+        dragRef.current = { mode: 'shape', pointerId: event.pointerId, center: result.point, current: result.point }
+        canvas.setPointerCapture(event.pointerId)
+        return
+      }
+
+      if (currentTool === 'opening') {
+        const wall = findWallNear(floor, raw, tolerance)
+        if (!wall) {
+          setSaveStatus('Vise un mur pour y percer une ouverture')
+          return
+        }
+        const projection = projectOnWall(wall, raw)
+        dragRef.current = {
+          mode: 'opening',
+          pointerId: event.pointerId,
+          wallId: wall.id,
+          from: projection.distanceAlong,
+          to: projection.distanceAlong,
+        }
+        canvas.setPointerCapture(event.pointerId)
+        return
+      }
+
+      if (currentTool === 'split') {
+        const wall = findWallNear(floor, raw, tolerance)
+        if (!wall) {
+          setSaveStatus('Vise un mur pour le couper')
+          return
+        }
+        actionsRef.current.splitWall(wall.id, projectOnWall(wall, raw).distanceAlong)
+        return
+      }
+
+      // spawn / exit / prop
+      const result = snapped(raw)
+      actionsRef.current.addPointItem(result.point)
     }
+
+    const onPointerMove = (event: PointerEvent) => {
+      const raw = planFromEvent(event)
+      mousePlanRef.current = raw
+      setMousePoint(raw)
+
+      const floor = currentFloor()
+      const drag = dragRef.current
+
+      // Repere d'accroche affiche des qu'on est dans un outil de trace.
+      if (!drag && toolRef.current !== 'select' && floor) {
+        const result = snapped(raw, chainStartRef.current)
+        snapHint = result.magnetic ? { point: result.point, label: result.label } : null
+        if (result.magnetic) mousePlanRef.current = result.point
+      } else if (!drag) {
+        snapHint = null
+      }
+
+      if (!drag || drag.pointerId !== event.pointerId) return
+
+      if (drag.mode === 'pan') {
+        drag.moved = true
+        cameraRef.current.cx -= (event.clientX - drag.x) / cameraRef.current.zoom
+        cameraRef.current.cz -= (event.clientY - drag.y) / cameraRef.current.zoom
+        drag.x = event.clientX
+        drag.y = event.clientY
+        setViewInfo({ ...cameraRef.current })
+        return
+      }
+
+      if (drag.mode === 'move') {
+        if (!drag.moved) {
+          if (Math.hypot(raw.x - drag.grab.x, raw.z - drag.grab.z) < 3 / cameraRef.current.zoom) return
+          drag.moved = true
+          actionsRef.current.record()
+        }
+        const target = {
+          x: drag.origin.x + raw.x - drag.grab.x,
+          z: drag.origin.z + raw.z - drag.grab.z,
+        }
+        const result = snapped(target)
+        actionsRef.current.moveSelection(drag.selection, result.point, false)
+        snapHint = result.magnetic ? { point: result.point, label: result.label } : null
+        return
+      }
+
+      if (drag.mode === 'rect') {
+        drag.current = snapped(raw).point
+        return
+      }
+      if (drag.mode === 'shape') {
+        drag.current = raw
+        return
+      }
+      if (drag.mode === 'opening' && floor) {
+        const wall = floor.walls.find((item) => item.id === drag.wallId)
+        if (wall) drag.to = projectOnWall(wall, raw).distanceAlong
+      }
+    }
+
     const onPointerUp = (event: PointerEvent) => {
       const drag = dragRef.current
-      const rect = canvas.getBoundingClientRect()
-      const point = toPlan(event.clientX - rect.left, event.clientY - rect.top)
+      if (!drag || drag.pointerId !== event.pointerId) return
       dragRef.current = null
 
-      if (drag?.mode === 'room') {
-        const x = round2(snap(Math.min(drag.start.x, point.x)))
-        const z = round2(snap(Math.min(drag.start.z, point.z)))
-        const w = round2(Math.max(ROOM_MIN_SIZE, snap(Math.abs(point.x - drag.start.x))))
-        const d = round2(Math.max(ROOM_MIN_SIZE, snap(Math.abs(point.z - drag.start.z))))
-        const room: InteriorRoom = {
-          id: makeId('room'),
-          name: 'Nouvelle piece',
-          x,
-          z,
-          w,
-          d,
-          floorMaterial: 'proto_floor',
-          wallMaterial: 'proto_wall',
-        }
-        updateActiveFloor((floor) => ({ ...floor, rooms: [...floor.rooms, room] }))
-        setSelected({ kind: 'room', id: room.id })
+      if (drag.mode === 'rect') {
+        const x = Math.min(drag.start.x, drag.current.x)
+        const z = Math.min(drag.start.z, drag.current.z)
+        const w = Math.abs(drag.current.x - drag.start.x)
+        const d = Math.abs(drag.current.z - drag.start.z)
+        if (w < MIN_WALL_LENGTH || d < MIN_WALL_LENGTH) return
+        if (drag.kind === 'room') actionsRef.current.createRoom(x, z, w, d)
+        else actionsRef.current.createFloorSurface(makeRectanglePolygon(x, z, w, d), 'Sol')
         return
       }
 
-      if (drag?.mode === 'move') {
-        if (drag.moved && moveHistoryRef.current) pushHistory(moveHistoryRef.current)
-        moveHistoryRef.current = null
+      if (drag.mode === 'shape') {
+        const polygon = buildShapePolygon(drag.center, drag.current)
+        if (polygon) {
+          const shape = shapeRef.current
+          const name = shape.kind === 'circle' ? 'Sol rond' : shape.kind === 'half' ? 'Sol demi-cercle' : `Sol ${shape.sides} cotes`
+          actionsRef.current.createFloorSurface(polygon, name)
+        }
         return
       }
 
-      if (drag?.mode === 'pan' && !drag.moved) {
-        if (toolRef.current === 'select') {
-          const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
-          const floor = interior ? getFloor(interior, activeFloorIdRef.current) : null
-          setSelected(floor ? findSelection(floor, point) : null)
-        } else if (toolRef.current === 'wall') {
-          const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
-          const floor = interior ? getFloor(interior, activeFloorIdRef.current) : null
-          const wall = floor ? findNearestWall(floor, point) : null
-          if (wall) toggleWallRemoval(wall.roomId, wall.side)
-        } else {
-          addPointItem(point)
-        }
+      if (drag.mode === 'opening') {
+        const from = Math.min(drag.from, drag.to)
+        const to = Math.max(drag.from, drag.to)
+        const preset = openingPresets[openingKindRef.current]
+        // Un simple clic (sans glisser) pose une ouverture de largeur standard.
+        const width = to - from < 0.15 ? preset.width : to - from
+        actionsRef.current.createOpening(drag.wallId, (from + to) / 2, width)
       }
     }
-    const onPointerLeave = () => setMousePoint(null)
+
+    /** Construit le polygone de l'outil Forme, selon le reglage courant. */
+    function buildShapePolygon(center: Point2, current: Point2): [number, number][] | null {
+      const radius = Math.hypot(current.x - center.x, current.z - center.z)
+      if (radius < 0.2) return null
+      const shape = shapeRef.current
+      const angle = Math.atan2(current.z - center.z, current.x - center.x)
+      if (shape.kind === 'circle') return makeArcPolygon(center.x, center.z, radius, shape.segments, Math.PI * 2)
+      if (shape.kind === 'half') return makeArcPolygon(center.x, center.z, radius, Math.max(3, Math.round(shape.segments / 2)), Math.PI, angle)
+      return makeRegularPolygon(center.x, center.z, radius, shape.sides, angle)
+    }
+
+    /** Point de reference d'une selection, pour calculer un deplacement relatif. */
+    function originOfSelection(floor: InteriorFloor, selection: InteriorSelection): Point2 | null {
+      if (selection.kind === 'wall') {
+        const wall = floor.walls.find((item) => item.id === selection.id)
+        return wall ? { x: (wall.ax + wall.bx) / 2, z: (wall.az + wall.bz) / 2 } : null
+      }
+      if (selection.kind === 'wallEnd') {
+        const wall = floor.walls.find((item) => item.id === selection.id)
+        if (!wall) return null
+        return selection.end === 'a' ? { x: wall.ax, z: wall.az } : { x: wall.bx, z: wall.bz }
+      }
+      if (selection.kind === 'surface') {
+        const surface = floor.surfaces.find((item) => item.id === selection.id)
+        return surface ? polygonCentroid(surface.pts) : null
+      }
+      if (selection.kind === 'surfaceVertex') {
+        const surface = floor.surfaces.find((item) => item.id === selection.id)
+        const point = surface?.pts[selection.index]
+        return point ? { x: point[0], z: point[1] } : null
+      }
+      if (selection.kind === 'opening') {
+        const wall = floor.walls.find((item) => item.id === selection.wallId)
+        const opening = wall?.openings.find((item) => item.id === selection.id)
+        return wall && opening ? wallPointAt(wall, opening.offset) : null
+      }
+      const list =
+        selection.kind === 'spawn' ? floor.spawnPoints : selection.kind === 'exit' ? floor.exits : floor.props
+      const item = list.find((entry) => entry.id === selection.id)
+      return item ? { x: item.x, z: item.z } : null
+    }
+
+    const onPointerLeave = () => {
+      setMousePoint(null)
+      mousePlanRef.current = null
+      snapHint = null
+    }
     const onDragOver = (event: DragEvent) => {
       if (!event.dataTransfer?.types.includes(PROP_TRANSFER_TYPE)) return
       event.preventDefault()
     }
     const onDrop = (event: DragEvent) => {
-      const assetId = event.dataTransfer?.getData(PROP_TRANSFER_TYPE) as (typeof PLACEHOLDER_ASSETS)[number]['id']
+      const assetId = event.dataTransfer?.getData(PROP_TRANSFER_TYPE)
       if (!assetId) return
       event.preventDefault()
       const rect = canvas.getBoundingClientRect()
-      addPropAt(toPlan(event.clientX - rect.left, event.clientY - rect.top), assetId)
       setTool('prop')
+      actionsRef.current.addPointItem(toPlan(event.clientX - rect.left, event.clientY - rect.top), assetId)
+    }
+    const onAuxClick = (event: MouseEvent) => {
+      // Le clic du milieu ne doit pas coller le presse-papier X11 ni faire defiler.
+      if (event.button === 1) event.preventDefault()
     }
 
     canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -790,6 +1222,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     canvas.addEventListener('pointerleave', onPointerLeave)
     canvas.addEventListener('dragover', onDragOver)
     canvas.addEventListener('drop', onDrop)
+    canvas.addEventListener('auxclick', onAuxClick)
     window.addEventListener('resize', resize)
     return () => {
       cancelAnimationFrame(raf)
@@ -801,9 +1234,13 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       canvas.removeEventListener('pointerleave', onPointerLeave)
       canvas.removeEventListener('dragover', onDragOver)
       canvas.removeEventListener('drop', onDrop)
+      canvas.removeEventListener('auxclick', onAuxClick)
       window.removeEventListener('resize', resize)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInteriorId, activeFloorId, testMode])
+
+  // --- Sauvegarde -------------------------------------------------------------------------
 
   const saveInterior = async () => {
     if (!activeInterior) return
@@ -830,79 +1267,34 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
   }
 
   const fitPlan = () => {
-    cameraRef.current = { cx: 0, cz: 0, zoom: 36 }
+    // Cadre sur ce qui existe, plutot que de revenir bêtement a l'origine.
+    const points: Point2[] = []
+    for (const wall of activeFloor?.walls ?? []) {
+      points.push({ x: wall.ax, z: wall.az }, { x: wall.bx, z: wall.bz })
+    }
+    for (const surface of activeFloor?.surfaces ?? []) {
+      for (const [x, z] of surface.pts) points.push({ x, z })
+    }
+    if (!points.length) {
+      cameraRef.current = { cx: 0, cz: 0, zoom: 42 }
+    } else {
+      const minX = Math.min(...points.map((p) => p.x))
+      const maxX = Math.max(...points.map((p) => p.x))
+      const minZ = Math.min(...points.map((p) => p.z))
+      const maxZ = Math.max(...points.map((p) => p.z))
+      const canvas = canvasRef.current
+      const spanX = Math.max(1, maxX - minX)
+      const spanZ = Math.max(1, maxZ - minZ)
+      const zoom =
+        canvas && canvas.clientWidth > 0
+          ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(canvas.clientWidth / (spanX * 1.3), canvas.clientHeight / (spanZ * 1.3))))
+          : 42
+      cameraRef.current = { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, zoom }
+    }
     setViewInfo({ ...cameraRef.current })
   }
 
-  const updateSelectedRoom = (recipe: (room: InteriorRoom) => InteriorRoom) => {
-    if (!selectedRoom) return
-    updateActiveFloor((floor) => ({
-      ...floor,
-      rooms: floor.rooms.map((room) => (room.id === selectedRoom.id ? recipe(room) : room)),
-    }))
-  }
-
-  /**
-   * Champ X ou Z d'un element ponctuel. Les portes et fenetres restent collees au mur le
-   * plus proche : on ne peut pas les poser dans le vide en tapant une coordonnee.
-   */
-  const editPointAxis = (axis: 'x' | 'z', raw: string) => {
-    const value = readNumberInput(raw)
-    if (!Number.isFinite(value)) return
-    updateSelectedPointItem((item) => {
-      const point = axis === 'x' ? { x: value, z: item.z } : { x: item.x, z: value }
-      if ((selected?.kind === 'door' || selected?.kind === 'window') && activeFloor) {
-        return { ...item, ...snapToNearestWall(point, activeFloor) }
-      }
-      return { ...item, ...point }
-    })
-  }
-
-  /** Champ numerique d'une piece : on ignore la saisie tant qu'elle n'est pas un nombre. */
-  const editRoomNumber = (raw: string, recipe: (room: InteriorRoom, value: number) => InteriorRoom) => {
-    const value = readNumberInput(raw)
-    if (!Number.isFinite(value)) return
-    updateSelectedRoom((room) => recipe(room, value))
-  }
-
-  const updateSelectedPointItem = (recipe: (item: NonNullable<typeof selectedPointItem>) => NonNullable<typeof selectedPointItem>) => {
-    if (!selected || !selectedPointItem) return
-    updateActiveFloor((floor) => {
-      if (selected.kind === 'door') {
-        return { ...floor, doors: floor.doors.map((item) => (item.id === selected.id ? (recipe(item) as InteriorDoor) : item)) }
-      }
-      if (selected.kind === 'window') {
-        return {
-          ...floor,
-          windows: floor.windows.map((item) => (item.id === selected.id ? (recipe(item) as InteriorWindow) : item)),
-        }
-      }
-      if (selected.kind === 'spawn') {
-        return {
-          ...floor,
-          spawnPoints: floor.spawnPoints.map((item) =>
-            item.id === selected.id ? (recipe(item) as InteriorSpawnPoint) : item,
-          ),
-        }
-      }
-      if (selected.kind === 'exit') {
-        return { ...floor, exits: floor.exits.map((item) => (item.id === selected.id ? (recipe(item) as InteriorExit) : item)) }
-      }
-      if (selected.kind === 'prop') {
-        return { ...floor, props: floor.props.map((item) => (item.id === selected.id ? (recipe(item) as InteriorProp) : item)) }
-      }
-      return floor
-    })
-  }
-
-  const activeItemCount = activeFloor
-    ? activeFloor.rooms.length +
-      activeFloor.doors.length +
-      activeFloor.windows.length +
-      activeFloor.props.length +
-      activeFloor.spawnPoints.length +
-      activeFloor.exits.length
-    : 0
+  const itemCount = countFloorItems(activeFloor)
 
   return (
     <div className={`editor-shell ${active ? '' : 'editor-hidden'}`} style={panels.shellStyle}>
@@ -920,24 +1312,20 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
           ))}
         </div>
         <div className="editor-actions">
-          <button type="button" onClick={undo} disabled={undoStackRef.current.length === 0} title="Ctrl+Z">
-            Undo
+          <button type="button" onClick={undo} disabled={!history.canUndo} title="Annuler (Ctrl+Z)">
+            ↶
           </button>
-          <button type="button" onClick={redo} disabled={redoStackRef.current.length === 0} title="Ctrl+Y">
-            Redo
+          <button type="button" onClick={redo} disabled={!history.canRedo} title="Retablir (Ctrl+Y)">
+            ↷
           </button>
-          <button type="button" onClick={() => (cameraRef.current.zoom = Math.min(MAX_ZOOM, cameraRef.current.zoom * 1.2))}>
-            +
-          </button>
-          <button type="button" onClick={() => (cameraRef.current.zoom = Math.max(MIN_ZOOM, cameraRef.current.zoom / 1.2))}>
-            -
+          <button type="button" onClick={fitPlan} title="Cadrer sur le plan">
+            Cadrer
           </button>
           <button
             type="button"
-            onClick={() => {
-              setTestMode(false)
-              fitPlan()
-            }}
+            onClick={() => setTestMode(false)}
+            className={testMode ? '' : 'active'}
+            disabled={!testMode}
           >
             Plan 2D
           </button>
@@ -948,11 +1336,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
             type="button"
             className={`primary ${activeIsDirty ? 'dirty' : ''}`}
             onClick={saveInterior}
-            title={
-              activeIsDirty
-                ? "Interieur ouvert modifie, pas encore sur le disque"
-                : 'Interieur ouvert a jour sur le disque'
-            }
+            title={activeIsDirty ? 'Interieur ouvert modifie, pas encore sur le disque' : 'Interieur ouvert a jour'}
           >
             Sauver{activeIsDirty ? ' •' : ''}
           </button>
@@ -987,10 +1371,6 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
               + Interieur
             </button>
           </div>
-          <p className="editor-note">
-            Pour rattacher un interieur a un lieu de la ville, passe par le module Carte : selectionne le
-            point et clique « Creer l&apos;interieur ».
-          </p>
         </section>
 
         <section>
@@ -1007,26 +1387,42 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
                   value={activeInterior.name}
                   onChange={(event) => {
                     const name = event.currentTarget.value
-                    updateActiveInteriorMeta((interior) => ({ ...interior, name }))
+                    updateActiveInterior((interior) => ({ ...interior, name }), 'interior-name')
                   }}
                 />
               </label>
-              <label>
-                <span>Type</span>
-                <select
-                  value={activeInterior.type}
-                  onChange={(event) => {
-                    const type = event.currentTarget.value as InteriorType
-                    updateActiveInteriorMeta((interior) => ({ ...interior, type }))
-                  }}
-                >
-                  {INTERIOR_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="field-pair">
+                <label>
+                  <span>Type</span>
+                  <select
+                    value={activeInterior.type}
+                    onChange={(event) => {
+                      const type = event.currentTarget.value as InteriorType
+                      updateActiveInterior((interior) => ({ ...interior, type }))
+                    }}
+                  >
+                    {INTERIOR_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Hauteur murs</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.1"
+                    value={activeInterior.defaultWallHeight}
+                    onChange={(event) => {
+                      const height = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(height) || height <= 0) return
+                      updateActiveInterior((interior) => ({ ...interior, defaultWallHeight: height }), 'interior-height')
+                    }}
+                  />
+                </label>
+              </div>
               <p className="editor-note">
                 {linkedMarker
                   ? `Ouvert depuis le point « ${linkedMarker.name} » sur la carte.`
@@ -1061,33 +1457,120 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         </section>
 
         <section>
-          <h2>Pieces rapides</h2>
-          <div className="editor-floor-tabs">
-            <button type="button" onClick={() => addPresetRoom('Piece 3x3', 3, 3)}>
-              Piece 3x3
-            </button>
-            <button type="button" onClick={() => addPresetRoom('Piece 4x5', 4, 5)}>
-              Piece 4x5
-            </button>
-            <button type="button" onClick={() => addPresetRoom('Couloir', 1.4, 5)}>
-              Couloir
-            </button>
-          </div>
+          <h2>Reglages d&apos;outil</h2>
+          <label className="layer-row">
+            <span className="layer-swatch" style={{ background: '#6de3ff' }} />
+            <span>Magnetisme</span>
+            <input
+              type="checkbox"
+              checked={snapEnabled}
+              onChange={(event) => setSnapEnabled(event.currentTarget.checked)}
+              aria-label="Activer le magnetisme"
+            />
+          </label>
+
+          {tool === 'opening' && (
+            <div className="tool-settings">
+              <span className="tool-settings-title">Type d&apos;ouverture</span>
+              <div className="editor-floor-tabs">
+                {(Object.keys(openingPresets) as InteriorOpeningKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={openingKind === kind ? 'active' : ''}
+                    onClick={() => setOpeningKind(kind)}
+                  >
+                    {openingPresets[kind].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tool === 'shape' && (
+            <div className="tool-settings">
+              <span className="tool-settings-title">Forme</span>
+              <div className="editor-floor-tabs">
+                <button type="button" className={shapeKind === 'circle' ? 'active' : ''} onClick={() => setShapeKind('circle')}>
+                  Rond
+                </button>
+                <button type="button" className={shapeKind === 'half' ? 'active' : ''} onClick={() => setShapeKind('half')}>
+                  Demi-cercle
+                </button>
+                <button type="button" className={shapeKind === 'polygon' ? 'active' : ''} onClick={() => setShapeKind('polygon')}>
+                  Polygone
+                </button>
+              </div>
+              {shapeKind === 'polygon' ? (
+                <label className="marker-form">
+                  <span>Cotes : {shapeSides}</span>
+                  <input
+                    type="range"
+                    min="3"
+                    max="12"
+                    step="1"
+                    value={shapeSides}
+                    onChange={(event) => setShapeSides(Number(event.currentTarget.value))}
+                  />
+                </label>
+              ) : (
+                <label className="marker-form">
+                  <span>Finesse : {shapeSegments} segments</span>
+                  <input
+                    type="range"
+                    min="6"
+                    max="48"
+                    step="2"
+                    value={shapeSegments}
+                    onChange={(event) => setShapeSegments(Number(event.currentTarget.value))}
+                  />
+                </label>
+              )}
+              <p className="editor-note">
+                Un rond est toujours une suite de segments. 16 suffisent en cartoon ; monter plus haut coute des
+                triangles sans que ca se voie.
+              </p>
+            </div>
+          )}
         </section>
 
         <section>
-          <h2>Navigation</h2>
-          <p className="editor-note">
-            Piece : cliquer-glisser sur la grille. Mur : cliquer un mur pour l'ouvrir ou le refermer.
-            Porte/fenetre/spawn/sortie/prop : cliquer pour placer. Molette pour
-            zoomer, clic-glisser le vide pour deplacer la camera, clic-glisser un element pour le bouger. Suppr efface,
-            Ctrl+Z annule, Ctrl+Y retablit, Ctrl+D duplique, V/R/P/F changent d'outil.
-          </p>
+          <h2>Aide</h2>
+          <p className="editor-note">{toolHints[tool]}</p>
+          <dl className="shortcut-list">
+            <div>
+              <dt>V / M / R</dt>
+              <dd>Selection / Mur / Piece</dd>
+            </div>
+            <div>
+              <dt>G / C</dt>
+              <dd>Sol / Forme ronde</dd>
+            </div>
+            <div>
+              <dt>O / X</dt>
+              <dd>Ouverture / Couper un mur</dd>
+            </div>
+            <div>
+              <dt>Maj</dt>
+              <dd>Bloque l&apos;angle sur 15°</dd>
+            </div>
+            <div>
+              <dt>Clic molette</dt>
+              <dd>Deplacer la vue</dd>
+            </div>
+            <div>
+              <dt>Suppr</dt>
+              <dd>Supprimer la selection</dd>
+            </div>
+            <div>
+              <dt>Ctrl+Z / Y</dt>
+              <dd>Annuler / retablir</dd>
+            </div>
+          </dl>
         </section>
       </aside>
 
       <main className="editor-map-panel interior-plan-panel">
-        {/* Poignees et boutons de volet : voir le commentaire equivalent dans EditorApp.tsx. */}
         {panels.renderHandle('left')}
         {panels.renderHandle('right')}
         <PanelToggle side="left" collapsed={panels.layout.leftCollapsed} onToggle={() => panels.toggle('left')} />
@@ -1124,9 +1607,11 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         <div className="editor-map-status">
           {testMode
             ? 'Test 3D : ZQSD pour bouger, Maj pour courir, Plan 2D pour revenir'
-            : mousePoint
-              ? `x ${round2(mousePoint.x)} m / z ${round2(mousePoint.z)} m`
-              : 'Survolez le plan'}
+            : chainStart
+              ? 'Chaine de murs en cours — Echap pour arreter'
+              : mousePoint
+                ? `x ${round2(mousePoint.x)} m / z ${round2(mousePoint.z)} m`
+                : 'Survolez le plan'}
         </div>
       </main>
 
@@ -1134,10 +1619,6 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         <section>
           <h2>Inspecteur</h2>
           <dl className="inspector-list">
-            <div>
-              <dt>Interieur</dt>
-              <dd>{activeInterior?.name ?? 'Aucun'}</dd>
-            </div>
             <div>
               <dt>Etage</dt>
               <dd>{activeFloor?.label ?? 'Aucun'}</dd>
@@ -1151,8 +1632,10 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
               <dd>{viewInfo.zoom.toFixed(0)} px/m</dd>
             </div>
             <div>
-              <dt>Objets</dt>
-              <dd>{activeItemCount}</dd>
+              <dt>Contenu</dt>
+              <dd>
+                {activeFloor?.walls.length ?? 0} murs · {activeFloor?.surfaces.length ?? 0} sols · {itemCount} objets
+              </dd>
             </div>
             <div>
               <dt>Etat</dt>
@@ -1161,9 +1644,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
             <div>
               <dt>A sauver</dt>
               <dd className={isDirty ? 'inspector-dirty' : ''}>
-                {isDirty
-                  ? `${dirtyInteriorIds.length} interieur(s) : ${dirtyInteriorIds.join(', ')}`
-                  : 'Rien, tout est sur le disque'}
+                {isDirty ? `${dirtyInteriorIds.length} interieur(s) : ${dirtyInteriorIds.join(', ')}` : 'Rien, tout est sur le disque'}
               </dd>
             </div>
           </dl>
@@ -1171,37 +1652,378 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
 
         <section>
           <h2>Selection</h2>
-          {selectedRoom ? (
+          {selectedWall ? (
             <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
               <label>
                 <span>Nom</span>
-                <input value={selectedRoom.name} onChange={(event) => updateSelectedRoom((room) => ({ ...room, name: event.currentTarget.value }))} />
+                <input
+                  value={selectedWall.name}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    updateWall(selectedWall.id, (wall) => ({ ...wall, name }), { coalesceKey: 'wall-name' })
+                  }}
+                />
               </label>
               <div className="field-pair">
                 <label>
-                  <span>X</span>
-                  <input type="number" step="0.5" value={selectedRoom.x} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, x: value }))} />
+                  <span>Longueur</span>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={round2(wallLength(selectedWall))}
+                    onChange={(event) => {
+                      const length = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(length) || length < MIN_WALL_LENGTH) return
+                      // On etire depuis A, en gardant la direction du mur.
+                      updateWall(
+                        selectedWall.id,
+                        (wall) => {
+                          const end = wallPointAt(wall, length)
+                          return { ...wall, bx: end.x, bz: end.z }
+                        },
+                        { coalesceKey: 'wall-length' },
+                      )
+                    }}
+                  />
                 </label>
                 <label>
-                  <span>Z</span>
-                  <input type="number" step="0.5" value={selectedRoom.z} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, z: value }))} />
+                  <span>Angle °</span>
+                  <input
+                    type="number"
+                    step="5"
+                    value={Math.round(wallAngleDegrees(selectedWall))}
+                    onChange={(event) => {
+                      const degrees = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(degrees)) return
+                      updateWall(
+                        selectedWall.id,
+                        (wall) => {
+                          const length = wallLength(wall)
+                          const radians = (degrees * Math.PI) / 180
+                          return { ...wall, bx: wall.ax + Math.cos(radians) * length, bz: wall.az + Math.sin(radians) * length }
+                        },
+                        { coalesceKey: 'wall-angle' },
+                      )
+                    }}
+                  />
                 </label>
               </div>
               <div className="field-pair">
                 <label>
-                  <span>Largeur</span>
-                  <input type="number" min="0.5" step="0.5" value={selectedRoom.w} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, w: Math.max(0.5, value) }))} />
+                  <span>Epaisseur</span>
+                  <input
+                    type="number"
+                    min="0.02"
+                    step="0.02"
+                    value={selectedWall.thickness}
+                    onChange={(event) => {
+                      const thickness = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(thickness) || thickness <= 0) return
+                      updateWall(selectedWall.id, (wall) => ({ ...wall, thickness }), { coalesceKey: 'wall-thickness' })
+                    }}
+                  />
                 </label>
                 <label>
-                  <span>Profondeur</span>
-                  <input type="number" min="0.5" step="0.5" value={selectedRoom.d} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, d: Math.max(0.5, value) }))} />
+                  <span>Hauteur</span>
+                  <input
+                    type="number"
+                    min="0.2"
+                    step="0.1"
+                    placeholder={String(activeInterior?.defaultWallHeight ?? 2.7)}
+                    value={selectedWall.height ?? ''}
+                    onChange={(event) => {
+                      const raw = event.currentTarget.value
+                      const height = readNumberInput(raw)
+                      updateWall(
+                        selectedWall.id,
+                        (wall) => ({ ...wall, height: raw.trim() === '' ? undefined : Number.isFinite(height) && height > 0 ? height : wall.height }),
+                        { coalesceKey: 'wall-height' },
+                      )
+                    }}
+                  />
                 </label>
               </div>
+              <div className="field-pair">
+                <label>
+                  <span>A — x</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={selectedWall.ax}
+                    onChange={(event) => {
+                      const value = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      updateWall(selectedWall.id, (wall) => ({ ...wall, ax: value }), { coalesceKey: 'wall-ax' })
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>A — z</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={selectedWall.az}
+                    onChange={(event) => {
+                      const value = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      updateWall(selectedWall.id, (wall) => ({ ...wall, az: value }), { coalesceKey: 'wall-az' })
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="field-pair">
+                <label>
+                  <span>B — x</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={selectedWall.bx}
+                    onChange={(event) => {
+                      const value = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      updateWall(selectedWall.id, (wall) => ({ ...wall, bx: value }), { coalesceKey: 'wall-bx' })
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>B — z</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={selectedWall.bz}
+                    onChange={(event) => {
+                      const value = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(value)) return
+                      updateWall(selectedWall.id, (wall) => ({ ...wall, bz: value }), { coalesceKey: 'wall-bz' })
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="tool-settings">
+                <span className="tool-settings-title">Ouvertures ({selectedWall.openings.length})</span>
+                {selectedWall.openings.length ? (
+                  <div className="marker-list">
+                    {selectedWall.openings.map((opening) => (
+                      <button
+                        key={opening.id}
+                        type="button"
+                        className="marker-row"
+                        onClick={() => setSelected({ kind: 'opening', wallId: selectedWall.id, id: opening.id })}
+                      >
+                        <span
+                          className="layer-swatch"
+                          style={{ background: opening.kind === 'door' ? '#d99a45' : opening.kind === 'window' ? '#62b6cb' : '#8b949c' }}
+                        />
+                        <span>
+                          <strong>{opening.name}</strong>
+                          <small>
+                            a {round2(opening.offset)} m · {round2(opening.width)} m de large
+                          </small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="editor-note">Aucune. Outil Ouverture (O), puis glisser sur ce mur.</p>
+                )}
+              </div>
+
               <div className="form-actions">
-                <button type="button" onClick={duplicateSelectedItem}>
+                <button type="button" className="secondary-action" onClick={duplicateSelection} title="Ctrl+D">
                   Dupliquer
                 </button>
-                <button type="button" className="danger" onClick={deleteSelectedItem}>
+                <button type="button" className="danger" onClick={deleteSelection} title="Suppr">
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          ) : selectedOpening && selectedOpeningWall ? (
+            <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Nom</span>
+                <input
+                  value={selectedOpening.name}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({ ...opening, name }), {
+                      coalesceKey: 'opening-name',
+                    })
+                  }}
+                />
+              </label>
+              <label>
+                <span>Type</span>
+                <select
+                  value={selectedOpening.kind}
+                  onChange={(event) => {
+                    const kind = event.currentTarget.value as InteriorOpeningKind
+                    const preset = openingPresets[kind]
+                    updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({
+                      ...opening,
+                      kind,
+                      sillHeight: preset.sillHeight,
+                      topHeight: preset.topHeight,
+                    }))
+                  }}
+                >
+                  {(Object.keys(openingPresets) as InteriorOpeningKind[]).map((kind) => (
+                    <option key={kind} value={kind}>
+                      {openingPresets[kind].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="field-pair">
+                <label>
+                  <span>Position</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={round2(selectedOpening.offset)}
+                    onChange={(event) => {
+                      const offset = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(offset)) return
+                      updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({ ...opening, offset }), {
+                        coalesceKey: 'opening-offset',
+                      })
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Largeur</span>
+                  <input
+                    type="number"
+                    min="0.2"
+                    step="0.1"
+                    value={round2(selectedOpening.width)}
+                    onChange={(event) => {
+                      const width = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(width) || width <= 0) return
+                      updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({ ...opening, width }), {
+                        coalesceKey: 'opening-width',
+                      })
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="field-pair">
+                <label>
+                  <span>Bas</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={selectedOpening.sillHeight}
+                    onChange={(event) => {
+                      const sillHeight = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(sillHeight) || sillHeight < 0) return
+                      updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({ ...opening, sillHeight }), {
+                        coalesceKey: 'opening-sill',
+                      })
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Haut</span>
+                  <input
+                    type="number"
+                    min="0.2"
+                    step="0.1"
+                    value={selectedOpening.topHeight}
+                    onChange={(event) => {
+                      const topHeight = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(topHeight) || topHeight <= 0) return
+                      updateOpening(selectedOpeningWall.id, selectedOpening.id, (opening) => ({ ...opening, topHeight }), {
+                        coalesceKey: 'opening-top',
+                      })
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="editor-note">
+                Une ouverture qui touche le sol laisse passer le joueur. Une fenetre (bas &gt; 0) ne laisse passer que
+                la lumiere.
+              </p>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => setSelected({ kind: 'wall', id: selectedOpeningWall.id })}
+                >
+                  Voir le mur
+                </button>
+                <button type="button" className="danger" onClick={deleteSelection}>
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          ) : selectedSurface ? (
+            <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Nom</span>
+                <input
+                  value={selectedSurface.name}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    updateSurface(selectedSurface.id, (surface) => ({ ...surface, name }), { coalesceKey: 'surface-name' })
+                  }}
+                />
+              </label>
+              <p className="editor-note">
+                {selectedSurface.pts.length} sommets. Selectionne le sol puis attrape un sommet pour le deformer.
+                Suppr sur un sommet l&apos;enleve, Suppr sur le sol le supprime entier.
+              </p>
+              {selected?.kind === 'surfaceVertex' && selectedSurface.pts[selected.index] && (
+                <div className="field-pair">
+                  <label>
+                    <span>Sommet x</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={selectedSurface.pts[selected.index][0]}
+                      onChange={(event) => {
+                        const value = readNumberInput(event.currentTarget.value)
+                        if (!Number.isFinite(value)) return
+                        updateSurface(
+                          selectedSurface.id,
+                          (surface) => ({
+                            ...surface,
+                            pts: surface.pts.map((pt, index) => (index === selected.index ? ([value, pt[1]] as [number, number]) : pt)),
+                          }),
+                          { coalesceKey: 'vertex-x' },
+                        )
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>Sommet z</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={selectedSurface.pts[selected.index][1]}
+                      onChange={(event) => {
+                        const value = readNumberInput(event.currentTarget.value)
+                        if (!Number.isFinite(value)) return
+                        updateSurface(
+                          selectedSurface.id,
+                          (surface) => ({
+                            ...surface,
+                            pts: surface.pts.map((pt, index) => (index === selected.index ? ([pt[0], value] as [number, number]) : pt)),
+                          }),
+                          { coalesceKey: 'vertex-z' },
+                        )
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="form-actions">
+                <button type="button" className="secondary-action" onClick={duplicateSelection} title="Ctrl+D">
+                  Dupliquer
+                </button>
+                <button type="button" className="danger" onClick={deleteSelection}>
                   Supprimer
                 </button>
               </div>
@@ -1212,124 +2034,40 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
                 <span>Nom</span>
                 <input
                   value={selectedPointItem.name}
-                  onChange={(event) => updateSelectedPointItem((item) => ({ ...item, name: event.currentTarget.value }))}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    const id = selectedPointItem.id
+                    const kind = selected?.kind
+                    updateActiveFloor(
+                      (floor) => ({
+                        ...floor,
+                        spawnPoints:
+                          kind === 'spawn' ? floor.spawnPoints.map((item) => (item.id === id ? { ...item, name } : item)) : floor.spawnPoints,
+                        exits: kind === 'exit' ? floor.exits.map((item) => (item.id === id ? { ...item, name } : item)) : floor.exits,
+                        props: kind === 'prop' ? floor.props.map((item) => (item.id === id ? { ...item, name } : item)) : floor.props,
+                      }),
+                      { coalesceKey: 'point-name' },
+                    )
+                  }}
                 />
               </label>
               <div className="field-pair">
                 <label>
                   <span>X</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={selectedPointItem.x}
-                    onChange={(event) => editPointAxis('x', event.currentTarget.value)}
-                  />
+                  <input type="number" step="0.1" value={selectedPointItem.x} readOnly />
                 </label>
                 <label>
                   <span>Z</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={selectedPointItem.z}
-                    onChange={(event) => editPointAxis('z', event.currentTarget.value)}
-                  />
+                  <input type="number" step="0.1" value={selectedPointItem.z} readOnly />
                 </label>
               </div>
-              {'rotation' in selectedPointItem && selected?.kind !== 'door' && selected?.kind !== 'window' && (
-                <label>
-                  <span>Rotation degres</span>
-                  <input
-                    type="number"
-                    step="15"
-                    value={Math.round((selectedPointItem.rotation * 180) / Math.PI)}
-                    onChange={(event) => {
-                      const degrees = readNumberInput(event.currentTarget.value)
-                      if (!Number.isFinite(degrees)) return
-                      updateSelectedPointItem((item) => ({ ...item, rotation: (degrees * Math.PI) / 180 }))
-                    }}
-                  />
-                </label>
-              )}
-              {(selected?.kind === 'door' || selected?.kind === 'window') && activeFloor && (
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() =>
-                    updateSelectedPointItem((item) => ({
-                      ...item,
-                      ...snapToNearestWall({ x: item.x, z: item.z }, activeFloor),
-                    }))
-                  }
-                >
-                  Recaler au mur
-                </button>
-              )}
-              {'width' in selectedPointItem && (
-                <label>
-                  <span>Largeur</span>
-                  <input
-                    type="number"
-                    min="0.2"
-                    step="0.1"
-                    value={Number((selectedPointItem as { width: number }).width)}
-                    onChange={(event) => {
-                      const width = readNumberInput(event.currentTarget.value)
-                      if (!Number.isFinite(width)) return
-                      updateSelectedPointItem(
-                        (item) => ({ ...item, width: Math.max(0.2, width) }) as NonNullable<typeof selectedPointItem>,
-                      )
-                    }}
-                  />
-                </label>
-              )}
-              {'assetId' in selectedPointItem && (
-                <label>
-                  <span>Asset</span>
-                  <select
-                    value={String((selectedPointItem as { assetId: string }).assetId)}
-                    onChange={(event) =>
-                      updateSelectedPointItem((item) => ({
-                        ...item,
-                        assetId: event.currentTarget.value,
-                      }) as NonNullable<typeof selectedPointItem>)
-                    }
-                  >
-                    {PLACEHOLDER_ASSETS.map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <p className="editor-note">Glisse l&apos;element sur le plan pour le deplacer.</p>
               <div className="form-actions">
-                <button type="button" onClick={duplicateSelectedItem}>
-                  Dupliquer
-                </button>
-                <button type="button" className="danger" onClick={deleteSelectedItem}>
+                <button type="button" className="danger" onClick={deleteSelection}>
                   Supprimer
                 </button>
               </div>
             </form>
-          ) : selected?.kind === 'wall' && activeFloor ? (
-            <div className="marker-form">
-              <p className="editor-note">
-                Mur {selected.side} de la piece {activeFloor.rooms.find((room) => room.id === selected.roomId)?.name ?? selected.roomId}.
-              </p>
-              <button type="button" className="secondary-action" onClick={() => toggleWallRemoval(selected.roomId, selected.side)}>
-                {activeFloor.rooms.find((room) => room.id === selected.roomId) &&
-                isWallRemoved(
-                  activeFloor.rooms.find((room) => room.id === selected.roomId)!,
-                  activeFloor.rooms,
-                  selected.side,
-                  activeFloor.removedWalls ?? [],
-                )
-                  ? 'Refermer ce mur'
-                  : 'Supprimer ce mur'}
-              </button>
-            </div>
-          ) : selected ? (
-            <p className="editor-note">{selected.kind} selectionne. L'inspecteur detaille arrive ensuite.</p>
           ) : (
             <p className="editor-note">Aucun element selectionne.</p>
           )}
@@ -1354,200 +2092,4 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       </aside>
     </div>
   )
-}
-
-function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, camera: { cx: number; cz: number; zoom: number }) {
-  const major = 2
-  const minX = camera.cx - width / 2 / camera.zoom
-  const maxX = camera.cx + width / 2 / camera.zoom
-  const minZ = camera.cz - height / 2 / camera.zoom
-  const maxZ = camera.cz + height / 2 / camera.zoom
-
-  ctx.save()
-  for (let x = Math.floor(minX / GRID_STEP) * GRID_STEP; x <= maxX; x += GRID_STEP) {
-    const sx = width / 2 + (x - camera.cx) * camera.zoom
-    ctx.beginPath()
-    ctx.moveTo(sx, 0)
-    ctx.lineTo(sx, height)
-    ctx.strokeStyle = Math.abs(x % major) < 0.001 ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.055)'
-    ctx.lineWidth = Math.abs(x % major) < 0.001 ? 1 : 0.5
-    ctx.stroke()
-  }
-  for (let z = Math.floor(minZ / GRID_STEP) * GRID_STEP; z <= maxZ; z += GRID_STEP) {
-    const sy = height / 2 + (z - camera.cz) * camera.zoom
-    ctx.beginPath()
-    ctx.moveTo(0, sy)
-    ctx.lineTo(width, sy)
-    ctx.strokeStyle = Math.abs(z % major) < 0.001 ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.055)'
-    ctx.lineWidth = Math.abs(z % major) < 0.001 ? 1 : 0.5
-    ctx.stroke()
-  }
-  ctx.restore()
-}
-
-function drawFloor(
-  ctx: CanvasRenderingContext2D,
-  floor: InteriorFloor,
-  toScreen: (point: PlanPoint) => [number, number],
-  selected: SelectedInteriorItem | null,
-) {
-  for (const room of floor.rooms) {
-    const [x, y] = toScreen({ x: room.x, z: room.z })
-    const [x2, y2] = toScreen({ x: room.x + room.w, z: room.z + room.d })
-    ctx.fillStyle = selected?.kind === 'room' && selected.id === room.id ? '#5f6f4a' : '#4d5946'
-    ctx.fillRect(x, y, x2 - x, y2 - y)
-    ctx.lineWidth = 1
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
-    ctx.strokeRect(x, y, x2 - x, y2 - y)
-  }
-
-  for (const room of floor.rooms) {
-    for (const wall of getVisibleWallSegments(room, floor.rooms, 0.12, floor.removedWalls ?? [])) {
-      const halfW = wall.w / 2
-      const halfD = wall.d / 2
-      const [aX, aY] = toScreen({ x: wall.x - halfW, z: wall.z - halfD })
-      const [bX, bY] = toScreen({ x: wall.x + halfW, z: wall.z + halfD })
-      const selectedWall = selected?.kind === 'wall' && selected.roomId === wall.roomId && selected.side === wall.side
-      const removed = isWallRemoved(room, floor.rooms, wall.side, floor.removedWalls ?? [])
-      ctx.fillStyle = selectedWall ? '#fff7dc' : removed ? '#5b5148' : '#d7c8af'
-      ctx.fillRect(aX, aY, bX - aX, bY - aY)
-    }
-    for (const wall of getWallSegments(room, 0.12)) {
-      if (!isWallRemoved(room, floor.rooms, wall.side, floor.removedWalls ?? [])) continue
-      const halfW = wall.w / 2
-      const halfD = wall.d / 2
-      const [aX, aY] = toScreen({ x: wall.x - halfW, z: wall.z - halfD })
-      const [bX, bY] = toScreen({ x: wall.x + halfW, z: wall.z + halfD })
-      ctx.save()
-      ctx.setLineDash([6, 5])
-      ctx.lineWidth = selected?.kind === 'wall' && selected.roomId === wall.roomId && selected.side === wall.side ? 3 : 2
-      ctx.strokeStyle = '#f0b84d'
-      ctx.strokeRect(aX, aY, bX - aX, bY - aY)
-      ctx.restore()
-    }
-  }
-
-  for (const room of floor.rooms) {
-    const [x, y] = toScreen({ x: room.x, z: room.z })
-    ctx.fillStyle = '#fff7dc'
-    ctx.font = '750 12px system-ui'
-    ctx.fillText(room.name, x + 8, y + 18)
-  }
-
-  floor.doors.forEach((door) =>
-    drawSegmentItem(ctx, toScreen, door.x, door.z, door.rotation, door.width, '#d99a45', 'P', selected?.kind === 'door' && selected.id === door.id),
-  )
-  floor.windows.forEach((windowItem) =>
-    drawSegmentItem(
-      ctx,
-      toScreen,
-      windowItem.x,
-      windowItem.z,
-      windowItem.rotation,
-      windowItem.width,
-      '#62b6cb',
-      'F',
-      selected?.kind === 'window' && selected.id === windowItem.id,
-      true,
-    ),
-  )
-  floor.props.forEach((prop) => {
-    const asset = PLACEHOLDER_ASSETS.find((item) => item.id === prop.assetId) ?? PLACEHOLDER_ASSETS[0]
-    drawPoint(ctx, toScreen, prop.x, prop.z, asset.color, asset.label[0] ?? 'O', selected?.kind === 'prop' && selected.id === prop.id)
-  })
-  floor.spawnPoints.forEach((spawn) => drawPoint(ctx, toScreen, spawn.x, spawn.z, '#e6493f', 'S', selected?.kind === 'spawn' && selected.id === spawn.id))
-  floor.exits.forEach((exit) => drawPoint(ctx, toScreen, exit.x, exit.z, '#4dab5f', 'X', selected?.kind === 'exit' && selected.id === exit.id))
-}
-
-function drawSegmentItem(
-  ctx: CanvasRenderingContext2D,
-  toScreen: (point: PlanPoint) => [number, number],
-  x: number,
-  z: number,
-  rotation: number,
-  width: number,
-  color: string,
-  label: string,
-  selected: boolean,
-  framed = false,
-) {
-  const half = width / 2
-  const dx = Math.cos(rotation) * half
-  const dz = -Math.sin(rotation) * half
-  const [ax, ay] = toScreen({ x: x - dx, z: z - dz })
-  const [bx, by] = toScreen({ x: x + dx, z: z + dz })
-  const [cx, cy] = toScreen({ x, z })
-
-  ctx.save()
-  ctx.lineCap = 'round'
-  ctx.lineWidth = selected ? 8 : 6
-  ctx.strokeStyle = selected ? '#fff7dc' : '#ffffff'
-  ctx.beginPath()
-  ctx.moveTo(ax, ay)
-  ctx.lineTo(bx, by)
-  ctx.stroke()
-  ctx.lineWidth = selected ? 4 : 3
-  ctx.strokeStyle = color
-  ctx.beginPath()
-  ctx.moveTo(ax, ay)
-  ctx.lineTo(bx, by)
-  ctx.stroke()
-  if (framed) {
-    ctx.lineWidth = 2
-    ctx.strokeStyle = '#e7fbff'
-    ctx.strokeRect(cx - Math.abs(bx - ax) / 2 - 3, cy - Math.abs(by - ay) / 2 - 6, Math.max(14, Math.abs(bx - ax) + 6), Math.max(12, Math.abs(by - ay) + 12))
-  }
-  ctx.fillStyle = '#111'
-  ctx.font = '900 10px system-ui'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(label, cx, cy - 10)
-  ctx.restore()
-}
-
-function drawPoint(
-  ctx: CanvasRenderingContext2D,
-  toScreen: (point: PlanPoint) => [number, number],
-  x: number,
-  z: number,
-  color: string,
-  label: string,
-  selected = false,
-) {
-  const [sx, sy] = toScreen({ x, z })
-  ctx.beginPath()
-  ctx.arc(sx, sy, selected ? 10 : 8, 0, Math.PI * 2)
-  ctx.fillStyle = color
-  ctx.fill()
-  ctx.lineWidth = selected ? 3 : 2
-  ctx.strokeStyle = selected ? '#fff7dc' : '#ffffff'
-  ctx.stroke()
-  ctx.fillStyle = '#111'
-  ctx.font = '900 10px system-ui'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(label, sx, sy + 0.5)
-  ctx.textAlign = 'start'
-  ctx.textBaseline = 'alphabetic'
-}
-
-function drawRoomPreview(
-  ctx: CanvasRenderingContext2D,
-  start: PlanPoint,
-  current: PlanPoint,
-  toScreen: (point: PlanPoint) => [number, number],
-) {
-  const x = snap(Math.min(start.x, current.x))
-  const z = snap(Math.min(start.z, current.z))
-  const w = snap(Math.abs(current.x - start.x))
-  const d = snap(Math.abs(current.z - start.z))
-  const [sx, sy] = toScreen({ x, z })
-  const [ex, ey] = toScreen({ x: x + w, z: z + d })
-  ctx.save()
-  ctx.fillStyle = 'rgba(240,184,77,0.18)'
-  ctx.strokeStyle = '#f0b84d'
-  ctx.lineWidth = 2
-  ctx.fillRect(sx, sy, ex - sx, ey - sy)
-  ctx.strokeRect(sx, sy, ex - sx, ey - sy)
-  ctx.restore()
 }

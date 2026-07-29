@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": "poi_ms6bvm6q",
+    "name": "kebab",
+    "type": "shop",
+    "position": {
+      "x": -27.36,
+      "z": 42.35
+    },
+    "color": "#e6493f",
+    "icon": "test",
+    "interactionRadius": 3,
+    "prompt": "",
+    "visibleInGame": true,
+    "visibleOnMap": true,
+    "devOnly": true,
+    "tags": [
+      "test"
+    ]
+  }
+]

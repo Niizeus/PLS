@@ -1,0 +1,20 @@
+{
+  "player": {
+    "WALK_SPEED": 2.3,
+    "RUN_SPEED": 5,
+    "CROUCH_SPEED": 2
+  },
+  "vehicles": {
+    "car": {
+      "STEER_RESPONSE": 13.3,
+      "BRAKE_FORCE": 20008
+    },
+    "scooter": {
+      "MAX_STEER_ANGLE": 0.69,
+      "STEER_RESPONSE": 16,
+      "GRIP": 4.4,
+      "BRAKE_FORCE": 3377,
+      "DRAG": 0.471
+    }
+  }
+}

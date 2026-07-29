@@ -54,10 +54,6 @@ export default function TimeDevControls() {
         store.setPaused(false)
         store.setTimeScale(nextScale)
       }
-      if (event.code === 'F2') {
-        event.preventDefault()
-        setNextNight()
-      }
       if (event.code === 'F7') {
         event.preventDefault()
         setHour(12)
@@ -74,6 +70,10 @@ export default function TimeDevControls() {
       if (event.code === 'F10') {
         event.preventDefault()
         setHour(5.5)
+      }
+      if (event.code === 'F11') {
+        event.preventDefault()
+        setNextNight()
       }
     }
 

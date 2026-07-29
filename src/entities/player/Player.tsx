@@ -3,12 +3,12 @@ import * as THREE from 'three'
 import { useKeyboard } from '../../gameplay/input/useKeyboard'
 import { useMouse } from '../../gameplay/input/useMouse'
 import { usePlayerMovement } from './usePlayerMovement'
-import { PLAYER } from './playerConfig'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { useCharacterStatsStore } from '../../gameplay/stats/characterStatsStore'
 import { SPAWN } from '../../world/beauvais/cityData'
 import { groundHeight } from '../../world/beauvais/roadway'
 import PlayerModel from './PlayerModel'
+import { getPlayerTuning } from '../../devtools/devTuningStore'
 
 /**
  * Le joueur (Pierrot).
@@ -53,7 +53,7 @@ export default function Player() {
   usePlayerMovement(groupRef, keys, mouse)
 
   return (
-    <group ref={groupRef} position={[SPAWN.x, groundHeight(SPAWN.x, SPAWN.z) + PLAYER.BODY_HEIGHT, SPAWN.z]}>
+    <group ref={groupRef} position={[SPAWN.x, groundHeight(SPAWN.x, SPAWN.z) + getPlayerTuning().BODY_HEIGHT, SPAWN.z]}>
       <Suspense fallback={null}>
         <PlayerModel />
       </Suspense>

@@ -7,7 +7,8 @@ import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { useScooterStore } from './scooterStore'
 import { FRAME } from '../../core/framePriority'
-import { SCOOTER, SCOOTER_COLORS } from './scooterConfig'
+import { getVehicleTuning } from '../../devtools/devTuningStore'
+import { SCOOTER_COLORS } from './scooterConfig'
 
 /**
  * Le scooter (placeholder cartoon en primitives).
@@ -29,7 +30,7 @@ export default function Scooter() {
     if (riding) {
       const player = usePlayerStore.getState().playerObject
       if (player) {
-        g.position.set(player.position.x, player.position.y - SCOOTER.SEAT_HEIGHT, player.position.z)
+        g.position.set(player.position.x, player.position.y - getVehicleTuning('scooter').SEAT_HEIGHT, player.position.z)
         g.rotation.y = player.rotation.y
       }
     } else {

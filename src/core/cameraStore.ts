@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getCameraTuning } from '../devtools/devTuningStore'
 
 /**
  * Orientation de la caméra 3e personne, pilotée à la souris.
@@ -40,10 +41,8 @@ interface CameraState {
   flushRotation: () => void
 }
 
-const SENSITIVITY = 0.0025 // radians par pixel de souris
 // Axe vertical inversé : souris vers le haut → la vue baisse (façon pilotage d'avion).
 // Passe à false pour revenir à l'autre sens.
-const INVERT_Y = true
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -75,9 +74,14 @@ export const useCameraStore = create<CameraState>((set) => ({
     const dy = pendingY
     pendingX = 0
     pendingY = 0
+    const tuning = getCameraTuning()
     set((s) => ({
-      yaw: s.yaw - dx * SENSITIVITY, // souris à droite → la vue tourne à droite
-      pitch: clamp(s.pitch + (INVERT_Y ? 1 : -1) * dy * SENSITIVITY, PITCH_MIN, PITCH_MAX),
+      yaw: s.yaw - dx * tuning.SENSITIVITY, // souris à droite → la vue tourne à droite
+      pitch: clamp(
+        s.pitch + (tuning.INVERT_Y >= 0.5 ? 1 : -1) * dy * tuning.SENSITIVITY,
+        tuning.PITCH_MIN,
+        tuning.PITCH_MAX,
+      ),
     }))
   },
 }))

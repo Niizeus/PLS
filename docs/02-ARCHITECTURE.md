@@ -21,6 +21,7 @@ PLS/
     ├── entities/          ← personnages & objets (1 fichier par entité)
     ├── gameplay/          ← règles du jeu : actions, quêtes, score, "actions mauvaises"
     ├── ui/                ← interface 2D : menus, HUD, dialogues (composants React)
+    ├── devtools/          ← outils de debug in-game actifs seulement en DEV
     ├── editor/            ← outil web dev-only (`editor.html`) : carte, futurs outils de production
     ├── shaders/           ← cell-shading / effets visuels (GLSL)
     ├── assets/            ← modèles 3D, sons, images du jeu
@@ -138,6 +139,7 @@ L'ordre est maintenant explicite, via les constantes de `FRAME` :
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
 | Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. |
+| Un paramètre de gameplay à régler en live | `src/devtools/devTuningSchema.ts`, puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/import un JSON d'overrides. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
@@ -148,3 +150,38 @@ L'ordre est maintenant explicite, via les constantes de `FRAME` :
 
 Note editeur : `world/World.tsx` peut etre monte avec `mode="editor"` par `src/editor/` pour elargir
 le streaming visuel local de Beauvais. Le mode par defaut reste `game`, utilise par le jeu principal.
+
+---
+
+## Outil dev in-game (`F2`)
+
+Le jeu principal monte un panneau de reglages dev-only dans `src/devtools/`. Il n'existe qu'en mode
+Vite DEV (`import.meta.env.DEV`) et sert a tester vite les valeurs de feeling sans recompiler :
+
+- `DevToolsControls.tsx` ecoute `F2` pour ouvrir/fermer le panneau, et `Escape` pour fermer.
+- `DevToolsPanel.tsx` affiche les onglets Joueur, Voiture, Scooter, Camera, Inventaire, Stats,
+  Temps et JSON.
+- `devTuningSchema.ts` est le registre des reglages exposes : label, chemin JSON, bornes, pas.
+- `devTuningStore.ts` charge d'abord `public/dev/dev-tuning.json`, ajoute les overrides locaux
+  sauvegardes en `localStorage`, puis expose les fonctions de lecture (`getPlayerTuning()`,
+  `getVehicleTuning(...)`, `getCameraTuning()`, etc.) pour les boucles de jeu.
+- `public/dev/dev-tuning.json` est le fichier officiel de reglages DEV du projet. Il peut rester
+  vide (`{}`) tant qu'aucun reglage n'est valide.
+- `public/dev/dev-tuning.example.json` donne un exemple de fichier d'overrides partageable.
+
+Flux prevu : regler en jeu avec `F2`, aller dans l'onglet JSON, copier l'export, puis remplacer le
+contenu de `public/dev/dev-tuning.json` quand le reglage est valide pour tout le projet. Le bouton
+`Ecrire dev-tuning.json` fait cette ecriture directement via Vite, apres une confirmation explicite,
+et uniquement pendant `npm run dev`. La route serveur associee (`/__pls/dev-tuning`) n'ecrit que ce
+fichier-la. `Reset local` efface seulement les essais du navigateur ; il ne touche pas au fichier
+projet. `Recharger projet` relit `public/dev/dev-tuning.json` sans relancer Vite.
+
+Regle d'ajout : on expose seulement un parametre utile a regler pendant le dev. Si une valeur est
+juste interne, derivee, ou dangereuse sans contexte, elle reste dans son module d'origine. Pour ajouter
+un parametre deja lu par le gameplay, ajoute une entree dans `DEV_TUNING_FIELDS`. Pour un nouveau
+systeme, cree d'abord son type/default clair, puis ajoute une fonction de lecture equivalent a
+`getPlayerTuning()`.
+
+`F2` est reserve a cet outil. Les raccourcis temps restent dans `TimeDevControls.tsx` : `F6` cycle la
+vitesse, `F7` met midi, `F8` met nuit, `F9` pause/play, `F10` met l'aube, `F11` saute a la prochaine
+nuit.

@@ -1,6 +1,6 @@
 import { ITEMS_BY_ID, type ItemEffectKey } from '../../data/items'
 import type { EquippedItems, InventoryEntry } from '../inventory/inventoryStore'
-import { getInventoryWeight, MAX_CARRY_WEIGHT } from '../inventory/inventoryWeight'
+import { getInventoryWeight, getMaxCarryWeight } from '../inventory/inventoryWeight'
 import type { ActiveStatusEffect, CharacterStats } from './characterStatsStore'
 
 export const STAT_KEYS: ItemEffectKey[] = [
@@ -67,7 +67,7 @@ export function getMovementSpeedMultiplier(effectiveStats: CharacterStats, inven
   const hungerPenalty = effectiveStats.hunger < 20 ? 0.86 : 1
   const thirstPenalty = effectiveStats.thirst < 20 ? 0.82 : 1
   const mentalPenalty = effectiveStats.mental < 15 ? 0.9 : 1
-  const carriedRatio = getInventoryWeight(inventoryItems) / MAX_CARRY_WEIGHT
+  const carriedRatio = getInventoryWeight(inventoryItems) / getMaxCarryWeight()
   const weightPenalty = carriedRatio > 0.72 ? 1 - (carriedRatio - 0.72) * 0.45 : 1
 
   return Math.min(1.45, Math.max(0.55, statBonus * healthPenalty * hungerPenalty * thirstPenalty * mentalPenalty * weightPenalty))

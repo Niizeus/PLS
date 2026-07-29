@@ -1,0 +1,28 @@
+{
+  "player": {
+    "WALK_SPEED": 4.5,
+    "RUN_SPEED": 8.5,
+    "JUMP_SPEED": 6
+  },
+  "vehicles": {
+    "car": {
+      "GRIP": 7.5,
+      "MAX_STEER_ANGLE": 0.55,
+      "DRAG": 0.431
+    },
+    "scooter": {
+      "GRIP": 11,
+      "MAX_STEER_ANGLE": 0.72,
+      "DRAG": 0.582
+    }
+  },
+  "camera": {
+    "SENSITIVITY": 0.0025,
+    "PITCH_MIN": -0.45,
+    "PITCH_MAX": 1.35,
+    "INVERT_Y": 1
+  },
+  "inventory": {
+    "MAX_CARRY_WEIGHT": 18
+  }
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ITEMS_BY_ID, type EquipmentSlot, type ItemCategory, type ItemEffectKey } from '../data/items'
 import { KEY } from '../gameplay/input/keyMap'
 import { QUICK_SLOT_IDS, useInventoryStore } from '../gameplay/inventory/inventoryStore'
-import { formatWeight, getInventoryWeight, MAX_CARRY_WEIGHT } from '../gameplay/inventory/inventoryWeight'
+import { formatWeight, getInventoryWeight, getMaxCarryWeight } from '../gameplay/inventory/inventoryWeight'
 import { usePickupStore } from '../gameplay/inventory/pickupStore'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { isBlocked } from '../world/beauvais/collision'
@@ -132,7 +132,8 @@ export default function InventoryPanel() {
     [activeCategory, items, sortMode],
   )
   const totalWeight = useMemo(() => getInventoryWeight(items), [items])
-  const weightRatio = Math.min(1, totalWeight / MAX_CARRY_WEIGHT)
+  const maxCarryWeight = getMaxCarryWeight()
+  const weightRatio = Math.min(1, totalWeight / maxCarryWeight)
   const selectedItem = selectedItemId ? ITEMS_BY_ID[selectedItemId] : null
   const selectedEntry = selectedItemId ? items.find((entry) => entry.itemId === selectedItemId) : null
   const occupiedSlot = selectedItemId
@@ -171,7 +172,7 @@ export default function InventoryPanel() {
           </div>
           <div style={weightBoxStyle}>
             <span style={weightLabelStyle}>Charge</span>
-            <strong>{formatWeight(totalWeight)} / {formatWeight(MAX_CARRY_WEIGHT)}</strong>
+            <strong>{formatWeight(totalWeight)} / {formatWeight(maxCarryWeight)}</strong>
             <span style={weightTrackStyle}>
               <span style={{ ...weightFillStyle, width: `${weightRatio * 100}%` }} />
             </span>

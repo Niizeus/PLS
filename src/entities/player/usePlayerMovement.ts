@@ -11,9 +11,7 @@ import { getCombatStyle } from './combatStyle'
 import { useCameraStore } from '../../core/cameraStore'
 import { FRAME } from '../../core/framePriority'
 import { useScooterStore } from '../vehicles/scooterStore'
-import { SCOOTER } from '../vehicles/scooterConfig'
 import { useCarStore } from '../vehicles/carStore'
-import { CAR } from '../vehicles/carConfig'
 import {
   createVehicleDriveState,
   driveVehicle,
@@ -26,7 +24,7 @@ import { useRadioStore } from '../../audio/radioStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { moveCircle } from '../movementCollision'
 import { zoneAt } from '../../world/beauvais/zones'
-import { PLAYER } from './playerConfig'
+import { getPlayerTuning, getVehicleTuning } from '../../devtools/devTuningStore'
 
 const SCOOTER_RADIO_ID = 'vehicle:scooter:prototype'
 const CAR_RADIO_ID = 'vehicle:car:prototype'
@@ -120,6 +118,9 @@ export function usePlayerMovement(
 
     // On borne le delta : si l'onglet a "laggé", on évite un saut géant.
     const delta = Math.min(rawDelta, 0.1)
+    const playerTuning = getPlayerTuning()
+    const scooterTuning = getVehicleTuning('scooter')
+    const carTuning = getVehicleTuning('car')
 
     // --- 0. Vehicules : monter / descendre (E), puis conduire si on roule ---
     const scooter = useScooterStore.getState()
@@ -136,7 +137,7 @@ export function usePlayerMovement(
         const scooterDx = group.position.x - scooter.parkedX
         const scooterDz = group.position.z - scooter.parkedZ
         const scooterD2 = scooterDx * scooterDx + scooterDz * scooterDz
-        if (scooterD2 <= SCOOTER.MOUNT_RANGE * SCOOTER.MOUNT_RANGE && scooterD2 < nearestD2) {
+        if (scooterD2 <= scooterTuning.MOUNT_RANGE * scooterTuning.MOUNT_RANGE && scooterD2 < nearestD2) {
           nearest = 'scooter'
           nearestD2 = scooterD2
         }
@@ -144,7 +145,7 @@ export function usePlayerMovement(
         const carDx = group.position.x - car.parkedX
         const carDz = group.position.z - car.parkedZ
         const carD2 = carDx * carDx + carDz * carDz
-        if (carD2 <= CAR.MOUNT_RANGE * CAR.MOUNT_RANGE && carD2 < nearestD2) {
+        if (carD2 <= carTuning.MOUNT_RANGE * carTuning.MOUNT_RANGE && carD2 < nearestD2) {
           nearest = 'car'
           nearestD2 = carD2
         }
@@ -153,7 +154,7 @@ export function usePlayerMovement(
           k.interactQueued = false
           group.position.set(
             scooter.parkedX,
-            groundHeight(scooter.parkedX, scooter.parkedZ) + SCOOTER.SEAT_HEIGHT,
+            groundHeight(scooter.parkedX, scooter.parkedZ) + scooterTuning.SEAT_HEIGHT,
             scooter.parkedZ,
           )
           group.rotation.y = scooter.parkedRot
@@ -163,7 +164,7 @@ export function usePlayerMovement(
           riding = true
         } else if (nearest === 'car') {
           k.interactQueued = false
-          group.position.set(car.parkedX, groundHeight(car.parkedX, car.parkedZ) + CAR.SEAT_HEIGHT, car.parkedZ)
+          group.position.set(car.parkedX, groundHeight(car.parkedX, car.parkedZ) + carTuning.SEAT_HEIGHT, car.parkedZ)
           group.rotation.y = car.parkedRot
           stopVehicle(carDrive.current)
           car.mount()
@@ -197,18 +198,18 @@ export function usePlayerMovement(
 
     if (activeScooter) {
       const scooterState = useScooterStore.getState()
-      driveVehicle(group, scooterState.fuelLiters > 0 ? k : withoutThrottle(k), scooterDrive.current, SCOOTER, delta)
+      driveVehicle(group, scooterState.fuelLiters > 0 ? k : withoutThrottle(k), scooterDrive.current, scooterTuning, delta)
       if (Math.abs(scooterDrive.current.speed) > 0.2) {
         scooterState.consumeFuel((Math.abs(scooterDrive.current.speed) * 0.000009 + (k.forward ? 0.000015 : 0)) * delta)
       }
-      publishTelemetry('scooter', scooterDrive.current, SCOOTER, scooterState)
+      publishTelemetry('scooter', scooterDrive.current, scooterTuning, scooterState)
     } else if (activeCar) {
       const carState = useCarStore.getState()
-      driveVehicle(group, carState.fuelLiters > 0 ? k : withoutThrottle(k), carDrive.current, CAR, delta)
+      driveVehicle(group, carState.fuelLiters > 0 ? k : withoutThrottle(k), carDrive.current, carTuning, delta)
       if (Math.abs(carDrive.current.speed) > 0.2) {
         carState.consumeFuel((Math.abs(carDrive.current.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
       }
-      publishTelemetry('car', carDrive.current, CAR, carState)
+      publishTelemetry('car', carDrive.current, carTuning, carState)
     } else {
       useVehicleTelemetryStore.getState().clearTelemetry()
     }
@@ -236,7 +237,7 @@ export function usePlayerMovement(
     const hurtToken = usePlayerStore.getState().hurtToken
     if (hurtToken !== lastHurtToken.current) {
       lastHurtToken.current = hurtToken
-      hurtTimer.current = PLAYER.HURT_DURATION
+      hurtTimer.current = playerTuning.HURT_DURATION
       // Se prendre un coup casse l'enchaînement en cours.
       attackTimer.current = 0
       comboStep.current = 0
@@ -254,23 +255,23 @@ export function usePlayerMovement(
           // Avec une arme : une seule animation pour l'instant (pas d'enchaînement).
           move = 'weapon'
           comboStep.current = 0
-          attackDuration.current = PLAYER.WEAPON_ATTACK_DURATION
+          attackDuration.current = playerTuning.WEAPON_ATTACK_DURATION
         } else {
           // Mains nues : 3 coups qui s'enchaînent tant qu'on reclique assez vite.
-          const canChain = comboWindow.current > 0 && comboStep.current > 0 && comboStep.current < PLAYER.COMBO_DURATIONS.length
+          const canChain = comboWindow.current > 0 && comboStep.current > 0 && comboStep.current < playerTuning.COMBO_DURATIONS.length
           comboStep.current = canChain ? comboStep.current + 1 : 1
           move = `punch${comboStep.current}` as AttackMove
-          attackDuration.current = PLAYER.COMBO_DURATIONS[comboStep.current - 1]
+          attackDuration.current = playerTuning.COMBO_DURATIONS[comboStep.current - 1]
         }
         attackTimer.current = attackDuration.current
         // La fenêtre d'enchaînement court pendant le coup + un petit délai après.
-        comboWindow.current = attackDuration.current + PLAYER.COMBO_WINDOW
+        comboWindow.current = attackDuration.current + playerTuning.COMBO_WINDOW
         strike(move)
       }
     }
     if (k.interactQueued) {
       k.interactQueued = false
-      interactTimer.current = PLAYER.INTERACT_DURATION
+      interactTimer.current = playerTuning.INTERACT_DURATION
     }
     if (attackTimer.current > 0) attackTimer.current -= delta
     if (interactTimer.current > 0) interactTimer.current -= delta
@@ -303,9 +304,9 @@ export function usePlayerMovement(
     const grounded = jumpY.current <= 0.001
     if (k.jumpQueued) {
       k.jumpQueued = false
-      if (grounded && !crouching && !isDefending && hurtTimer.current <= 0) vy.current = PLAYER.JUMP_SPEED
+      if (grounded && !crouching && !isDefending && hurtTimer.current <= 0) vy.current = playerTuning.JUMP_SPEED
     }
-    vy.current -= PLAYER.GRAVITY * delta
+    vy.current -= playerTuning.GRAVITY * delta
     jumpY.current += vy.current * delta
     if (jumpY.current < 0) {
       jumpY.current = 0
@@ -330,7 +331,9 @@ export function usePlayerMovement(
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
       const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
-      const speed = (crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED) * speedMultiplier
+      const speed =
+        (crouching ? playerTuning.CROUCH_SPEED : running ? playerTuning.RUN_SPEED : playerTuning.WALK_SPEED) *
+        speedMultiplier
       // Collision cercle contre murs : glisse le long des façades en biais au
       // lieu d'avancer en escalier (voir `movementCollision.ts`).
       const move = moveCircle(
@@ -338,20 +341,20 @@ export function usePlayerMovement(
         group.position.z,
         moveDir.current.x * speed * delta,
         moveDir.current.z * speed * delta,
-        PLAYER.BODY_RADIUS,
+        playerTuning.BODY_RADIUS,
       )
       group.position.x = move.x
       group.position.z = move.z
 
       // Oriente le perso vers sa direction de marche (rotation douce).
       const targetAngle = Math.atan2(moveDir.current.x, moveDir.current.z)
-      group.rotation.y = dampAngle(group.rotation.y, targetAngle, PLAYER.TURN_SPEED, delta)
+      group.rotation.y = dampAngle(group.rotation.y, targetAngle, playerTuning.TURN_SPEED, delta)
 
       moveIntensity = running ? 1 : 0.5
     }
 
     // Colle le perso au relief, + la hauteur de saut éventuelle.
-    const targetGroundY = groundHeight(group.position.x, group.position.z) + PLAYER.BODY_HEIGHT
+    const targetGroundY = groundHeight(group.position.x, group.position.z) + playerTuning.BODY_HEIGHT
     groundY.current = smoothGroundY(groundY.current, targetGroundY, delta)
     group.position.y = groundY.current + jumpY.current
 
@@ -376,7 +379,7 @@ export function usePlayerMovement(
         ? 1 - attackTimer.current / attackDuration.current
         : 0
     vis.interactProgress =
-      interactTimer.current > 0 ? 1 - interactTimer.current / PLAYER.INTERACT_DURATION : 0
+      interactTimer.current > 0 ? 1 - interactTimer.current / playerTuning.INTERACT_DURATION : 0
     vis.moveIntensity = moveIntensity
 
     if (usePlayerStore.getState().action !== action) setAction(action)

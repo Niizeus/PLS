@@ -6,7 +6,8 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { groundHeight } from '../../world/beauvais/roadway'
 import { FRAME } from '../../core/framePriority'
-import { CAR, CAR_COLORS } from './carConfig'
+import { getVehicleTuning } from '../../devtools/devTuningStore'
+import { CAR_COLORS } from './carConfig'
 import { useCarStore } from './carStore'
 
 /** Voiture prototype en primitives, pensee comme repere d'echelle et test de conduite. */
@@ -21,7 +22,7 @@ export default function Car() {
     if (riding) {
       const player = usePlayerStore.getState().playerObject
       if (player) {
-        g.position.set(player.position.x, player.position.y - CAR.SEAT_HEIGHT, player.position.z)
+        g.position.set(player.position.x, player.position.y - getVehicleTuning('car').SEAT_HEIGHT, player.position.z)
         g.rotation.y = player.rotation.y
       }
     } else {

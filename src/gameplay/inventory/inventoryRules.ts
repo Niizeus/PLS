@@ -1,6 +1,6 @@
 import { ITEMS_BY_ID } from '../../data/items'
 import type { InventoryEntry } from './inventoryStore'
-import { formatWeight, getInventoryWeight, getItemWeight, MAX_CARRY_WEIGHT } from './inventoryWeight'
+import { formatWeight, getInventoryWeight, getItemWeight, getMaxCarryWeight } from './inventoryWeight'
 
 export type AddItemFailureReason = 'invalid' | 'stackFull' | 'tooHeavy'
 
@@ -35,7 +35,7 @@ export function getAddItemFailureReason(
   if (getStackSpace(items, itemId) < quantity) return 'stackFull'
 
   const nextWeight = getInventoryWeight(items) + getItemWeight(itemId) * quantity
-  if (nextWeight > MAX_CARRY_WEIGHT) return 'tooHeavy'
+  if (nextWeight > getMaxCarryWeight()) return 'tooHeavy'
 
   return null
 }

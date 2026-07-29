@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { usePlayerStore, type AttackMove, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { useCarStore } from '../vehicles/carStore'
-import { PLAYER } from './playerConfig'
+import { getPlayerTuning, useDevTuningStore } from '../../devtools/devTuningStore'
 
 /**
  * 🧍 Le personnage Pierrot, animé.
@@ -79,17 +79,12 @@ const ATTACK_TO_ANIM: Record<AttackMove, string> = {
  * gameplay (playerConfig) : l'anim se termine pile quand le coup se termine,
  * quelle que soit la durée d'origine du FBX. Régle le feeling dans playerConfig.
  */
-const ATTACK_DURATION: Record<AttackMove, number> = {
-  punch1: PLAYER.COMBO_DURATIONS[0],
-  punch2: PLAYER.COMBO_DURATIONS[1],
-  punch3: PLAYER.COMBO_DURATIONS[2],
-  weapon: PLAYER.WEAPON_ATTACK_DURATION,
-}
-
 const TARGET_HEIGHT = 1.75 // taille voulue du perso en mètres (échelle auto-calculée)
 const FACING = 0 // rotation Y du modèle ; mets Math.PI si le perso marche à reculons
 
 export default function PlayerModel() {
+  useDevTuningStore((s) => s.overrides)
+  const playerTuning = getPlayerTuning()
   // Personnage de base (mesh skinné + squelette). Les autres FBX : juste les clips.
   const character = useFBX(BASE + ANIMS.idle)
   const fbxWalk = useFBX(BASE + ANIMS.walk)
@@ -165,9 +160,9 @@ export default function PlayerModel() {
     const scale = TARGET_HEIGHT / h
     console.info('[Pierrot] taille brute:', box.getSize(new THREE.Vector3()).toArray().map((v) => v.toFixed(2)), '→ échelle', scale.toFixed(3))
     // Pieds (box.min.y) posés à -BODY_HEIGHT (le sol, sous le centre du groupe joueur).
-    const y = -PLAYER.BODY_HEIGHT - box.min.y * scale
+    const y = -playerTuning.BODY_HEIGHT - box.min.y * scale
     return { scale, y }
-  }, [character])
+  }, [character, playerTuning.BODY_HEIGHT])
 
   // Anime selon l'etat du jeu (ou "drive" quand on conduit un vehicule).
   const action = usePlayerStore((s) => s.action)
@@ -190,10 +185,10 @@ export default function PlayerModel() {
     } else if (action === 'attack') {
       const move = attackMove ?? 'punch1'
       name = ATTACK_TO_ANIM[move]
-      oneShotDuration = ATTACK_DURATION[move]
+      oneShotDuration = getAttackDuration(move, playerTuning)
     } else if (action === 'hurt') {
       name = 'hurt'
-      oneShotDuration = PLAYER.HURT_DURATION
+      oneShotDuration = playerTuning.HURT_DURATION
     } else {
       name = ACTION_TO_ANIM[action] ?? 'idle'
     }
@@ -227,11 +222,17 @@ export default function PlayerModel() {
     next.fadeIn(fade).play()
     current.current = key
     currentName.current = name
-  }, [action, attackMove, attackToken, hurtToken, riding, actions])
+  }, [action, attackMove, attackToken, hurtToken, riding, actions, playerTuning])
 
   return (
     <group ref={group} rotation={[0, FACING, 0]} position={[0, fit.y, 0]} scale={fit.scale}>
       <primitive object={character} />
     </group>
   )
+}
+
+function getAttackDuration(move: AttackMove, playerTuning: ReturnType<typeof getPlayerTuning>): number {
+  if (move === 'weapon') return playerTuning.WEAPON_ATTACK_DURATION
+  const index = Number(move.slice(-1)) - 1
+  return playerTuning.COMBO_DURATIONS[index] ?? playerTuning.COMBO_DURATIONS[0]
 }

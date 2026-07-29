@@ -93,8 +93,15 @@ export default function Beauvais({ mode = 'game' }: { mode?: 'game' | 'editor' }
     const p = usePlayerStore.getState().playerObject
     const tx = Math.floor((p ? p.position.x : SPAWN.x) / TILE)
     const tz = Math.floor((p ? p.position.z : SPAWN.z) / TILE)
-    const reach = mode === 'editor' ? editorTileReach(camera, size, TILE, REACH) : REACH
-    setCenter((c) => (c.tx === tx && c.tz === tz && c.reach === reach ? c : { tx, tz, reach }))
+    const wanted = mode === 'editor' ? editorTileReach(camera, size, TILE, REACH) : REACH
+    setCenter((c) => {
+      // On n'ajoute (ou n'enleve) qu'UN anneau de tuiles a la fois. Un gros dezoom dans
+      // l'editeur passe donc de 3x3 a 15x15 en plusieurs etapes au lieu de construire des
+      // centaines de tuiles dans la meme image, ce qui figeait l'affichage une seconde ou
+      // deux. Ce test tourne une image sur 12 : la zone finit de se remplir en un clin d'oeil.
+      const reach = c.reach + Math.sign(wanted - c.reach)
+      return c.tx === tx && c.tz === tz && c.reach === reach ? c : { tx, tz, reach }
+    })
   })
 
   const keys: string[] = []

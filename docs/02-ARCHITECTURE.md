@@ -186,3 +186,35 @@ systeme, cree d'abord son type/default clair, puis ajoute une fonction de lectur
 `F2` est reserve a cet outil. Les raccourcis temps restent dans `TimeDevControls.tsx` : `F6` cycle la
 vitesse, `F7` met midi, `F8` met nuit, `F9` pause/play, `F10` met l'aube, `F11` saute a la prochaine
 nuit.
+
+---
+
+## Editeur PLS (`editor.html`) — garde-fous
+
+L'editeur est dev-only et ecrit directement dans `src/data/`. Trois protections encadrent ca,
+a ne pas retirer sans les remplacer.
+
+**1. Ecriture protegee des donnees.** Les plugins Vite d'ecriture (`vite/mapMarkersPlugin.ts`,
+`vite/zonesPlugin.ts`, `vite/interiorsPlugin.ts`) passent tous par `vite/plsDataFile.ts`, qui :
+
+- copie l'ancien contenu dans `src/data/.backups/` avant chaque ecrasement (20 versions gardees
+  par fichier, dossier ignore par Git — c'est un filet local, l'historique partage reste les commits) ;
+- repond **409** au lieu d'ecrire quand la sauvegarde viderait un fichier qui contenait encore des
+  donnees. Cote editeur, `src/editor/editorSave.ts` transforme ce 409 en question a l'humain et ne
+  rejoue la requete (en-tete `x-pls-force`) que s'il confirme.
+
+Un nouveau plugin d'ecriture de l'editeur doit passer par `writeDataFile()`, pas par `fs.writeFileSync`.
+
+**2. Filet anti-page-blanche.** `src/editor/EditorErrorBoundary.tsx` entoure le hub dans
+`src/editor/main.tsx` : une erreur de rendu affiche le message et la pile au lieu d'un ecran vide.
+
+⚠️ Piege React a connaitre : `event.currentTarget` vaut `null` des que le handler rend la main. Il
+faut **toujours** lire la valeur d'un champ dans le corps du handler, jamais dans le callback passe a
+`setState` (React ne l'execute qu'au rendu suivant → TypeError en plein rendu → tout se demonte).
+C'est pour ca que `updateSelectedMarker`, `updateSelectedZone` et `updateActiveInterior` appliquent
+leur recette immediatement. Voir aussi `src/editor/editorInputs.ts` (`Number('')` vaut `0`, pas NaN).
+
+**3. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
+elargit le streaming de Beauvais. `src/world/editorStreaming.ts` plafonne ce rayon a 15 x 15 tuiles :
+sans ca, un dezoom complet demandait ~20 000 tuiles et la geometrie des 34 000 batiments d'un coup,
+ce qui figeait l'onglet. Pour voir la ville entiere, c'est le **plan 2D** qui sert, pas la vue 3D.

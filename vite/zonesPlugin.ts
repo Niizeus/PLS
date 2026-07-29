@@ -1,6 +1,6 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
+import { DestructiveWriteError, hasForceHeader, writeDataFile } from './plsDataFile'
 
 export const ZONES_ENDPOINT = '/__pls/zones'
 const ZONES_FILE = path.join('src', 'data', 'zones.json')
@@ -67,13 +67,25 @@ export default function zonesPlugin(): Plugin {
 
           try {
             const zones = normalizeZones(JSON.parse(body))
-            const target = path.join(root, ZONES_FILE)
-            fs.writeFileSync(target, JSON.stringify(zones, null, 2) + '\n', 'utf8')
+            writeDataFile({
+              root,
+              relativePath: ZONES_FILE,
+              content: zones,
+              itemCount: zones.zones.length,
+              countExisting: (parsed) =>
+                isRecord(parsed) && Array.isArray(parsed.zones) ? parsed.zones.length : 0,
+              force: hasForceHeader(req.headers),
+              label: 'les quartiers',
+            })
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: true, zones: zones.zones.length }))
           } catch (error) {
-            res.statusCode = 400
-            res.end(`Quartiers invalides : ${(error as Error).message}`)
+            res.statusCode = error instanceof DestructiveWriteError ? 409 : 400
+            res.end(
+              error instanceof DestructiveWriteError
+                ? error.message
+                : `Quartiers invalides : ${(error as Error).message}`,
+            )
           }
         })
       })

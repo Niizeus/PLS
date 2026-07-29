@@ -14,6 +14,8 @@ import { BOUNDS, BUILDINGS, ROADS, SPAWN, WATERS } from '../world/beauvais/cityD
 import { ZONES, type Zone } from '../world/beauvais/zones'
 import { drawBuildings, drawRoads, drawWater, drawZones, type MapView } from '../ui/mapDraw'
 import EditorGameView, { type EditorCameraState } from './EditorGameView'
+import { readNumberInput } from './editorInputs'
+import { saveData } from './editorSave'
 
 type LayerId = 'water' | 'roads' | 'buildings' | 'zones' | 'markers'
 type ViewMode = 'plan' | 'gameTop' | 'gameTilt'
@@ -315,10 +317,20 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   const [saveStatus, setSaveStatus] = useState('Aucune modification')
   const [mouseWorld, setMouseWorld] = useState<MouseWorld | null>(null)
   const [viewInfo, setViewInfo] = useState(cameraRef.current)
+  // Photo du dernier etat ecrit sur le disque : comparee a l'etat courant, elle dit si des
+  // modifications attendent d'etre sauvegardees (voir markersDirty / zonesDirty).
+  const [savedMarkersJson, setSavedMarkersJson] = useState(() => JSON.stringify(serializeMapMarkers(MAP_MARKERS)))
+  const [savedZonesJson, setSavedZonesJson] = useState(() => JSON.stringify(cloneZones(ZONES)))
 
   const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null
   const selectedZone = zones.find((zone) => zone.id === selectedZoneId) ?? null
   const markerValidation = useMemo(() => validateMapMarkers(markers), [markers])
+  const markersDirty = useMemo(
+    () => JSON.stringify(serializeMapMarkers(markers)) !== savedMarkersJson,
+    [markers, savedMarkersJson],
+  )
+  const zonesDirty = useMemo(() => JSON.stringify(cloneZones(zones)) !== savedZonesJson, [zones, savedZonesJson])
+  const hasUnsavedChanges = markersDirty || zonesDirty
 
   useEffect(() => {
     layersRef.current = layers
@@ -348,31 +360,47 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     selectedZonePointRef.current = selectedZonePoint
   }, [selectedZonePoint])
 
+  // ⚠️ IMPORTANT : `recipe` est appliquee TOUT DE SUITE, pas a l'interieur du callback
+  // passe a setMarkers/setZones. React n'execute ce callback-la qu'au rendu suivant, et
+  // les champs de l'inspecteur y liraient un `event.currentTarget` deja remis a null par
+  // React -> TypeError en plein rendu -> l'editeur entier se demonte (page blanche).
+  // En appliquant la recette ici, on lit l'evenement pendant qu'il est encore valide.
   const updateSelectedMarker = (recipe: (marker: MapMarker) => MapMarker) => {
     if (!selectedMarkerId) return
-    setMarkers((current) => current.map((marker) => (marker.id === selectedMarkerId ? recipe(marker) : marker)))
+    const current = markersRef.current.find((marker) => marker.id === selectedMarkerId)
+    if (!current) return
+    const next = recipe(current)
+    const list = markersRef.current.map((marker) => (marker.id === selectedMarkerId ? next : marker))
+    markersRef.current = list // garde le ref a jour meme entre deux rendus (drag souris)
+    setMarkers(list)
     setSaveStatus('Modifications non sauvegardees')
   }
 
   const updateSelectedZone = (recipe: (zone: Zone) => Zone) => {
     if (!selectedZoneId) return
-    setZones((current) => current.map((zone) => (zone.id === selectedZoneId ? recipe(zone) : zone)))
+    const current = zonesRef.current.find((zone) => zone.id === selectedZoneId)
+    if (!current) return
+    const next = recipe(current)
+    const list = zonesRef.current.map((zone) => (zone.id === selectedZoneId ? next : zone))
+    zonesRef.current = list
+    setZones(list)
     setSaveStatus('Quartiers modifies, sauvegarde requise')
   }
 
   const moveZonePoint = (zoneId: string, pointIndex: number, point: MouseWorld) => {
-    setZones((current) =>
-      current.map((zone) =>
-        zone.id === zoneId
-          ? {
-              ...zone,
-              pts: zone.pts.map((zonePoint, index) =>
-                index === pointIndex ? [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))] : zonePoint,
-              ),
-            }
-          : zone,
-      ),
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.z)) return
+    const list = zonesRef.current.map((zone) =>
+      zone.id === zoneId
+        ? {
+            ...zone,
+            pts: zone.pts.map((zonePoint, index) =>
+              index === pointIndex ? [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))] : zonePoint,
+            ),
+          }
+        : zone,
     )
+    zonesRef.current = list
+    setZones(list)
     setSaveStatus('Quartiers modifies, sauvegarde requise')
   }
 
@@ -430,6 +458,18 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   useEffect(() => {
     worldClickRef.current = handleWorldClick
   })
+
+  // Fermer l'onglet ou recharger avec des modifications non sauvegardees les perdait en
+  // silence. Le navigateur affiche maintenant sa demande de confirmation standard.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasUnsavedChanges])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -647,18 +687,17 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     }
 
     setSaveStatus('Sauvegarde en cours...')
-    try {
-      const response = await fetch('/__pls/map-markers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serialized),
-      })
-      if (!response.ok) throw new Error(await response.text())
+    const result = await saveData({
+      endpoint: '/__pls/map-markers',
+      payload: serialized,
+      successMessage: `Sauvegarde OK : ${serialized.length} point(s)`,
+    })
+    if (result.status === 'ok') {
       setMarkers(serialized)
-      setSaveStatus(`Sauvegarde OK : ${serialized.length} point(s)`)
-    } catch (error) {
-      setSaveStatus(`Sauvegarde impossible : ${(error as Error).message}`)
+      markersRef.current = serialized
+      setSavedMarkersJson(JSON.stringify(serialized))
     }
+    setSaveStatus(result.message)
   }
 
   const saveZones = async () => {
@@ -672,17 +711,13 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     }
 
     setSaveStatus('Sauvegarde quartiers en cours...')
-    try {
-      const response = await fetch('/__pls/zones', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error(await response.text())
-      setSaveStatus(`Sauvegarde quartiers OK : ${payload.zones.length} quartier(s)`)
-    } catch (error) {
-      setSaveStatus(`Sauvegarde quartiers impossible : ${(error as Error).message}`)
-    }
+    const result = await saveData({
+      endpoint: '/__pls/zones',
+      payload,
+      successMessage: `Sauvegarde quartiers OK : ${payload.zones.length} quartier(s)`,
+    })
+    if (result.status === 'ok') setSavedZonesJson(JSON.stringify(payload.zones))
+    setSaveStatus(result.message)
   }
 
   return (
@@ -748,11 +783,21 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
           <button type="button" onClick={fitCity}>
             Ville
           </button>
-          <button type="button" className="primary" onClick={saveMarkers}>
-            Sauver POI
+          <button
+            type="button"
+            className={`primary ${markersDirty ? 'dirty' : ''}`}
+            onClick={saveMarkers}
+            title={markersDirty ? "Points d'interet modifies, pas encore sur le disque" : 'Points a jour sur le disque'}
+          >
+            Sauver POI{markersDirty ? ' •' : ''}
           </button>
-          <button type="button" className="primary" onClick={saveZones}>
-            Sauver quartiers
+          <button
+            type="button"
+            className={`primary ${zonesDirty ? 'dirty' : ''}`}
+            onClick={saveZones}
+            title={zonesDirty ? 'Quartiers modifies, pas encore sur le disque' : 'Quartiers a jour sur le disque'}
+          >
+            Sauver quartiers{zonesDirty ? ' •' : ''}
           </button>
         </div>
       </header>
@@ -886,6 +931,14 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
               <dt>Etat</dt>
               <dd>{saveStatus}</dd>
             </div>
+            <div>
+              <dt>A sauver</dt>
+              <dd className={hasUnsavedChanges ? 'inspector-dirty' : ''}>
+                {hasUnsavedChanges
+                  ? [markersDirty ? 'POI' : null, zonesDirty ? 'Quartiers' : null].filter(Boolean).join(' + ')
+                  : 'Rien, tout est sur le disque'}
+              </dd>
+            </div>
           </dl>
         </section>
 
@@ -927,7 +980,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                       value={selectedZone.pts[selectedZonePoint][0]}
                       onChange={(event) =>
                         moveZonePoint(selectedZone.id, selectedZonePoint, {
-                          x: Number(event.currentTarget.value),
+                          x: readNumberInput(event.currentTarget.value),
                           z: selectedZone.pts[selectedZonePoint][1],
                         })
                       }
@@ -942,7 +995,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                       onChange={(event) =>
                         moveZonePoint(selectedZone.id, selectedZonePoint, {
                           x: selectedZone.pts[selectedZonePoint][0],
-                          z: Number(event.currentTarget.value),
+                          z: readNumberInput(event.currentTarget.value),
                         })
                       }
                     />
@@ -1023,7 +1076,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                     type="number"
                     step="0.1"
                     value={selectedMarker.position.x}
-                    onChange={(event) => updateSelectedPosition('x', Number(event.currentTarget.value))}
+                    onChange={(event) => updateSelectedPosition('x', readNumberInput(event.currentTarget.value))}
                   />
                 </label>
                 <label>
@@ -1032,7 +1085,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                     type="number"
                     step="0.1"
                     value={selectedMarker.position.z}
-                    onChange={(event) => updateSelectedPosition('z', Number(event.currentTarget.value))}
+                    onChange={(event) => updateSelectedPosition('z', readNumberInput(event.currentTarget.value))}
                   />
                 </label>
               </div>
@@ -1043,12 +1096,11 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                   min="0.1"
                   step="0.1"
                   value={selectedMarker.interactionRadius}
-                  onChange={(event) =>
-                    updateSelectedMarker((marker) => ({
-                      ...marker,
-                      interactionRadius: Math.max(0.1, Number(event.currentTarget.value)),
-                    }))
-                  }
+                  onChange={(event) => {
+                    const radius = readNumberInput(event.currentTarget.value)
+                    if (!Number.isFinite(radius)) return
+                    updateSelectedMarker((marker) => ({ ...marker, interactionRadius: Math.max(0.1, radius) }))
+                  }}
                 />
               </label>
               <label>

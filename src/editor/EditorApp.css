@@ -130,6 +130,21 @@ textarea {
   background: #587448;
 }
 
+/* Bouton de sauvegarde quand des modifications attendent d'etre ecrites sur le disque. */
+.editor-actions button.primary.dirty {
+  border-color: #d8a33f;
+  background: #7a5c1f;
+  color: #ffeec2;
+}
+
+.editor-actions button.primary.dirty:hover {
+  background: #916d24;
+}
+
+.inspector-dirty {
+  color: #ffcf72 !important;
+}
+
 .editor-left,
 .editor-right {
   min-width: 0;
@@ -532,6 +547,70 @@ textarea {
 
 .interior-plan-panel {
   background: #252a2f;
+}
+
+/* Ecran affiche par EditorErrorBoundary quand un composant plante. */
+.editor-crash {
+  height: 100%;
+  padding: 32px;
+  overflow: auto;
+  background: #201b1b;
+  color: #f6e6e2;
+  user-select: text;
+}
+
+.editor-crash h1 {
+  margin: 0 0 12px;
+  color: #ff9d8a;
+  font-size: 22px;
+}
+
+.editor-crash h2 {
+  margin: 26px 0 8px;
+  color: #d9c2bc;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.editor-crash p {
+  max-width: 70ch;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.editor-crash button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid #7d5a52;
+  border-radius: 6px;
+  background: #4a2f2b;
+  color: #ffd7cf;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editor-crash button:hover {
+  background: #5d3b36;
+}
+
+.editor-crash pre {
+  max-height: 45vh;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid #4a3a37;
+  border-radius: 8px;
+  background: #171313;
+  color: #ffb9ab;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.editor-crash-hint {
+  margin-top: 14px;
+  color: #c0a9a4;
+  font-size: 13px;
 }
 
 @media (max-width: 920px) {

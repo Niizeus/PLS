@@ -1,6 +1,6 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
+import { DestructiveWriteError, hasForceHeader, writeDataFile } from './plsDataFile'
 
 export const INTERIORS_ENDPOINT = '/__pls/interiors'
 const INTERIORS_DIR = path.join('src', 'data', 'interiors')
@@ -14,6 +14,20 @@ function safeInteriorFileName(id: string) {
   const safe = id.trim().replace(/[^a-zA-Z0-9_-]/g, '_')
   if (!safe) throw new Error('id interieur vide')
   return `${safe}.json`
+}
+
+/**
+ * Compte ce qu'un interieur contient vraiment (pieces, portes, fenetres, props, spawns,
+ * sorties, escaliers), tous etages confondus. Un interieur avec des etages mais aucun
+ * contenu compte pour 0 : c'est la coquille vide qu'on veut eviter d'ecrire par accident.
+ */
+function countInteriorItems(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.floors)) return 0
+  const lists = ['rooms', 'doors', 'windows', 'props', 'spawnPoints', 'exits', 'stairs'] as const
+  return value.floors.reduce((total: number, floor: unknown) => {
+    if (!isRecord(floor)) return total
+    return total + lists.reduce((sum, key) => sum + (Array.isArray(floor[key]) ? floor[key].length : 0), 0)
+  }, 0)
 }
 
 function normalizeInterior(value: unknown) {
@@ -61,15 +75,25 @@ export default function interiorsPlugin(): Plugin {
 
           try {
             const { id, interior } = normalizeInterior(JSON.parse(body))
-            const target = path.join(root, INTERIORS_DIR, safeInteriorFileName(id))
-            fs.mkdirSync(path.dirname(target), { recursive: true })
-            fs.writeFileSync(target, JSON.stringify(interior, null, 2) + '\n', 'utf8')
+            writeDataFile({
+              root,
+              relativePath: path.join(INTERIORS_DIR, safeInteriorFileName(id)),
+              content: interior,
+              itemCount: countInteriorItems(interior),
+              countExisting: countInteriorItems,
+              force: hasForceHeader(req.headers),
+              label: `l'interieur ${id}`,
+            })
 
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: true, id }))
           } catch (error) {
-            res.statusCode = 400
-            res.end(`Interieur invalide : ${(error as Error).message}`)
+            res.statusCode = error instanceof DestructiveWriteError ? 409 : 400
+            res.end(
+              error instanceof DestructiveWriteError
+                ? error.message
+                : `Interieur invalide : ${(error as Error).message}`,
+            )
           }
         })
       })

@@ -37,3 +37,6 @@ desktop.ini
 # --- Divers ---
 *.tmp
 coverage/
+
+# --- Copies de secours de l'editeur PLS (filet local, l'historique partage = les commits) ---
+src/data/.backups/

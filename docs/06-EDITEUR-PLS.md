@@ -1093,3 +1093,24 @@ Modules a brancher ensuite dans le meme hub :
   quete principale.
 
 ---
+
+## Garde-fous en place (mis a jour au fil des sessions)
+
+Cette section liste ce qui est **deja implemente** pour proteger le travail, par opposition au
+reste du document qui decrit la cible. Detail technique dans
+[`02-ARCHITECTURE.md`](02-ARCHITECTURE.md#editeur-pls-editorhtml--garde-fous).
+
+- **Copies de secours automatiques** : chaque sauvegarde copie l'ancien fichier dans
+  `src/data/.backups/` (20 versions gardees par fichier, ignore par Git). Si une sauvegarde ecrase
+  quelque chose par erreur, la version d'avant est recuperable a la main.
+- **Refus des sauvegardes qui vident un fichier** : sauver alors que l'editeur est vide et que le
+  disque ne l'est pas declenche une confirmation explicite. C'est exactement le scenario qui avait
+  remis `mapMarkers.json` a `[]`.
+- **Avertissement avant fermeture** : fermer ou recharger l'onglet avec des modifications non
+  sauvegardees demande confirmation. Les boutons de sauvegarde passent en orange avec un point
+  quand du travail attend d'etre ecrit, et l'inspecteur affiche une ligne "A sauver".
+- **Ecran d'erreur au lieu d'une page blanche** : si un composant de l'editeur plante, le message
+  et la pile s'affichent avec un bouton pour recharger.
+- **Vue 3D bridee au dezoom** : les vues IG ne montent qu'une zone de 15 x 15 tuiles autour du
+  centre. Au-dela, c'est le plan 2D qui sert a voir la ville entiere — la vue 3D ne peut pas
+  afficher les 34 000 batiments d'un coup sans figer le navigateur.

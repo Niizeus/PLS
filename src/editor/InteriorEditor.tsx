@@ -14,6 +14,8 @@ import {
   type InteriorWindow,
 } from '../data/interiors'
 import InteriorTestView from './InteriorTestView'
+import { readNumberInput } from './editorInputs'
+import { saveData } from './editorSave'
 import { getVisibleWallSegments, getWallSegments, isWallRemoved, type InteriorWallSegment } from './interiorGeometry'
 
 type InteriorTool = 'select' | 'room' | 'wall' | 'door' | 'window' | 'spawn' | 'exit' | 'prop'
@@ -202,10 +204,16 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
   const [testMode, setTestMode] = useState(false)
   const [pendingPropAssetId, setPendingPropAssetId] = useState<(typeof PLACEHOLDER_ASSETS)[number]['id']>('proto_cube')
   const [, setHistoryVersion] = useState(0)
+  // Photo du dernier etat ecrit sur le disque : sert a savoir s'il reste des modifs a sauver.
+  const [savedInteriorsJson, setSavedInteriorsJson] = useState(() => JSON.stringify(cloneInteriors(INTERIORS)))
 
   const activeInterior = interiors.find((interior) => interior.id === activeInteriorId) ?? interiors[0]
   const activeFloor = activeInterior ? getFloor(activeInterior, activeFloorId) : null
   const validation = useMemo(() => validateInteriors(interiors), [interiors])
+  const isDirty = useMemo(
+    () => JSON.stringify(cloneInteriors(interiors)) !== savedInteriorsJson,
+    [interiors, savedInteriorsJson],
+  )
   const selectedRoom = selected?.kind === 'room' ? activeFloor?.rooms.find((room) => room.id === selected.id) ?? null : null
   const selectedPointItem = selected && activeFloor ? getSelectedPointItem(activeFloor, selected) : null
 
@@ -268,11 +276,19 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     restoreInteriors(next, 'Retablissement local, sauvegarde requise')
   }
 
+  // ⚠️ IMPORTANT : `recipe` est appliquee TOUT DE SUITE, pas dans le callback passe a
+  // setInteriors. React n'execute ce callback qu'au rendu suivant : les champs de
+  // l'inspecteur y liraient un `event.currentTarget` deja remis a null -> TypeError en
+  // plein rendu -> l'editeur se demonte (page blanche). Ca evite aussi d'appeler
+  // setSelected() depuis la phase de rendu (duplicateSelectedItem le fait).
   const updateActiveInterior = (recipe: (interior: InteriorDefinition) => InteriorDefinition, recordHistory = true) => {
     if (recordHistory) pushHistory()
-    setInteriors((current) =>
-      current.map((interior) => (interior.id === activeInteriorId ? serializeInterior(recipe(interior)) : interior)),
-    )
+    const current = interiorsRef.current.find((interior) => interior.id === activeInteriorId)
+    if (!current) return
+    const next = serializeInterior(recipe(current))
+    const list = interiorsRef.current.map((interior) => (interior.id === activeInteriorId ? next : interior))
+    interiorsRef.current = list // garde le ref a jour meme entre deux rendus (drag souris)
+    setInteriors(list)
     setSaveStatus('Modifications non sauvegardees')
   }
 
@@ -468,6 +484,17 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     setActiveFloorId(floor.id)
     setSelected(null)
   }
+
+  // Avertit avant de fermer/recharger l'onglet si l'interieur n'est pas sauvegarde.
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -710,18 +737,18 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     }
 
     setSaveStatus('Sauvegarde en cours...')
-    try {
-      const response = await fetch('/__pls/interiors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serialized),
-      })
-      if (!response.ok) throw new Error(await response.text())
-      setInteriors((current) => current.map((interior) => (interior.id === serialized.id ? serialized : interior)))
-      setSaveStatus(`Sauvegarde OK : ${serialized.name}`)
-    } catch (error) {
-      setSaveStatus(`Sauvegarde impossible : ${(error as Error).message}`)
+    const outcome = await saveData({
+      endpoint: '/__pls/interiors',
+      payload: serialized,
+      successMessage: `Sauvegarde OK : ${serialized.name}`,
+    })
+    if (outcome.status === 'ok') {
+      const list = interiorsRef.current.map((interior) => (interior.id === serialized.id ? serialized : interior))
+      interiorsRef.current = list
+      setInteriors(list)
+      setSavedInteriorsJson(JSON.stringify(list))
     }
+    setSaveStatus(outcome.message)
   }
 
   const fitPlan = () => {
@@ -735,6 +762,29 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
       ...floor,
       rooms: floor.rooms.map((room) => (room.id === selectedRoom.id ? recipe(room) : room)),
     }))
+  }
+
+  /**
+   * Champ X ou Z d'un element ponctuel. Les portes et fenetres restent collees au mur le
+   * plus proche : on ne peut pas les poser dans le vide en tapant une coordonnee.
+   */
+  const editPointAxis = (axis: 'x' | 'z', raw: string) => {
+    const value = readNumberInput(raw)
+    if (!Number.isFinite(value)) return
+    updateSelectedPointItem((item) => {
+      const point = axis === 'x' ? { x: value, z: item.z } : { x: item.x, z: value }
+      if ((selected?.kind === 'door' || selected?.kind === 'window') && activeFloor) {
+        return { ...item, ...snapToNearestWall(point, activeFloor) }
+      }
+      return { ...item, ...point }
+    })
+  }
+
+  /** Champ numerique d'une piece : on ignore la saisie tant qu'elle n'est pas un nombre. */
+  const editRoomNumber = (raw: string, recipe: (room: InteriorRoom, value: number) => InteriorRoom) => {
+    const value = readNumberInput(raw)
+    if (!Number.isFinite(value)) return
+    updateSelectedRoom((room) => recipe(room, value))
   }
 
   const updateSelectedPointItem = (recipe: (item: NonNullable<typeof selectedPointItem>) => NonNullable<typeof selectedPointItem>) => {
@@ -816,8 +866,13 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
           <button type="button" onClick={() => setTestMode(true)} disabled={!activeInterior || !activeFloor}>
             Tester
           </button>
-          <button type="button" className="primary" onClick={saveInterior}>
-            Sauver
+          <button
+            type="button"
+            className={`primary ${isDirty ? 'dirty' : ''}`}
+            onClick={saveInterior}
+            title={isDirty ? 'Interieur modifie, pas encore sur le disque' : 'Interieur a jour sur le disque'}
+          >
+            Sauver{isDirty ? ' •' : ''}
           </button>
         </div>
       </header>
@@ -962,6 +1017,12 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
               <dt>Etat</dt>
               <dd>{saveStatus}</dd>
             </div>
+            <div>
+              <dt>A sauver</dt>
+              <dd className={isDirty ? 'inspector-dirty' : ''}>
+                {isDirty ? 'Modifications en attente' : 'Rien, tout est sur le disque'}
+              </dd>
+            </div>
           </dl>
         </section>
 
@@ -976,21 +1037,21 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
               <div className="field-pair">
                 <label>
                   <span>X</span>
-                  <input type="number" step="0.5" value={selectedRoom.x} onChange={(event) => updateSelectedRoom((room) => ({ ...room, x: Number(event.currentTarget.value) }))} />
+                  <input type="number" step="0.5" value={selectedRoom.x} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, x: value }))} />
                 </label>
                 <label>
                   <span>Z</span>
-                  <input type="number" step="0.5" value={selectedRoom.z} onChange={(event) => updateSelectedRoom((room) => ({ ...room, z: Number(event.currentTarget.value) }))} />
+                  <input type="number" step="0.5" value={selectedRoom.z} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, z: value }))} />
                 </label>
               </div>
               <div className="field-pair">
                 <label>
                   <span>Largeur</span>
-                  <input type="number" min="0.5" step="0.5" value={selectedRoom.w} onChange={(event) => updateSelectedRoom((room) => ({ ...room, w: Math.max(0.5, Number(event.currentTarget.value)) }))} />
+                  <input type="number" min="0.5" step="0.5" value={selectedRoom.w} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, w: Math.max(0.5, value) }))} />
                 </label>
                 <label>
                   <span>Profondeur</span>
-                  <input type="number" min="0.5" step="0.5" value={selectedRoom.d} onChange={(event) => updateSelectedRoom((room) => ({ ...room, d: Math.max(0.5, Number(event.currentTarget.value)) }))} />
+                  <input type="number" min="0.5" step="0.5" value={selectedRoom.d} onChange={(event) => editRoomNumber(event.currentTarget.value, (room, value) => ({ ...room, d: Math.max(0.5, value) }))} />
                 </label>
               </div>
               <div className="form-actions">
@@ -1018,15 +1079,7 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
                     type="number"
                     step="0.5"
                     value={selectedPointItem.x}
-                    onChange={(event) =>
-                      updateSelectedPointItem((item) => {
-                        const point = { x: Number(event.currentTarget.value), z: item.z }
-                        if ((selected?.kind === 'door' || selected?.kind === 'window') && activeFloor) {
-                          return { ...item, ...snapToNearestWall(point, activeFloor) }
-                        }
-                        return { ...item, x: point.x }
-                      })
-                    }
+                    onChange={(event) => editPointAxis('x', event.currentTarget.value)}
                   />
                 </label>
                 <label>
@@ -1035,15 +1088,7 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
                     type="number"
                     step="0.5"
                     value={selectedPointItem.z}
-                    onChange={(event) =>
-                      updateSelectedPointItem((item) => {
-                        const point = { x: item.x, z: Number(event.currentTarget.value) }
-                        if ((selected?.kind === 'door' || selected?.kind === 'window') && activeFloor) {
-                          return { ...item, ...snapToNearestWall(point, activeFloor) }
-                        }
-                        return { ...item, z: point.z }
-                      })
-                    }
+                    onChange={(event) => editPointAxis('z', event.currentTarget.value)}
                   />
                 </label>
               </div>
@@ -1054,12 +1099,11 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
                     type="number"
                     step="15"
                     value={Math.round((selectedPointItem.rotation * 180) / Math.PI)}
-                    onChange={(event) =>
-                      updateSelectedPointItem((item) => ({
-                        ...item,
-                        rotation: (Number(event.currentTarget.value) * Math.PI) / 180,
-                      }))
-                    }
+                    onChange={(event) => {
+                      const degrees = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(degrees)) return
+                      updateSelectedPointItem((item) => ({ ...item, rotation: (degrees * Math.PI) / 180 }))
+                    }}
                   />
                 </label>
               )}
@@ -1085,12 +1129,13 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
                     min="0.2"
                     step="0.1"
                     value={Number((selectedPointItem as { width: number }).width)}
-                    onChange={(event) =>
-                      updateSelectedPointItem((item) => ({
-                        ...item,
-                        width: Math.max(0.2, Number(event.currentTarget.value)),
-                      }) as NonNullable<typeof selectedPointItem>)
-                    }
+                    onChange={(event) => {
+                      const width = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(width)) return
+                      updateSelectedPointItem(
+                        (item) => ({ ...item, width: Math.max(0.2, width) }) as NonNullable<typeof selectedPointItem>,
+                      )
+                    }}
                   />
                 </label>
               )}

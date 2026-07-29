@@ -1,6 +1,6 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
+import { DestructiveWriteError, hasForceHeader, writeDataFile } from './plsDataFile'
 
 export const MAP_MARKERS_ENDPOINT = '/__pls/map-markers'
 const MAP_MARKERS_FILE = path.join('src', 'data', 'mapMarkers.json')
@@ -62,15 +62,26 @@ export default function mapMarkersPlugin(): Plugin {
 
           try {
             const markers = normalizeMarkers(JSON.parse(body))
-            const target = path.join(root, MAP_MARKERS_FILE)
-            fs.mkdirSync(path.dirname(target), { recursive: true })
-            fs.writeFileSync(target, JSON.stringify(markers, null, 2) + '\n', 'utf8')
+            writeDataFile({
+              root,
+              relativePath: MAP_MARKERS_FILE,
+              content: markers,
+              itemCount: markers.length,
+              countExisting: (parsed) => (Array.isArray(parsed) ? parsed.length : 0),
+              force: hasForceHeader(req.headers),
+              label: "les points d'interet",
+            })
 
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: true, markers: markers.length }))
           } catch (error) {
-            res.statusCode = 400
-            res.end(`Points invalides : ${(error as Error).message}`)
+            // 409 = "je refuse d'ecraser" : l'editeur demande confirmation et rejoue.
+            res.statusCode = error instanceof DestructiveWriteError ? 409 : 400
+            res.end(
+              error instanceof DestructiveWriteError
+                ? error.message
+                : `Points invalides : ${(error as Error).message}`,
+            )
           }
         })
       })

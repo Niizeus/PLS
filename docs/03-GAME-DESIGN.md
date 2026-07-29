@@ -2,6 +2,11 @@
 
 Le "cahier des idées" du jeu. Il évolue avec le projet — n'hésitez pas à le compléter.
 
+**Statut : source principale des décisions gameplay.** Ce document décrit ce que le jeu doit être :
+boucles, systèmes, intentions, conséquences et feeling. Les détails techniques trop précis doivent
+être déplacés plus tard vers l'architecture ou une doc système dédiée si le fichier devient trop
+lourd.
+
 ---
 
 ## 🎯 Pitch

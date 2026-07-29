@@ -3,6 +3,10 @@
 Ce document regroupe les idees d'objets pour le jeu PLS. Il sert de base de game design avant
 integration dans les fichiers de donnees du jeu.
 
+**Statut : bible items en construction.** Ce document fixe les categories, la structure commune des
+items, l'inventaire cible et les listes d'objets. Les stats exactes et l'equilibrage fin viendront
+plus tard avec l'editeur d'items.
+
 ## Direction inventaire
 
 L'inventaire cible est un **sac à dos en grille**, pas une simple liste avec poids maximum. Chaque

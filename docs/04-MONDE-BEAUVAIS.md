@@ -4,6 +4,11 @@ On veut que la map soit **vraiment Beauvais**, à **échelle 1:1 complète** : o
 **vraies données de la ville** pour placer les bâtiments, les rues, les lieux importants et
 l'ambiance/le climat.
 
+**Statut : source principale pour Beauvais.** Ce document regroupe la vision de la ville, les
+quartiers, les lieux, le pipeline de carte et les garde-fous du monde. Il contient aussi des notes
+techniques importantes ; si elles deviennent trop nombreuses, elles pourront être séparées dans une
+doc technique du monde.
+
 Le but gameplay de la carte est simple : Beauvais est le piège dont Chibrux doit sortir.
 Les sorties routières sont bloquées par des travaux partout, donc la ville doit être à la fois
 reconnaissable, explorable et frustrante à quitter.

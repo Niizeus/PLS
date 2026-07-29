@@ -5,6 +5,10 @@ l'implementation. L'objectif est d'avoir un socle solide : savoir ce que l'outil
 permettre aujourd'hui, ce qu'il devra permettre plus tard, et comment eviter de construire
 un outil trop limite qu'il faudrait jeter dans deux semaines.
 
+**Statut : vision + roadmap + etat implemente.** Ce document sert a guider l'editeur PLS. Il melange
+volontairement la cible long terme et l'etat actuel ; si le fichier devient trop lourd, il faudra
+separer une doc "vision editeur" et une doc "suivi technique".
+
 ---
 
 ## Vision generale

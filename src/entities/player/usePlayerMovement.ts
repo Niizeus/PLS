@@ -292,7 +292,12 @@ export function usePlayerMovement(
     const isMoving = fwd !== 0 || strafe !== 0
     const isDefending = m.defending
     const crouching = k.crouch
-    const running = k.run && isMoving && !crouching
+
+    const inventory = useInventoryStore.getState()
+    const characterStats = useCharacterStatsStore.getState()
+    const effectiveStats = getEffectiveStats(characterStats, inventory.equipped, characterStats.activeEffects)
+    const needsSadWalk = shouldUseSadWalk(effectiveStats)
+    const running = k.run && isMoving && !crouching && !needsSadWalk
 
     // --- Saut (physique verticale) ---
     const grounded = jumpY.current <= 0.001
@@ -324,9 +329,6 @@ export function usePlayerMovement(
       moveDir.current.set(dirX, 0, dirZ)
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
-      const inventory = useInventoryStore.getState()
-      const characterStats = useCharacterStatsStore.getState()
-      const effectiveStats = getEffectiveStats(characterStats, inventory.equipped, characterStats.activeEffects)
       const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
       const speed = (crouching ? PLAYER.CROUCH_SPEED : running ? PLAYER.RUN_SPEED : PLAYER.WALK_SPEED) * speedMultiplier
       // Collision cercle contre murs : glisse le long des façades en biais au
@@ -361,6 +363,7 @@ export function usePlayerMovement(
     else if (interactTimer.current > 0) action = 'interact'
     else if (crouching) action = 'crouch'
     else if (isDefending) action = 'defense'
+    else if (isMoving && needsSadWalk) action = 'sadWalk'
     else if (running) action = 'run'
     else if (isMoving) action = 'walk'
     else action = 'idle'
@@ -389,6 +392,10 @@ export function usePlayerMovement(
  */
 function withoutThrottle(k: KeyboardState): KeyboardState {
   return { ...k, forward: false }
+}
+
+function shouldUseSadWalk(stats: { hunger: number; mental: number }): boolean {
+  return stats.hunger < 20 || stats.mental < 15
 }
 
 /** Pousse l'etat du vehicule vers le tableau de bord (vitesse, regime, rapport, essence). */

@@ -30,14 +30,18 @@ export default function Player() {
   }, [setPlayerObject])
 
   // Dégâts → animation "Hurt".
-  // On surveille simplement la barre de vie : dès qu'elle BAISSE (coup reçu,
-  // faim, chute...), on joue l'animation. Quand un vrai système de combat
+  // On surveille simplement la barre de vie : dès qu'elle BAISSE à cause d'un
+  // choc net (coup reçu, chute...), on joue l'animation. Les dégâts lents des
+  // besoins à zéro ne sonnent plus le joueur : ils passent par la marche triste.
+  // Quand un vrai système de combat
   // arrivera, il pourra aussi appeler `usePlayerStore.getState().takeHit()`
   // directement, sans toucher à ce fichier.
   useEffect(() => {
     let previousHealth = useCharacterStatsStore.getState().health
     return useCharacterStatsStore.subscribe((state) => {
-      if (state.health < previousHealth) usePlayerStore.getState().takeHit()
+      if (state.health < previousHealth && state.lastHealthLossSource !== 'needs') {
+        usePlayerStore.getState().takeHit()
+      }
       previousHealth = state.health
     })
   }, [])

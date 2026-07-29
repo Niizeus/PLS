@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useLoader, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FRAME } from './framePriority'
+import { CLOUD_SOFT_SPRITE_PATHS, CLOUD_SPRITE_PATHS, CLOUD_SPRITE_SIZES } from './cloudSpriteManifest'
 import {
   getCelestialCycle,
   writeMoonSkyPosition,
@@ -11,7 +12,16 @@ import { getSkyColors, useGameTimeStore } from '../gameplay/time/gameTimeStore'
 
 const SKY_DISTANCE = 180
 const STAR_COUNT = 1600
-const CLOUD_COUNT = 22
+const CLOUD_PACK_COLUMNS = 14
+const CLOUD_PACK_ROWS = 10
+const CLOUD_PACK_COUNT = CLOUD_PACK_COLUMNS * CLOUD_PACK_ROWS
+const CLOUD_FIELD_SIZE = 1980
+const CLOUD_EDGE_FADE = 430
+const CLOUD_FAR_FADE_START = 360
+const CLOUD_FAR_FADE_END = 820
+const CLOUD_VISIBILITY_SMOOTHING = 1.45
+const CLOUD_OVERHEAD_BLEND_START = 90
+const CLOUD_OVERHEAD_BLEND_END = 270
 
 function makeGradient(topColor: string, horizonColor: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
@@ -177,40 +187,6 @@ function makeMoonGlowTexture(): THREE.CanvasTexture {
   return texture
 }
 
-function makeCloudTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 128
-  const ctx = canvas.getContext('2d')!
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-  const puff = (x: number, y: number, rx: number, ry: number, alpha: number) => {
-    const gradient = ctx.createRadialGradient(x, y, 3, x, y, Math.max(rx, ry))
-    gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha})`)
-    gradient.addColorStop(0.62, `rgba(255, 255, 255, ${alpha * 0.7})`)
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    ctx.fillStyle = gradient
-    ctx.beginPath()
-    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  puff(68, 72, 56, 24, 0.72)
-  puff(104, 58, 52, 31, 0.78)
-  puff(142, 70, 64, 25, 0.68)
-  puff(176, 61, 42, 20, 0.48)
-  puff(126, 82, 84, 21, 0.34)
-
-  ctx.fillStyle = 'rgba(190, 215, 235, 0.16)'
-  ctx.beginPath()
-  ctx.ellipse(126, 91, 82, 14, 0, 0, Math.PI * 2)
-  ctx.fill()
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
-}
-
 function createStarGeometry(): THREE.BufferGeometry {
   let seed = 13579
   const random = () => {
@@ -247,22 +223,89 @@ function createStarGeometry(): THREE.BufferGeometry {
   return geometry
 }
 
-function createCloudSprites() {
-  return Array.from({ length: CLOUD_COUNT }, (_, index) => {
-    const angle = (index / CLOUD_COUNT) * Math.PI * 2
-    const radius = SKY_DISTANCE - 34 - (index % 3) * 8
-    const height = 42 + (index % 6) * 10
-    const width = 32 + (index % 5) * 8
+function createCloudPacks(textureCount: number) {
+  const random = createSeededRandom(92821)
+  const cellWidth = CLOUD_FIELD_SIZE / CLOUD_PACK_COLUMNS
+  const cellDepth = CLOUD_FIELD_SIZE / CLOUD_PACK_ROWS
+  const spriteChoices = getCloudSpriteChoices(textureCount)
+
+  return Array.from({ length: CLOUD_PACK_COUNT }, (_, index) => {
+    const column = index % CLOUD_PACK_COLUMNS
+    const row = Math.floor(index / CLOUD_PACK_COLUMNS)
+    const direction = random() * Math.PI * 2
+    const jitterX = cellWidth * 0.22
+    const jitterZ = cellDepth * 0.22
+    const baseX = -CLOUD_FIELD_SIZE * 0.5 + (column + 0.5) * cellWidth + (random() - 0.5) * jitterX
+    const baseZ = -CLOUD_FIELD_SIZE * 0.5 + (row + 0.5) * cellDepth + (random() - 0.5) * jitterZ
+    const cloudCount = 1 + Math.floor(random() * 3) + (index % 9 === 0 ? 1 : 0)
+    const packRadius = 14 + random() * 46
+    const baseHeight = 56 + random() * 56
+
     return {
-      position: [
-        Math.cos(angle) * radius,
-        height,
-        Math.sin(angle) * radius,
-      ] as [number, number, number],
-      scale: [width, width * 0.42, 1] as [number, number, number],
-      rotation: [0, 0, ((index % 5) - 2) * 0.08] as [number, number, number],
+      baseX,
+      baseZ,
+      directionX: Math.cos(direction),
+      directionZ: Math.sin(direction),
+      speed: 0.018 + random() * 0.052,
+      phase: random() * Math.PI * 2,
+      floatAmount: 0.6 + random() * 1.4,
+      clouds: Array.from({ length: cloudCount }, (_, cloudIndex) => {
+        const band = random()
+        const isPrimary = cloudIndex === 0
+        const angle = random() * Math.PI * 2
+        const companionMinDistance = band < 0.58 ? 12 : 20
+        const companionDistance = companionMinDistance + Math.pow(random(), 0.86) * Math.max(0, packRadius - companionMinDistance)
+        const distance = isPrimary ? 0 : companionDistance
+        const width = isPrimary
+          ? 30 + random() * 42
+          : band < 0.58
+            ? 8 + random() * 12
+            : 16 + random() * 18
+        const squash = 0.4 + random() * 0.24
+        const stretch = 0.78 + random() * 0.52
+        const pool = isPrimary
+          ? spriteChoices.primary
+          : band < 0.58
+            ? spriteChoices.small
+            : spriteChoices.companion
+
+        return {
+          offsetX: Math.cos(angle) * distance,
+          offsetY: (random() - 0.5) * 8,
+          offsetZ: Math.sin(angle) * distance,
+          scale: [width * stretch, width * squash, 1] as [number, number, number],
+          textureIndex: pickFrom(pool, random),
+          rotation: (random() - 0.5) * 0.22,
+        }
+      }),
+      height: baseHeight,
     }
   })
+}
+
+function getCloudSpriteChoices(textureCount: number) {
+  const indices = Array.from({ length: textureCount }, (_, index) => index)
+  const small = indices.filter((index) => CLOUD_SPRITE_SIZES[index].width < 160)
+  const companion = indices.filter((index) => CLOUD_SPRITE_SIZES[index].width >= 140 && CLOUD_SPRITE_SIZES[index].width < 260)
+  const primary = indices.filter((index) => CLOUD_SPRITE_SIZES[index].width >= 220)
+
+  return {
+    small: small.length > 0 ? small : indices,
+    companion: companion.length > 0 ? companion : indices,
+    primary: primary.length > 0 ? primary : indices,
+  }
+}
+
+function pickFrom(items: number[], random: () => number): number {
+  return items[Math.floor(random() * items.length)]
+}
+
+function createSeededRandom(seed: number) {
+  let state = seed >>> 0
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 4294967296
+  }
 }
 
 export default function DynamicSky() {
@@ -281,26 +324,16 @@ export default function DynamicSky() {
   const colors = useMemo(() => getSkyColors(displayMinute), [displayMinute])
   const background = useMemo(() => makeGradient(colors.top, colors.horizon), [colors.horizon, colors.top])
   const starGeometry = useMemo(() => createStarGeometry(), [])
-  const clouds = useMemo(() => createCloudSprites(), [])
+  const cloudTextures = useLoader(THREE.TextureLoader, [...CLOUD_SPRITE_PATHS])
+  const cloudSoftTextures = useLoader(THREE.TextureLoader, [...CLOUD_SOFT_SPRITE_PATHS])
+  const cloudPacks = useMemo(
+    () => createCloudPacks(cloudTextures.length),
+    [cloudTextures.length],
+  )
   const sunTexture = useMemo(() => makeSunTexture(), [])
   const sunGlareTexture = useMemo(() => makeSunGlareTexture(), [])
   const moonTexture = useMemo(() => makeMoonTexture(moonPhaseStep), [moonPhaseStep])
   const moonGlowTexture = useMemo(() => makeMoonGlowTexture(), [])
-  const cloudTexture = useMemo(() => makeCloudTexture(), [])
-  const cloudMaterial = useMemo(
-    () =>
-      new THREE.SpriteMaterial({
-        map: cloudTexture,
-        color: '#ffffff',
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        depthTest: true,
-        fog: false,
-        toneMapped: false,
-      }),
-    [cloudTexture],
-  )
   const scratch = useMemo(
     () => ({
       sunPosition: new THREE.Vector3(),
@@ -308,6 +341,13 @@ export default function DynamicSky() {
       cameraPosition: new THREE.Vector3(),
       cameraForward: new THREE.Vector3(),
       sunDirection: new THREE.Vector3(),
+      cloudTint: new THREE.Color(),
+      cloudBase: new THREE.Color('#fffdf4'),
+      cloudTop: new THREE.Color(),
+      cloudHorizon: new THREE.Color(),
+      cloudSkyTint: new THREE.Color(),
+      cloudSoftTint: new THREE.Color(),
+      cloudNight: new THREE.Color('#7e91b0'),
     }),
     [],
   )
@@ -327,18 +367,28 @@ export default function DynamicSky() {
       sunTexture.dispose()
       sunGlareTexture.dispose()
       moonGlowTexture.dispose()
-      cloudTexture.dispose()
-      cloudMaterial.dispose()
     }
-  }, [cloudMaterial, cloudTexture, moonGlowTexture, starGeometry, sunGlareTexture, sunTexture])
+  }, [moonGlowTexture, starGeometry, sunGlareTexture, sunTexture])
+
+  useEffect(() => {
+    for (const texture of [...cloudTextures, ...cloudSoftTextures]) {
+      texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearMipmapLinearFilter
+      texture.magFilter = THREE.LinearFilter
+      texture.generateMipmaps = true
+      texture.needsUpdate = true
+    }
+  }, [cloudSoftTextures, cloudTextures])
 
   useEffect(() => {
     return () => moonTexture.dispose()
   }, [moonTexture])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const totalMinutes = useGameTimeStore.getState().totalMinutes
     const cycle = getCelestialCycle(totalMinutes)
+    const cloudOpacity = 0.96 + cycle.daylight * 0.04
+    writeCloudTint(getSkyColors(totalMinutes), cycle, scratch)
 
     if (root.current) {
       camera.getWorldPosition(scratch.cameraPosition)
@@ -350,7 +400,50 @@ export default function DynamicSky() {
     }
 
     if (cloudLayer.current) {
-      cloudLayer.current.rotation.y = cycle.starRotation * 0.026
+      for (let index = 0; index < cloudLayer.current.children.length; index += 1) {
+        const packGroup = cloudLayer.current.children[index] as THREE.Group
+        const pack = cloudPacks[index]
+        const driftX = pack.baseX + totalMinutes * pack.directionX * pack.speed
+        const driftZ = pack.baseZ + totalMinutes * pack.directionZ * pack.speed
+        const offsetX = wrapOffset(driftX - scratch.cameraPosition.x, CLOUD_FIELD_SIZE)
+        const offsetZ = wrapOffset(driftZ - scratch.cameraPosition.z, CLOUD_FIELD_SIZE)
+        const planarDistance = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ)
+        const edgeDistance = Math.max(Math.abs(offsetX), Math.abs(offsetZ))
+        const edgeVisibility =
+          1 - smoothstep(CLOUD_FIELD_SIZE * 0.5 - CLOUD_EDGE_FADE, CLOUD_FIELD_SIZE * 0.5, edgeDistance)
+        const farVisibility = 1 - smoothstep(CLOUD_FAR_FADE_START, CLOUD_FAR_FADE_END, planarDistance)
+        const distanceVisibility = edgeVisibility * farVisibility
+        const farAmount = smoothstep(180, CLOUD_FAR_FADE_START, planarDistance)
+        const nightAmount = smoothstep(0.32, 0.92, 1 - cycle.daylight)
+        const overheadAmount =
+          (1 - smoothstep(CLOUD_OVERHEAD_BLEND_START, CLOUD_OVERHEAD_BLEND_END, planarDistance)) * nightAmount
+        const opacityFollow = 1 - Math.exp(-CLOUD_VISIBILITY_SMOOTHING * delta)
+        packGroup.position.set(
+          scratch.cameraPosition.x + offsetX,
+          pack.height + Math.sin(totalMinutes * 0.006 + pack.phase) * pack.floatAmount,
+          scratch.cameraPosition.z + offsetZ,
+        )
+
+        for (const cloudGroup of packGroup.children) {
+          const cloudPart = cloudGroup as THREE.Group
+          const sprite = cloudPart.children[0] as THREE.Sprite
+          const softSprite = cloudPart.children[1] as THREE.Sprite
+          const material = sprite.material as THREE.SpriteMaterial
+          const softMaterial = softSprite.material as THREE.SpriteMaterial
+          material.opacity = lerp(
+            material.opacity,
+            cloudOpacity * distanceVisibility * (1 - farAmount * 0.97) * (1 - overheadAmount * 0.3),
+            opacityFollow,
+          )
+          material.color.copy(scratch.cloudTint).lerp(scratch.cloudSkyTint, overheadAmount * 0.46)
+          softMaterial.opacity = lerp(
+            softMaterial.opacity,
+            (0.14 + farAmount * 0.56) * distanceVisibility * (1 - overheadAmount * 0.18),
+            opacityFollow,
+          )
+          softMaterial.color.copy(scratch.cloudSoftTint).lerp(scratch.cloudSkyTint, overheadAmount * 0.58)
+        }
+      }
     }
 
     if (stars.current) {
@@ -373,7 +466,6 @@ export default function DynamicSky() {
       moon.current.opacity = cycle.moonVisibility
       moon.current.rotation = 0
     }
-    cloudMaterial.opacity = cycle.cloudVisibility
   }, FRAME.CAMERA + 0.1)
 
   const totalMinutes = useGameTimeStore.getState().totalMinutes
@@ -381,7 +473,8 @@ export default function DynamicSky() {
   const moonPosition = writePosition(totalMinutes, SKY_DISTANCE - 20, scratch.moonPosition, writeMoonSkyPosition)
 
   return (
-    <group ref={root} renderOrder={-1000}>
+    <>
+      <group ref={root} renderOrder={-1000}>
       <group ref={starLayer}>
         <points geometry={starGeometry} renderOrder={-980}>
           <pointsMaterial
@@ -396,18 +489,6 @@ export default function DynamicSky() {
             fog={false}
           />
         </points>
-      </group>
-      <group ref={cloudLayer}>
-        {clouds.map((cloud, index) => (
-          <sprite
-            key={index}
-            material={cloudMaterial}
-            position={cloud.position}
-            rotation={cloud.rotation}
-            scale={cloud.scale}
-            renderOrder={-975}
-          />
-        ))}
       </group>
       <sprite position={sunPosition} scale={[68, 68, 1]} renderOrder={-970}>
         <spriteMaterial
@@ -458,7 +539,47 @@ export default function DynamicSky() {
           toneMapped={false}
         />
       </sprite>
-    </group>
+      </group>
+      <group ref={cloudLayer} renderOrder={-976}>
+        {cloudPacks.map((pack, packIndex) => (
+          <group key={packIndex} renderOrder={-975}>
+            {pack.clouds.map((cloud, cloudIndex) => (
+              <group
+                key={cloudIndex}
+                position={[cloud.offsetX, cloud.offsetY, cloud.offsetZ]}
+                scale={cloud.scale}
+                renderOrder={-975}
+              >
+                <sprite renderOrder={-974}>
+                  <spriteMaterial
+                    map={cloudTextures[cloud.textureIndex]}
+                    transparent
+                    opacity={0}
+                    rotation={cloud.rotation}
+                    depthWrite={false}
+                    depthTest
+                    fog={false}
+                    toneMapped={false}
+                  />
+                </sprite>
+                <sprite renderOrder={-976}>
+                  <spriteMaterial
+                    map={cloudSoftTextures[cloud.textureIndex]}
+                    transparent
+                    opacity={0}
+                    rotation={cloud.rotation}
+                    depthWrite={false}
+                    depthTest
+                    fog={false}
+                    toneMapped={false}
+                  />
+                </sprite>
+              </group>
+            ))}
+          </group>
+        ))}
+      </group>
+    </>
   )
 }
 
@@ -470,6 +591,44 @@ function writePosition(
 ) {
   writer(totalMinutes, distance, out)
   return [out.x, out.y, out.z] as [number, number, number]
+}
+
+function wrapOffset(value: number, span: number): number {
+  const half = span * 0.5
+  return ((((value + half) % span) + span) % span) - half
+}
+
+function writeCloudTint(
+  colors: { top: string; horizon: string },
+  cycle: { daylight: number; hour: number },
+  scratch: {
+    cloudTint: THREE.Color
+    cloudBase: THREE.Color
+    cloudTop: THREE.Color
+    cloudHorizon: THREE.Color
+    cloudSkyTint: THREE.Color
+    cloudSoftTint: THREE.Color
+    cloudNight: THREE.Color
+  },
+) {
+  scratch.cloudTop.set(colors.top)
+  scratch.cloudHorizon.set(colors.horizon)
+  scratch.cloudSkyTint.copy(scratch.cloudTop).lerp(scratch.cloudHorizon, 0.28)
+
+  const sunrise = pulse(cycle.hour, 6.65, 1.6)
+  const sunset = pulse(cycle.hour, 18.65, 2.1)
+  const warmSky = Math.max(sunrise, sunset) * smoothstep(0.08, 0.85, cycle.daylight)
+  const night = 1 - cycle.daylight
+
+  scratch.cloudTint.copy(scratch.cloudBase)
+  scratch.cloudTint.lerp(scratch.cloudSkyTint, 0.08)
+  scratch.cloudTint.lerp(scratch.cloudHorizon, warmSky * 0.2)
+  scratch.cloudTint.lerp(scratch.cloudNight, smoothstep(0.28, 0.92, night) * 0.54)
+  scratch.cloudSoftTint.copy(scratch.cloudTint).lerp(scratch.cloudSkyTint, 0.46)
+}
+
+function pulse(value: number, center: number, radius: number): number {
+  return Math.max(0, 1 - Math.abs(value - center) / radius)
 }
 
 const MOON_CRATERS = [

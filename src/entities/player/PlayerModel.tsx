@@ -23,6 +23,7 @@ const BASE = '/models/pierrot/'
 const ANIMS: Record<string, string> = {
   idle: 'idle.fbx',
   walk: 'walk.fbx',
+  sadWalk: 'Sad Walk.fbx',
   run: 'run.fbx',
   jump: 'jump.fbx',
   drive: 'drive.fbx',
@@ -45,6 +46,7 @@ const ANIMS: Record<string, string> = {
 const ACTION_TO_ANIM: Record<PlayerAction, string> = {
   idle: 'idle',
   walk: 'walk',
+  sadWalk: 'sadWalk',
   run: 'run',
   attack: 'punch1', // valeur de secours ; le vrai clip vient de ATTACK_TO_ANIM
   defense: 'defense',
@@ -91,6 +93,7 @@ export default function PlayerModel() {
   // Personnage de base (mesh skinné + squelette). Les autres FBX : juste les clips.
   const character = useFBX(BASE + ANIMS.idle)
   const fbxWalk = useFBX(BASE + ANIMS.walk)
+  const fbxSadWalk = useFBX(BASE + ANIMS.sadWalk)
   const fbxRun = useFBX(BASE + ANIMS.run)
   const fbxJump = useFBX(BASE + ANIMS.jump)
   const fbxDrive = useFBX(BASE + ANIMS.drive)
@@ -119,6 +122,7 @@ export default function PlayerModel() {
     return [
       clip(character, 'idle'),
       clip(fbxWalk, 'walk'),
+      clip(fbxSadWalk, 'sadWalk'),
       clip(fbxRun, 'run'),
       clip(fbxJump, 'jump'),
       clip(fbxDrive, 'drive'),

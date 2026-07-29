@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ItemEffectKey } from '../../data/items'
 
 export type CharacterStats = Record<ItemEffectKey, number>
+export type HealthLossSource = 'direct' | 'needs' | null
 export interface ActiveStatusEffect {
   id: string
   sourceItemId?: string
@@ -12,6 +13,7 @@ export interface ActiveStatusEffect {
 
 interface CharacterStatsState extends CharacterStats {
   activeEffects: ActiveStatusEffect[]
+  lastHealthLossSource: HealthLossSource
   applyEffects: (effects: Partial<Record<ItemEffectKey, number>>) => void
   applyConsumableEffects: (
     label: string,
@@ -123,6 +125,7 @@ const initialState = loadCharacterState()
 export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
   ...initialState.stats,
   activeEffects: initialState.activeEffects,
+  lastHealthLossSource: null,
 
   applyEffects: (effects) =>
     set((state) => {
@@ -133,7 +136,10 @@ export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
       }
       const clean = sanitizeStats(next)
       saveCharacterState(clean, state.activeEffects)
-      return clean
+      return {
+        ...clean,
+        lastHealthLossSource: clean.health < state.health ? 'direct' : state.lastHealthLossSource,
+      }
     }),
 
   applyConsumableEffects: (label, effects, durationMs = 30_000, sourceItemId) =>
@@ -170,7 +176,11 @@ export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
       }
 
       saveCharacterState(clean, activeEffects)
-      return { ...clean, activeEffects }
+      return {
+        ...clean,
+        activeEffects,
+        lastHealthLossSource: clean.health < state.health ? 'direct' : state.lastHealthLossSource,
+      }
     }),
 
   decayNeeds: () =>
@@ -185,7 +195,10 @@ export const useCharacterStatsStore = create<CharacterStatsState>((set) => ({
         health: state.health - (starving || dehydrated ? 1 : 0),
       })
       saveCharacterState(next, state.activeEffects)
-      return next
+      return {
+        ...next,
+        lastHealthLossSource: next.health < state.health ? 'needs' : state.lastHealthLossSource,
+      }
     }),
 
   purgeExpiredEffects: () =>

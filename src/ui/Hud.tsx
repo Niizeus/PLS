@@ -15,6 +15,7 @@ import { HUD, column, panel } from './hudStyle'
 const ACTION_LABEL: Record<PlayerAction, string> = {
   idle: 'À l’arrêt',
   walk: 'Marche',
+  sadWalk: 'Marche triste',
   run: 'Course',
   attack: 'Attaque !',
   defense: 'Défense',

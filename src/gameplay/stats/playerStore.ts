@@ -13,7 +13,17 @@ import type * as THREE from 'three'
  */
 
 // Les états visuels possibles du personnage.
-export type PlayerAction = 'idle' | 'walk' | 'run' | 'attack' | 'defense' | 'interact' | 'jump' | 'crouch' | 'hurt'
+export type PlayerAction =
+  | 'idle'
+  | 'walk'
+  | 'sadWalk'
+  | 'run'
+  | 'attack'
+  | 'defense'
+  | 'interact'
+  | 'jump'
+  | 'crouch'
+  | 'hurt'
 
 /**
  * Le coup en cours quand `action === 'attack'`.

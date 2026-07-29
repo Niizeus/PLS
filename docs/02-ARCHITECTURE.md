@@ -31,6 +31,32 @@ PLS/
 
 > Chaque dossier peut avoir son petit `README.md` qui dit "ce dossier sert à X".
 
+`src/gameplay/physics/` porte la couche physique globale PLS : constantes monde
+(gravité, pas fixe, groupes de collision), enveloppe Rapier, props dynamiques,
+surface physique de Beauvais et helpers d'appuis véhicule. `<WorldPhysicsColliders>`
+stream des tuiles `TrimeshCollider` fixes autour du joueur à partir de la surface
+finale praticable (`driveSurfaceHeightAt`, basee sur `groundHeight()`) : Rapier devient l'autorité locale du
+sol proche, pas seulement un outil de test. `<WorldBuildingColliders>` stream aussi
+les façades proches sous forme de murs `CuboidCollider` fixes, pour que la voiture
+collide avec les bâtiments dans Rapier et plus avec une caisse 2D séparée. Les
+props/colliders de test attendent le chargement du relief avant de se créer, sinon
+Rapier les figerait à une hauteur provisoire avant que le sol visible existe.
+
+La voiture principale charge le FBX `public/models/Vehicule/Voiture/Chevrolet.fbx`
+dans `entities/vehicles/Car.tsx`. Le modèle est préparé en trois parties (caisse,
+essieu avant, essieu arrière) pour exposer les pivots nécessaires au braquage, à la
+rotation des roues et à la suspension visuelle. Elle possède un chassis Rapier
+`dynamic` invisible : `carRapierController.ts` applique les forces moteur, frein,
+grip latéral, couple de direction et suspensions par raycasts sur ce rigidbody. Le
+store voiture publie ensuite la pose Rapier pour que le joueur/caméra suivent le
+chassis au lieu de tirer la voiture avec l'ancien contrôleur. Les futurs véhicules
+FBX doivent suivre la même règle : séparer au minimum caisse et roues pilotables,
+puis fournir un chassis Rapier dynamique piloté par forces. Attention : quand un
+`RigidBody` est en `colliders={false}` avec des colliders enfants manuels, la masse
+doit être posée sur le collider enfant (`CuboidCollider mass={...}`), sinon le
+rigidbody garde une masse calculée depuis la densité par défaut et les suspensions
+appliquent des forces totalement disproportionnées.
+
 ---
 
 ## 👥 Qui bosse sur quoi (répartition = clé anti-conflit)
@@ -82,6 +108,9 @@ Par défaut tous les `useFrame` ont la priorité 0 : leur ordre est celui du **m
 composants. Déplacer une ligne dans `GameCanvas.tsx` suffisait donc à faire calculer la caméra
 AVANT le joueur — elle visait alors la position de l'image précédente, ce qui produit une saccade
 proportionnelle à la vitesse (invisible à pied, très visible en voiture).
+En voiture, `FollowCamera` lit directement la pose conducteur publiée par Rapier dans `carStore` et
+lisse une cible legerement predite par la velocite du chassis : cela evite d'amplifier les pas fixes
+de la physique quand le rendu tourne entre deux steps.
 
 L'ordre est maintenant explicite, via les constantes de `FRAME` :
 
@@ -98,6 +127,16 @@ L'ordre est maintenant explicite, via les constantes de `FRAME` :
 > `core/SceneRenderer.tsx` existe et appelle `gl.render()` en dernier. Si un jour on enlève
 > toutes les priorités, il faut enlever `SceneRenderer` en même temps — sinon plus rien
 > ne s'affiche, ou la scène est rendue deux fois.
+
+En voiture, le joueur/caméra suit une pose publiée par le chassis Rapier. `FollowCamera`
+lisse donc uniquement son point cible voiture (X/Z plus vite que Y) pour absorber les
+micro-oscillations de suspension/route sans changer la pose physique réelle de la voiture.
+
+Constat de test à conserver : les "mini rollbacks" ressentis en voiture apparaissent en même temps
+que des drops FPS. Ils doivent donc être traités comme un problème de hitch/performance du monde
+physique et du streaming, pas seulement comme un réglage de caméra ou de suspension. Avant de
+changer le feeling véhicule, profiler en priorité le nombre de colliders actifs, les remounts de
+`WorldBuildingColliders` / `WorldPhysicsColliders`, et le coût du step Rapier.
 
 > 🖱️ La souris est **mise en file** (`queueRotation`) et appliquée **une seule fois par image**
 > (`flushRotation`). Les événements souris n'arrivent pas au rythme des images : une souris

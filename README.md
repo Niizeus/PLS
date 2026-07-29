@@ -41,6 +41,7 @@ C'est ce qui évite les conflits et les fichiers "cassés".
 |-------|-------|----------|
 | Base du projet | **Vite + React + TypeScript** | Rapide, moderne, l'IA le maîtrise très bien |
 | 3D dans le navigateur | **Three.js** via **React Three Fiber** (`@react-three/fiber` + `@react-three/drei`) | Standard du 3D en React |
+| Physique sandbox | **Rapier** via `@react-three/rapier` | Gravité, rigid bodies, collisions dynamiques, joints/ragdolls |
 | Style cell-shading | `MeshToonMaterial` + contours (`<Outlines>` / postprocessing) | Rendu cartoon / BD |
 | État du jeu | **Zustand** | Léger, simple, parfait pour un jeu |
 | Carte de Beauvais | Données **OpenStreetMap** (OSM) | La vraie ville, gratuit |

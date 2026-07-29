@@ -23,9 +23,13 @@ export const SCOOTER: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   WHEELBASE: 1.02,
   /** Un deux-roues braque beaucoup plus qu'une voiture. */
   MAX_STEER_ANGLE: 0.72,
+  /** Expose au F2 par coherence avec les vehicules, peu utilise par le scooter actuel. */
+  VISUAL_STEER_MAX: 0.42,
   STEER_RESPONSE: 9,
   /** Un scooter tient moins en virage qu'une voiture. */
   MAX_LATERAL_G: 0.75,
+  /** Petit bonus arcade : le deux-roues doit rester nerveux sans devenir impossible. */
+  STEER_ASSIST_G: 0.25,
   /** Leger et etroit : il derape peu, il bascule. */
   GRIP: 11,
   BRAKE_FORCE: 1500,
@@ -66,6 +70,16 @@ export const SCOOTER: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   IMPACT_RESTITUTION: 0.15,
   IMPACT_SPIN: 0.14,
   SPIN_DAMP: 4.5,
+  SUSPENSION_TRAVEL: 0.28,
+  TAKEOFF_MIN_SPEED: 8,
+  TAKEOFF_MIN_VELOCITY: 0.55,
+  TAKEOFF_MIN_PITCH: 0.07,
+  AIR_GRAVITY: 11.5,
+  AIR_PITCH_CONTROL: 2.2,
+  AIR_ROLL_CONTROL: 3.8,
+  AIR_ROTATION_DAMP: 0.18,
+  TAKEOFF_ROTATION_IMPULSE: 4.2,
+  LANDING_BOUNCE: 0.12,
 
   /** Hauteur du perso quand il est assis dessus. */
   SEAT_HEIGHT: 1.15,

@@ -6,8 +6,10 @@
   },
   "vehicles": {
     "car": {
-      "STEER_RESPONSE": 13.3,
-      "BRAKE_FORCE": 20008
+      "STEER_RESPONSE": 12.8,
+      "BRAKE_FORCE": 20008,
+      "VISUAL_STEER_MAX": 0.11,
+      "STEER_ASSIST_G": 0.86
     },
     "scooter": {
       "MAX_STEER_ANGLE": 0.69,

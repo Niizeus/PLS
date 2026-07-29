@@ -4,7 +4,7 @@ import { Outlines } from '@react-three/drei'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { groundHeight } from '../../world/beauvais/roadway'
+import { sampleVehicleGrounding } from '../../gameplay/physics/vehicleGrounding'
 import { useScooterStore } from './scooterStore'
 import { FRAME } from '../../core/framePriority'
 import { getVehicleTuning } from '../../devtools/devTuningStore'
@@ -25,17 +25,19 @@ export default function Scooter() {
   useFrame(() => {
     const g = group.current
     if (!g) return
-    const { riding, parkedX, parkedZ, parkedRot } = useScooterStore.getState()
+    const { riding, parkedX, parkedZ, parkedRot, visualPitch, visualRoll } = useScooterStore.getState()
 
     if (riding) {
       const player = usePlayerStore.getState().playerObject
       if (player) {
         g.position.set(player.position.x, player.position.y - getVehicleTuning('scooter').SEAT_HEIGHT, player.position.z)
-        g.rotation.y = player.rotation.y
+        g.rotation.set(visualPitch, player.rotation.y, visualRoll)
       }
     } else {
-      g.position.set(parkedX, groundHeight(parkedX, parkedZ), parkedZ)
-      g.rotation.y = parkedRot
+      const tuning = getVehicleTuning('scooter')
+      const grounding = sampleVehicleGrounding(parkedX, parkedZ, parkedRot, tuning)
+      g.position.set(parkedX, grounding.groundY, parkedZ)
+      g.rotation.set(grounding.pitch, parkedRot, grounding.roll)
     }
     // ATTACHED : on lit la position du joueur, donc APRES qu'il ait bouge.
   }, FRAME.ATTACHED)

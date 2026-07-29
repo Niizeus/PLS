@@ -1,6 +1,13 @@
 import * as THREE from 'three'
+import type { RapierContext } from '@react-three/rapier'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
-import { vehicleGroundHeight, type GroundSampleOffset } from '../../world/beauvais/roadway'
+import { PHYSICS_GROUPS } from '../../gameplay/physics/physicsConfig'
+import {
+  sampleVehicleGrounding,
+  sampleVehicleGroundingFallback,
+  type VehicleGroundingPose,
+  type VehicleGroundingOptions,
+} from '../../gameplay/physics/vehicleGrounding'
 import { moveBox } from '../movementCollision'
 import { createGearboxState, driveTrain, type EngineConfig, type GearboxState } from './vehicleEngine'
 
@@ -52,6 +59,8 @@ export interface VehicleDriveConfig {
   WHEELBASE: number
   /** Braquage maxi des roues avant (rad). */
   MAX_STEER_ANGLE: number
+  /** Clamp purement visuel du braquage des roues (rad), sans impact sur la physique. */
+  VISUAL_STEER_MAX: number
   /** Vitesse à laquelle le braquage rejoint l'intention du joueur. */
   STEER_RESPONSE: number
   /**
@@ -59,6 +68,8 @@ export interface VehicleDriveConfig {
    * au-delà, le véhicule sous-vire au lieu de pivoter comme une toupie.
    */
   MAX_LATERAL_G: number
+  /** Bonus d'adherence de jeu a haute vitesse : moins simulateur, plus conduisible. */
+  STEER_ASSIST_G: number
   /** Vitesse à laquelle la dérive latérale est mangée (plus haut = plus « sur rails »). */
   GRIP: number
   /** Force de freinage aux roues (N). */
@@ -90,6 +101,26 @@ export interface VehicleDriveConfig {
   IMPACT_SPIN: number
   /** Amortissement de ce pivotement (par seconde). */
   SPIN_DAMP: number
+  /** Course verticale disponible avant que les roues perdent le contact (m). */
+  SUSPENSION_TRAVEL: number
+  /** Vitesse horizontale minimale pour decoller sur une rupture de pente (m/s). */
+  TAKEOFF_MIN_SPEED: number
+  /** Vitesse verticale minimale transmise par le sol pour decoller (m/s). */
+  TAKEOFF_MIN_VELOCITY: number
+  /** Angle minimal du nez quand les roues perdent le sol pour declencher un saut. */
+  TAKEOFF_MIN_PITCH: number
+  /** Gravite appliquee au vehicule en l'air (m/s2). */
+  AIR_GRAVITY: number
+  /** Controle de tangage en l'air avec avant/arriere. */
+  AIR_PITCH_CONTROL: number
+  /** Controle de roulis en l'air avec gauche/droite. */
+  AIR_ROLL_CONTROL: number
+  /** Amortissement des rotations aeriennes. */
+  AIR_ROTATION_DAMP: number
+  /** Impulsion de rotation donnee par l'assiette au moment du decollage. */
+  TAKEOFF_ROTATION_IMPULSE: number
+  /** Part de vitesse verticale conservee a l'atterrissage. */
+  LANDING_BOUNCE: number
 
   SEAT_HEIGHT: number
   /** Demi-longueur de la caisse de collision (m). */
@@ -114,6 +145,16 @@ export interface VehicleDriveState {
   /** Boîte de vitesses. */
   box: GearboxState
   groundY: number | null
+  lastSupportY: number | null
+  verticalVelocity: number
+  airborne: boolean
+  pitch: number
+  roll: number
+  pitchVelocity: number
+  rollVelocity: number
+  wheelSpin: number
+  frontSuspension: number
+  rearSuspension: number
 }
 
 export const createVehicleDriveState = (): VehicleDriveState => ({
@@ -126,6 +167,16 @@ export const createVehicleDriveState = (): VehicleDriveState => ({
   gear: 1,
   box: createGearboxState(),
   groundY: null,
+  lastSupportY: null,
+  verticalVelocity: 0,
+  airborne: false,
+  pitch: 0,
+  roll: 0,
+  pitchVelocity: 0,
+  rollVelocity: 0,
+  wheelSpin: 0,
+  frontSuspension: 0,
+  rearSuspension: 0,
 })
 
 export function stopVehicle(state: VehicleDriveState) {
@@ -139,6 +190,16 @@ export function stopVehicle(state: VehicleDriveState) {
   state.box.gear = 0
   state.box.shiftTimer = 0
   state.groundY = null
+  state.lastSupportY = null
+  state.verticalVelocity = 0
+  state.airborne = false
+  state.pitch = 0
+  state.roll = 0
+  state.pitchVelocity = 0
+  state.rollVelocity = 0
+  state.wheelSpin = 0
+  state.frontSuspension = 0
+  state.rearSuspension = 0
 }
 
 const GRAVITY = 9.81
@@ -149,8 +210,11 @@ export function driveVehicle(
   state: VehicleDriveState,
   config: VehicleDriveConfig,
   delta: number,
+  rapierContext?: Pick<RapierContext, 'rapier' | 'world'>,
 ) {
   // --- Repère du véhicule : avant (u) et droite (r) ---
+  const sweepFrom = group.position.clone()
+
   const ux = Math.sin(group.rotation.y)
   const uz = Math.cos(group.rotation.y)
   const rx = Math.cos(group.rotation.y)
@@ -159,14 +223,15 @@ export function driveVehicle(
   // On décompose la vitesse : ce qui avance, et ce qui dérive sur le côté.
   let forward = state.vx * ux + state.vz * uz
   let lateral = state.vx * rx + state.vz * rz
+  const tireContact = state.airborne ? 0.08 : 1
 
-  forward = applyLongitudinalForces(k, state, config, forward, delta)
+  forward = applyLongitudinalForces(k, state, config, forward, delta, tireContact)
   // L'adhérence mange la dérive. En exponentielle, pour que le comportement ne
   // dépende pas du nombre d'images par seconde.
-  lateral *= Math.exp(-config.GRIP * delta)
+  lateral *= Math.exp(-config.GRIP * tireContact * delta)
 
   updateSteer(k, state, config, delta)
-  const heading = turn(group, state, config, forward, delta)
+  const heading = turn(group, state, config, forward, delta, tireContact)
 
   // On recompose la vitesse dans le NOUVEAU repère : la caisse a tourné, mais
   // l'inertie, elle, ne tourne pas avec — c'est ça, la dérive.
@@ -189,11 +254,19 @@ export function driveVehicle(
 
   if (result.hit) resolveImpact(group, state, config, result, delta)
 
-  // --- Assiette : on suit la chaussée sous les 4 roues ---
-  const offsets = wheelOffsets(group.rotation.y, config)
-  const targetY = vehicleGroundHeight(group.position.x, group.position.z, offsets) + config.SEAT_HEIGHT
-  state.groundY = smoothGroundY(state.groundY, targetY, delta)
-  group.position.y = state.groundY
+  // --- Assiette : les roues lisent le sol, la caisse suit hauteur + tangage/roulis ---
+  const grounding = sampleVehicleGrounding(
+    group.position.x,
+    group.position.z,
+    group.rotation.y,
+    config,
+    createRapierWheelGrounding(group, state, config, rapierContext),
+  )
+  const targetY = grounding.groundY + config.SEAT_HEIGHT
+  updateVerticalMotion(k, state, config, targetY, grounding.pitch, grounding.roll, delta)
+  updateWheelVisuals(state, config, grounding, forward, delta)
+  group.position.y = state.groundY ?? targetY
+  applyRapierChassisSweep(sweepFrom, group, state, config, rapierContext)
 }
 
 /**
@@ -207,26 +280,27 @@ function applyLongitudinalForces(
   config: VehicleDriveConfig,
   forward: number,
   delta: number,
+  tireContact: number,
 ): number {
   const speed = Math.abs(forward)
   let force = 0
 
   if (k.forward) {
     if (forward < -0.5) {
-      force = config.BRAKE_FORCE // on roulait en arrière : c'est un freinage
+      force = config.BRAKE_FORCE * tireContact // on roulait en arrière : c'est un freinage
       state.rpm = 0
       state.gear = 1
     } else {
       const out = driveTrain(config.ENGINE, state.box, forward, config.WHEEL_RADIUS, true, delta)
-      force = out.force
+      force = out.force * tireContact
       state.rpm = out.rpm
       state.gear = out.gear
     }
   } else if (k.backward) {
     if (forward > 0.5) {
-      force = -config.BRAKE_FORCE // on roulait en avant : c'est un freinage
+      force = -config.BRAKE_FORCE * tireContact // on roulait en avant : c'est un freinage
     } else {
-      force = -forward > config.REVERSE_SPEED ? 0 : -config.REVERSE_FORCE
+      force = -forward > config.REVERSE_SPEED ? 0 : -config.REVERSE_FORCE * tireContact
     }
     state.rpm = 0
     state.gear = 1
@@ -235,12 +309,14 @@ function applyLongitudinalForces(
     const out = driveTrain(config.ENGINE, state.box, forward, config.WHEEL_RADIUS, false, delta)
     state.rpm = out.rpm
     state.gear = out.gear
-    force = -Math.sign(forward) * config.ENGINE_BRAKE
+    force = -Math.sign(forward) * config.ENGINE_BRAKE * tireContact
   }
 
   // Résistances : l'air (en v²) et le roulement (constant). C'est leur équilibre
   // avec la poussée du dernier rapport qui FIXE la vitesse maxi — voir vehicleEngine.ts.
-  force -= Math.sign(forward) * (config.DRAG * speed * speed + config.ROLL_RESIST * config.MASS * GRAVITY)
+  force -= Math.sign(forward) * (
+    config.DRAG * speed * speed + config.ROLL_RESIST * config.MASS * GRAVITY * tireContact
+  )
 
   let next = forward + (force / config.MASS) * delta
   // Sans ça, les résistances feraient repartir le véhicule en arrière à l'arrêt.
@@ -276,11 +352,14 @@ function turn(
   config: VehicleDriveConfig,
   forward: number,
   delta: number,
+  tireContact: number,
 ): number {
   const angle = state.steer * config.MAX_STEER_ANGLE
-  let yawRate = (forward / config.WHEELBASE) * Math.tan(angle)
+  let yawRate = (forward / config.WHEELBASE) * Math.tan(angle) * tireContact
 
-  const maxYawRate = (config.MAX_LATERAL_G * GRAVITY) / Math.max(Math.abs(forward), 1)
+  const speed = Math.abs(forward)
+  const assist = THREE.MathUtils.smoothstep(speed, 12, 34) * config.STEER_ASSIST_G
+  const maxYawRate = ((config.MAX_LATERAL_G + assist) * GRAVITY) / Math.max(speed, 1)
   yawRate = THREE.MathUtils.clamp(yawRate, -maxYawRate, maxYawRate)
 
   // Rotation résiduelle d'un choc, qui s'amortit toute seule.
@@ -288,6 +367,33 @@ function turn(
   state.spin *= Math.exp(-config.SPIN_DAMP * delta)
 
   return group.rotation.y
+}
+
+function createRapierWheelGrounding(
+  group: THREE.Group,
+  state: VehicleDriveState,
+  config: VehicleDriveConfig,
+  context?: Pick<RapierContext, 'rapier' | 'world'>,
+): VehicleGroundingOptions {
+  if (!context) return {}
+
+  const fallback = sampleVehicleGroundingFallback(group.position.x, group.position.z, group.rotation.y, config)
+  const originY =
+    Math.max(state.groundY ?? -Infinity, group.position.y, fallback.groundY + config.SEAT_HEIGHT) +
+    config.SUSPENSION_TRAVEL +
+    config.WHEEL_RADIUS +
+    1.2
+  const maxDistance = config.SEAT_HEIGHT + config.SUSPENSION_TRAVEL + config.WHEEL_RADIUS + 5
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+
+  return {
+    raycastWheel: (x, z) => {
+      const ray = new context.rapier.Ray({ x, y: originY, z }, { x: 0, y: -1, z: 0 })
+      const hit = context.world.castRay(ray, maxDistance, true, filterFlags, PHYSICS_GROUPS.vehicle)
+      return hit ? { y: originY - hit.timeOfImpact } : null
+    },
+  }
 }
 
 /**
@@ -300,6 +406,67 @@ function turn(
  * C'est tout : frôler coûte quelques pour cent, percuter de face coûte tout.
  * Aucun cas particulier, aucun seuil arbitraire — juste de la géométrie.
  */
+function applyRapierChassisSweep(
+  from: THREE.Vector3,
+  group: THREE.Group,
+  state: VehicleDriveState,
+  config: VehicleDriveConfig,
+  context?: Pick<RapierContext, 'rapier' | 'world'>,
+) {
+  if (!context) return
+
+  const motion = {
+    x: group.position.x - from.x,
+    y: group.position.y - from.y,
+    z: group.position.z - from.z,
+  }
+  if (motion.x * motion.x + motion.y * motion.y + motion.z * motion.z < 0.000001) return
+
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, group.rotation.y, 0))
+  const shape = new context.rapier.Cuboid(config.COLLISION_HALF_WIDTH, 0.55, config.COLLISION_HALF_LENGTH)
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+
+  const hit = context.world.castShape(
+    {
+      x: from.x,
+      y: from.y - config.SEAT_HEIGHT + 0.75,
+      z: from.z,
+    },
+    { x: quat.x, y: quat.y, z: quat.z, w: quat.w },
+    motion,
+    shape,
+    0.03,
+    1,
+    true,
+    filterFlags,
+    PHYSICS_GROUPS.vehicle,
+  )
+  if (!hit) return
+
+  // Une rampe / route inclinée est un sol praticable : les raycasts de roues
+  // doivent la monter. Le sweep chassis sert surtout aux obstacles latéraux.
+  if (isClimbableSurfaceHit(hit)) return
+
+  const keep = Math.max(0, hit.time_of_impact - 0.03)
+  group.position.set(from.x + motion.x * keep, from.y + motion.y * keep, from.z + motion.z * keep)
+  state.groundY = group.position.y
+
+  if (Math.abs(motion.x) + Math.abs(motion.z) > 0.001) {
+    state.vx *= 0.18
+    state.vz *= 0.18
+    state.speed = state.vx * Math.sin(group.rotation.y) + state.vz * Math.cos(group.rotation.y)
+  }
+  if (motion.y < 0) {
+    state.verticalVelocity = Math.max(0, state.verticalVelocity)
+    state.airborne = false
+  }
+}
+
+function isClimbableSurfaceHit(hit: { normal1: { y: number }; normal2: { y: number } }) {
+  return Math.max(Math.abs(hit.normal1.y), Math.abs(hit.normal2.y)) > 0.45
+}
+
 function resolveImpact(
   group: THREE.Group,
   state: VehicleDriveState,
@@ -332,27 +499,109 @@ function resolveImpact(
   state.speed = state.vx * Math.sin(group.rotation.y) + state.vz * Math.cos(group.rotation.y)
 }
 
-/**
- * Les 4 points de CONTACT AU SOL (les roues), pour calculer l'assiette.
- *
- * ⚠️ Ce ne sont pas des points de collision : les murs sont gérés par la caisse
- * orientée (`moveBox`). Les roues sont un peu rentrées dans l'emprise, comme sur
- * un vrai véhicule.
- */
-function wheelOffsets(rotationY: number, config: VehicleDriveConfig): GroundSampleOffset[] {
-  const halfLength = config.COLLISION_HALF_LENGTH * 0.68
-  const halfWidth = config.COLLISION_HALF_WIDTH * 0.8
+function updateVerticalMotion(
+  k: KeyboardState,
+  state: VehicleDriveState,
+  config: VehicleDriveConfig,
+  supportY: number,
+  supportPitch: number,
+  supportRoll: number,
+  delta: number,
+) {
+  if (state.groundY === null) {
+    state.groundY = supportY
+    state.lastSupportY = supportY
+    state.verticalVelocity = 0
+    state.airborne = false
+  }
 
-  const forwardX = Math.sin(rotationY)
-  const forwardZ = Math.cos(rotationY)
-  const rightX = Math.cos(rotationY)
-  const rightZ = -Math.sin(rotationY)
-  return [
-    { x: forwardX * halfLength + rightX * halfWidth, z: forwardZ * halfLength + rightZ * halfWidth },
-    { x: forwardX * halfLength - rightX * halfWidth, z: forwardZ * halfLength - rightZ * halfWidth },
-    { x: -forwardX * halfLength + rightX * halfWidth, z: -forwardZ * halfLength + rightZ * halfWidth },
-    { x: -forwardX * halfLength - rightX * halfWidth, z: -forwardZ * halfLength - rightZ * halfWidth },
-  ]
+  const previousSupportY = state.lastSupportY ?? supportY
+  const supportVelocity = (supportY - previousSupportY) / Math.max(delta, 1e-4)
+  state.lastSupportY = supportY
+
+  if (state.groundY < supportY) {
+    state.groundY = supportY
+    state.airborne = false
+    state.verticalVelocity = Math.max(0, THREE.MathUtils.clamp(supportVelocity, -6, 10))
+    state.pitch = smoothValue(state.pitch, supportPitch, 18, delta)
+    state.roll = smoothValue(state.roll, supportRoll, 18, delta)
+  }
+
+  if (!state.airborne) {
+    state.verticalVelocity = smoothValue(
+      state.verticalVelocity,
+      THREE.MathUtils.clamp(supportVelocity, -6, 8),
+      14,
+      delta,
+    )
+
+    const lostWheelContact = supportY + config.SUSPENSION_TRAVEL < state.groundY
+    const fastEnough = Math.abs(state.speed) >= config.TAKEOFF_MIN_SPEED
+    const launchedByRamp = state.verticalVelocity >= config.TAKEOFF_MIN_VELOCITY
+    const rampLip = state.pitch <= -config.TAKEOFF_MIN_PITCH
+
+    if (lostWheelContact && fastEnough && (launchedByRamp || rampLip)) {
+      state.airborne = true
+      state.verticalVelocity = Math.max(state.verticalVelocity, config.TAKEOFF_MIN_VELOCITY)
+      state.pitchVelocity += supportPitch * config.TAKEOFF_ROTATION_IMPULSE
+      state.rollVelocity += supportRoll * config.TAKEOFF_ROTATION_IMPULSE
+    } else {
+      state.groundY = supportY > state.groundY ? supportY : smoothGroundY(state.groundY, supportY, delta)
+      state.pitch = smoothValue(state.pitch, supportPitch, 12, delta)
+      state.roll = smoothValue(state.roll, supportRoll, 12, delta)
+      state.pitchVelocity = smoothValue(state.pitchVelocity, 0, 10, delta)
+      state.rollVelocity = smoothValue(state.rollVelocity, 0, 10, delta)
+      return
+    }
+  }
+
+  const pitchInput = (k.backward ? 1 : 0) - (k.forward ? 1 : 0)
+  const rollInput = (k.left ? 1 : 0) - (k.right ? 1 : 0)
+  state.pitchVelocity += pitchInput * config.AIR_PITCH_CONTROL * delta
+  state.rollVelocity += rollInput * config.AIR_ROLL_CONTROL * delta
+  state.pitchVelocity *= Math.exp(-config.AIR_ROTATION_DAMP * delta)
+  state.rollVelocity *= Math.exp(-config.AIR_ROTATION_DAMP * delta)
+
+  state.verticalVelocity -= config.AIR_GRAVITY * delta
+  state.groundY += state.verticalVelocity * delta
+  state.pitch += state.pitchVelocity * delta
+  state.roll += state.rollVelocity * delta
+
+  if (state.verticalVelocity <= 0 && state.groundY <= supportY + config.SUSPENSION_TRAVEL) {
+    state.airborne = false
+    state.groundY = supportY
+    state.verticalVelocity = Math.max(0, -state.verticalVelocity * config.LANDING_BOUNCE)
+    state.pitch = smoothValue(state.pitch, supportPitch, 18, delta)
+    state.roll = smoothValue(state.roll, supportRoll, 18, delta)
+    state.pitchVelocity *= config.LANDING_BOUNCE
+    state.rollVelocity *= config.LANDING_BOUNCE
+  }
+}
+
+function updateWheelVisuals(
+  state: VehicleDriveState,
+  config: VehicleDriveConfig,
+  grounding: VehicleGroundingPose,
+  forward: number,
+  delta: number,
+) {
+  state.wheelSpin = wrapAngle(state.wheelSpin + (forward / Math.max(config.WHEEL_RADIUS, 0.01)) * delta)
+
+  const supportLift = state.airborne ? -config.SUSPENSION_TRAVEL * 0.45 : 0
+  const bodyY = (state.groundY ?? grounding.groundY + config.SEAT_HEIGHT) - config.SEAT_HEIGHT
+  const frontTarget = clampVisualSuspension(grounding.frontY - bodyY + supportLift, config)
+  const rearTarget = clampVisualSuspension(grounding.rearY - bodyY + supportLift, config)
+  state.frontSuspension = smoothValue(state.frontSuspension, frontTarget, 16, delta)
+  state.rearSuspension = smoothValue(state.rearSuspension, rearTarget, 16, delta)
+}
+
+function clampVisualSuspension(value: number, config: VehicleDriveConfig): number {
+  return THREE.MathUtils.clamp(value, -config.SUSPENSION_TRAVEL * 0.65, config.SUSPENSION_TRAVEL * 0.35)
+}
+
+function wrapAngle(value: number): number {
+  if (Math.abs(value) < Math.PI * 128) return value
+  return THREE.MathUtils.euclideanModulo(value + Math.PI, Math.PI * 2) - Math.PI
 }
 
 function smoothGroundY(current: number | null, target: number, delta: number): number {
@@ -361,4 +610,8 @@ function smoothGroundY(current: number | null, target: number, delta: number): n
   const next = current + (target - current) * t
   const maxStep = 5 * delta
   return THREE.MathUtils.clamp(next, current - maxStep, current + maxStep)
+}
+
+function smoothValue(current: number, target: number, speed: number, delta: number): number {
+  return current + (target - current) * (1 - Math.exp(-speed * delta))
 }

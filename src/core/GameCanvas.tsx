@@ -6,6 +6,9 @@ import DynamicSky from './DynamicSky'
 import TimeFog from './TimeFog'
 import World from '../world/World'
 import Characters from '../entities/Characters'
+import PhysicsRoot from '../gameplay/physics/PhysicsRoot'
+import WorldBuildingColliders from '../gameplay/physics/WorldBuildingColliders'
+import WorldPhysicsColliders from '../gameplay/physics/WorldPhysicsColliders'
 
 /**
  * La scène 3D complète.
@@ -38,8 +41,12 @@ export default function GameCanvas() {
 
       <Lights />
 
-      <World />
-      <Characters />
+      <PhysicsRoot>
+        <World />
+        <WorldPhysicsColliders />
+        <WorldBuildingColliders />
+        <Characters />
+      </PhysicsRoot>
 
       <FollowCamera />
 

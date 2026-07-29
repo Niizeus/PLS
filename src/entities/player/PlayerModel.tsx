@@ -225,7 +225,7 @@ export default function PlayerModel() {
   }, [action, attackMove, attackToken, hurtToken, riding, actions, playerTuning])
 
   return (
-    <group ref={group} rotation={[0, FACING, 0]} position={[0, fit.y, 0]} scale={fit.scale}>
+    <group ref={group} visible={!ridingCar} rotation={[0, FACING, 0]} position={[0, fit.y, 0]} scale={fit.scale}>
       <primitive object={character} />
     </group>
   )

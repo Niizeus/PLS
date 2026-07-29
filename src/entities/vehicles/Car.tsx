@@ -1,107 +1,220 @@
-﻿import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { Outlines } from '@react-three/drei'
+import { useMemo, useRef } from 'react'
+import { Outlines, useFBX } from '@react-three/drei'
+import { CuboidCollider, RigidBody, useAfterPhysicsStep, useBeforePhysicsStep, useRapier, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
-import { usePlayerStore } from '../../gameplay/stats/playerStore'
-import { groundHeight } from '../../world/beauvais/roadway'
-import { FRAME } from '../../core/framePriority'
+import { PHYSICS_GROUPS, PHYSICS_MATERIAL } from '../../gameplay/physics/physicsConfig'
 import { getVehicleTuning } from '../../devtools/devTuningStore'
-import { CAR_COLORS } from './carConfig'
+import { driveSurfaceHeightAt } from '../../gameplay/physics/physicsSurface'
+import { usePlayerStore } from '../../gameplay/stats/playerStore'
+import { CAR, CAR_COLORS } from './carConfig'
 import { useCarStore } from './carStore'
+import {
+  applyRapierCarForces,
+  CAR_CHASSIS_CENTER_HEIGHT,
+  CAR_STATIC_SUSPENSION_RATIO,
+  createRapierCarRuntime,
+  parkRapierCar,
+  type RapierCarSnapshot,
+  snapshotRapierCar,
+  syncCarVisualFromBody,
+} from './carRapierController'
 
-/** Voiture prototype en primitives, pensee comme repere d'echelle et test de conduite. */
+const CAR_MODEL_URL = '/models/Vehicule/Voiture/Chevrolet.fbx'
+const CAR_MODEL_SCALE = 0.01
+const RAW_UNITS_PER_METER = 1 / CAR_MODEL_SCALE
+const CAR_MODEL_GROUND_LIFT = 0.635
+const FRONT_WHEEL_NAME = 'muscle_wheel_front_muscle_0'
+const REAR_WHEEL_NAME = 'muscle_wheel_rear_muscle_0'
+const BODY_NAME = 'muscle_body_muscle_0'
+const CHASSIS_COLLIDER_HALF_HEIGHT = 0.38
+const VISUAL_SUSPENSION_SCALE = 0.65
+const VISUAL_REBOUND_LIMIT = 0.11
+const VISUAL_BUMP_LIMIT = 0.11
+
+interface ModelPart {
+  geometry: THREE.BufferGeometry
+  material: THREE.Material
+  center: THREE.Vector3
+}
+
+/** Voiture FBX jouable : caisse + essieux separes pour braquage, rotation et suspension visuelle. */
 export default function Car() {
   const group = useRef<THREE.Group>(null)
-
-  useFrame(() => {
-    const g = group.current
-    if (!g) return
-    const { riding, parkedX, parkedZ, parkedRot } = useCarStore.getState()
-
-    if (riding) {
-      const player = usePlayerStore.getState().playerObject
-      if (player) {
-        g.position.set(player.position.x, player.position.y - getVehicleTuning('car').SEAT_HEIGHT, player.position.z)
-        g.rotation.y = player.rotation.y
-      }
-    } else {
-      g.position.set(parkedX, groundHeight(parkedX, parkedZ), parkedZ)
-      g.rotation.y = parkedRot
+  const chassisBody = useRef<RapierRigidBody>(null)
+  const frontSuspension = useRef<THREE.Group>(null)
+  const rearSuspension = useRef<THREE.Group>(null)
+  const frontSteer = useRef<THREE.Group>(null)
+  const frontWheel = useRef<THREE.Mesh>(null)
+  const rearWheel = useRef<THREE.Mesh>(null)
+  const rapierContext = useRapier()
+  const runtime = useRef(createRapierCarRuntime())
+  const fbx = useFBX(CAR_MODEL_URL) as THREE.Group
+  const model = useMemo(() => prepareCarModel(fbx), [fbx])
+  const initialPose = useMemo(() => {
+    const state = useCarStore.getState()
+    return {
+      x: state.parkedX,
+      y: driveSurfaceHeightAt(state.parkedX, state.parkedZ) + CAR_CHASSIS_CENTER_HEIGHT,
+      z: state.parkedZ,
+      rot: state.parkedRot,
     }
-    // ATTACHED : on lit la position du joueur, donc APRES qu'il ait bouge.
-  }, FRAME.ATTACHED)
+  }, [])
 
-  const outline = <Outlines thickness={0.035} color="#17171d" />
+  useBeforePhysicsStep((world) => {
+    const body = chassisBody.current
+    if (!body) return
+    const state = useCarStore.getState()
+    const tuning = getVehicleTuning('car')
+    if (!state.riding && !state.physicsReleased) {
+      parkRapierCar(
+        body,
+        state.parkedX,
+        state.parkedZ,
+        state.parkedRot,
+        driveSurfaceHeightAt(state.parkedX, state.parkedZ),
+        runtime.current,
+      )
+      return
+    }
+    applyRapierCarForces(
+      body,
+      world,
+      rapierContext.rapier,
+      state.riding ? state.controls : { forward: false, backward: false, left: false, right: false },
+      tuning,
+      runtime.current,
+      world.timestep || 1 / 60,
+    )
+  })
+
+  useAfterPhysicsStep(() => {
+    const g = group.current
+    const body = chassisBody.current
+    if (!g || !body) return
+    const tuning = getVehicleTuning('car')
+    syncCarVisualFromBody(g, body)
+    const snapshot = snapshotRapierCar(body, runtime.current, tuning)
+    const carState = useCarStore.getState()
+    carState.setPhysicsState(snapshot)
+    if (carState.riding) syncDriverAnchor(snapshot)
+
+    if (frontSuspension.current) frontSuspension.current.position.y = visualSuspensionLocal(snapshot.frontSuspension, tuning)
+    if (rearSuspension.current) rearSuspension.current.position.y = visualSuspensionLocal(snapshot.rearSuspension, tuning)
+    if (frontSteer.current) frontSteer.current.rotation.y = THREE.MathUtils.clamp(snapshot.steer, -tuning.VISUAL_STEER_MAX, tuning.VISUAL_STEER_MAX)
+    if (frontWheel.current) frontWheel.current.rotation.x = snapshot.wheelSpin
+    if (rearWheel.current) rearWheel.current.rotation.x = snapshot.wheelSpin
+  })
 
   return (
-    <group ref={group}>
-      {/* Chassis 4 m x 1,8 m, avant vers +Z. */}
-      <mesh position={[0, 0.58, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.8, 0.58, 3.9]} />
-        <meshToonMaterial color={CAR_COLORS.body} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-
-      {/* Capot plus bas pour lire l'avant de loin. */}
-      <mesh position={[0, 0.92, 1.05]} castShadow>
-        <boxGeometry args={[1.62, 0.18, 1.35]} />
-        <meshToonMaterial color={CAR_COLORS.bodyDark} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-
-      {/* Habitacle ramasse et un peu caricatural. */}
-      <mesh position={[0, 1.12, -0.35]} castShadow>
-        <boxGeometry args={[1.35, 0.72, 1.25]} />
-        <meshToonMaterial color={CAR_COLORS.glass} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-
-      <mesh position={[0, 1.5, -0.35]} castShadow>
-        <boxGeometry args={[1.1, 0.12, 0.95]} />
-        <meshToonMaterial color={CAR_COLORS.body} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-
-      {/* Pare-chocs et phares. */}
-      <mesh position={[0, 0.53, 2.04]} castShadow>
-        <boxGeometry args={[1.9, 0.16, 0.16]} />
-        <meshToonMaterial color={CAR_COLORS.bumper} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-      <mesh position={[-0.48, 0.75, 2.14]} castShadow>
-        <boxGeometry args={[0.34, 0.16, 0.08]} />
-        <meshToonMaterial color={CAR_COLORS.trim} gradientMap={toonGradient} />
-      </mesh>
-      <mesh position={[0.48, 0.75, 2.14]} castShadow>
-        <boxGeometry args={[0.34, 0.16, 0.08]} />
-        <meshToonMaterial color={CAR_COLORS.trim} gradientMap={toonGradient} />
-      </mesh>
-      <mesh position={[0, 0.5, -2.02]} castShadow>
-        <boxGeometry args={[1.82, 0.14, 0.14]} />
-        <meshToonMaterial color={CAR_COLORS.bumper} gradientMap={toonGradient} />
-        {outline}
-      </mesh>
-
-      <Wheel x={-0.98} z={1.25} />
-      <Wheel x={0.98} z={1.25} />
-      <Wheel x={-0.98} z={-1.25} />
-      <Wheel x={0.98} z={-1.25} />
-    </group>
+    <>
+      <RigidBody
+        ref={chassisBody}
+        type="dynamic"
+        colliders={false}
+        ccd
+        canSleep={false}
+        position={[initialPose.x, initialPose.y, initialPose.z]}
+        rotation={[0, initialPose.rot, 0]}
+        linearDamping={0.015}
+        angularDamping={1.8}
+        additionalSolverIterations={4}
+      >
+        <CuboidCollider
+          args={[CAR.COLLISION_HALF_WIDTH, CHASSIS_COLLIDER_HALF_HEIGHT, CAR.COLLISION_HALF_LENGTH]}
+          mass={CAR.MASS}
+          friction={PHYSICS_MATERIAL.asphalt.friction}
+          restitution={PHYSICS_MATERIAL.asphalt.restitution}
+          collisionGroups={PHYSICS_GROUPS.vehicle}
+          solverGroups={PHYSICS_GROUPS.vehicle}
+        />
+      </RigidBody>
+      <group ref={group}>
+        <group scale={CAR_MODEL_SCALE} position={[0, CAR_MODEL_GROUND_LIFT, 0]}>
+          <mesh
+            position={model.body.center}
+            geometry={model.body.geometry}
+            material={model.body.material}
+            castShadow
+            receiveShadow
+          >
+            <Outlines thickness={0.035} color="#17171d" />
+          </mesh>
+          <group ref={frontSuspension}>
+            <group ref={frontSteer} position={model.frontWheel.center}>
+              <mesh
+                ref={frontWheel}
+                geometry={model.frontWheel.geometry}
+                material={model.frontWheel.material}
+                castShadow
+              >
+                <Outlines thickness={0.026} color="#111116" />
+              </mesh>
+            </group>
+          </group>
+          <group ref={rearSuspension}>
+            <group position={model.rearWheel.center}>
+              <mesh ref={rearWheel} geometry={model.rearWheel.geometry} material={model.rearWheel.material} castShadow>
+                <Outlines thickness={0.026} color="#111116" />
+              </mesh>
+            </group>
+          </group>
+        </group>
+      </group>
+    </>
   )
 }
 
-function Wheel({ x, z }: { x: number; z: number }) {
-  return (
-    <group position={[x, 0.38, z]} rotation={[0, 0, Math.PI / 2]}>
-      <mesh castShadow>
-        <cylinderGeometry args={[0.36, 0.36, 0.26, 20]} />
-        <meshToonMaterial color={CAR_COLORS.wheel} gradientMap={toonGradient} />
-      </mesh>
-      <mesh position={[0, 0, 0.14]} castShadow>
-        <cylinderGeometry args={[0.16, 0.16, 0.03, 14]} />
-        <meshToonMaterial color={CAR_COLORS.tireHub} gradientMap={toonGradient} />
-      </mesh>
-    </group>
-  )
+function prepareCarModel(source: THREE.Group) {
+  source.updateMatrixWorld(true)
+  return {
+    body: bakePart(source, BODY_NAME, createCarMaterial(CAR_COLORS.body)),
+    frontWheel: bakePart(source, FRONT_WHEEL_NAME, createCarMaterial(CAR_COLORS.wheel)),
+    rearWheel: bakePart(source, REAR_WHEEL_NAME, createCarMaterial(CAR_COLORS.wheel)),
+  }
 }
+
+function bakePart(source: THREE.Group, name: string, material: THREE.Material): ModelPart {
+  const object = source.getObjectByName(name)
+  if (!object || !('geometry' in object)) {
+    throw new Error(`Mesh FBX voiture introuvable: ${name}`)
+  }
+
+  const mesh = object as THREE.Mesh
+  const geometry = mesh.geometry.clone()
+  geometry.applyMatrix4(mesh.matrixWorld)
+  geometry.computeBoundingBox()
+  const box = geometry.boundingBox ?? new THREE.Box3()
+  const center = box.getCenter(new THREE.Vector3())
+  geometry.translate(-center.x, -center.y, -center.z)
+  geometry.computeBoundingBox()
+  geometry.computeBoundingSphere()
+
+  return { geometry, material, center }
+}
+
+function createCarMaterial(color: string) {
+  return new THREE.MeshToonMaterial({
+    color,
+    gradientMap: toonGradient,
+  })
+}
+
+function visualSuspensionLocal(compression: number, tuning: ReturnType<typeof getVehicleTuning>) {
+  const staticCompression = tuning.SUSPENSION_TRAVEL * CAR_STATIC_SUSPENSION_RATIO
+  const visualMeters = THREE.MathUtils.clamp(
+    (compression - staticCompression) * VISUAL_SUSPENSION_SCALE,
+    -VISUAL_REBOUND_LIMIT,
+    VISUAL_BUMP_LIMIT,
+  )
+  return visualMeters * RAW_UNITS_PER_METER
+}
+
+function syncDriverAnchor(snapshot: RapierCarSnapshot) {
+  const player = usePlayerStore.getState().playerObject
+  if (!player) return
+  player.position.set(snapshot.driverX, snapshot.driverY, snapshot.driverZ)
+  player.rotation.y = snapshot.rot
+}
+
+useFBX.preload(CAR_MODEL_URL)

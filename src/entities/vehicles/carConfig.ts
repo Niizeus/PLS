@@ -5,8 +5,8 @@ import type { VehicleDriveConfig } from './vehicleDriving'
  *
  * Les chiffres ci-dessous sont de VRAIES grandeurs physiques (kg, N·m, m), pas
  * des nombres magiques : c'est ce qui rend le comportement previsible quand on
- * les ajuste. Le rayon de roue et l'empattement sont ceux du modele 3D
- * (`Car.tsx` : roues de 0,36 m, essieux a ±1,25 m).
+ * les ajuste. Le rayon de roue, l'empattement et la caisse de collision sont
+ * cales sur le FBX `public/models/Vehicule/Voiture/Chevrolet.fbx`.
  *
  * ⚠️ **La vitesse maxi n'est pas reglee directement.** Elle sort de l'equilibre
  * entre la poussee du dernier rapport et la resistance de l'air. Avec les
@@ -19,17 +19,21 @@ import type { VehicleDriveConfig } from './vehicleDriving'
 export const CAR: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   /** Masse en ordre de marche, conducteur compris. */
   MASS: 1250,
-  /** Rayon de roue (m) — cale sur le visuel de Car.tsx. */
-  WHEEL_RADIUS: 0.36,
-  /** Empattement : les essieux sont a z = ±1,25 dans Car.tsx. */
-  WHEELBASE: 2.5,
-  /** Braquage maxi des roues avant : ~31°, rayon de braquage d'environ 4 m. */
-  MAX_STEER_ANGLE: 0.55,
+  /** Rayon moyen des roues FBX : avant ~0,31 m, arriere ~0,34 m. */
+  WHEEL_RADIUS: 0.33,
+  /** Empattement mesure sur le FBX Chevrolet. */
+  WHEELBASE: 2.87,
+  /** Braquage maxi des roues avant : ~34°, arcade mais plausible. */
+  MAX_STEER_ANGLE: 0.6,
+  /** Clamp visuel separe : les roues restent lisibles meme si la physique braque plus fort. */
+  VISUAL_STEER_MAX: 0.24,
   STEER_RESPONSE: 5.5,
   /** Une voiture de route tient environ 0,95 g en virage. Au-dela, elle sous-vire. */
   MAX_LATERAL_G: 0.95,
+  /** Aide arcade progressive au-dela de ~45 km/h : moins realiste, beaucoup plus jouable. */
+  STEER_ASSIST_G: 0.55,
   /** Adherence laterale : haut = colle a la route, bas = ca glisse en appui. */
-  GRIP: 7.5,
+  GRIP: 8.6,
   /** Freinage : ~1 g, ce que fait une voiture normale. */
   BRAKE_FORCE: 12000,
   REVERSE_FORCE: 4200,
@@ -74,14 +78,25 @@ export const CAR: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   /** Un choc pris sur une aile devie la caisse. */
   IMPACT_SPIN: 0.08,
   SPIN_DAMP: 3.5,
+  /** Plus la course est grande, plus la voiture absorbe avant de decoller. */
+  SUSPENSION_TRAVEL: 0.42,
+  TAKEOFF_MIN_SPEED: 12,
+  TAKEOFF_MIN_VELOCITY: 0.7,
+  TAKEOFF_MIN_PITCH: 0.08,
+  AIR_GRAVITY: 10.8,
+  AIR_PITCH_CONTROL: 1.4,
+  AIR_ROLL_CONTROL: 2.4,
+  AIR_ROTATION_DAMP: 0.12,
+  TAKEOFF_ROTATION_IMPULSE: 2.8,
+  LANDING_BOUNCE: 0.18,
 
   /** Hauteur du joueur en position assise dans la voiture. */
   SEAT_HEIGHT: 1.05,
-  /** Caisse de collision, calee sur le visuel (chassis 3,9 m x 1,8 m). */
-  COLLISION_HALF_LENGTH: 1.9,
-  COLLISION_HALF_WIDTH: 0.86,
+  /** Caisse de collision, calee sur le FBX (~4,92 m x 1,91 m), un peu rentree des pare-chocs. */
+  COLLISION_HALF_LENGTH: 2.28,
+  COLLISION_HALF_WIDTH: 0.9,
   /** Distance a laquelle on peut monter dans la voiture. */
-  MOUNT_RANGE: 3.5,
+  MOUNT_RANGE: 3.8,
 }
 
 /** Palette BD de la voiture prototype. */

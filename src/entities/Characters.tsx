@@ -3,6 +3,7 @@ import MapMarkerEntities from './map/MapMarkerEntities'
 import Player from './player/Player'
 import Scooter from './vehicles/Scooter'
 import Car from './vehicles/Car'
+import SandboxPhysicsProps from '../gameplay/physics/SandboxPhysicsProps'
 
 /**
  * LES PERSONNAGES & VÉHICULES : le joueur (Chibrux), le scooter, et plus tard les PNJ.
@@ -21,6 +22,7 @@ export default function Characters() {
       <Car />
       <MapMarkerEntities />
       <ItemPickups />
+      <SandboxPhysicsProps />
     </>
   )
 }

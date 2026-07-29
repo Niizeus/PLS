@@ -1,4 +1,5 @@
 import { useFrame } from '@react-three/fiber'
+import { useRapier } from '@react-three/rapier'
 import { useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
@@ -60,6 +61,7 @@ export function usePlayerMovement(
   mouse: RefObject<MouseState>,
 ) {
   const setAction = usePlayerStore((s) => s.setAction)
+  const rapierContext = useRapier()
   const setDefending = usePlayerStore((s) => s.setDefending)
   const setZoneName = usePlayerStore((s) => s.setZoneName)
   const strike = usePlayerStore((s) => s.strike)
@@ -95,7 +97,6 @@ export function usePlayerMovement(
   const moveDir = useRef(new THREE.Vector3())
   // Etats de conduite conserves hors React pour eviter les re-render par frame.
   const scooterDrive = useRef(createVehicleDriveState())
-  const carDrive = useRef(createVehicleDriveState())
   // Hauteur de sol lissee pour eviter les secousses camera sur routes/bordures.
   const groundY = useRef<number | null>(null)
   // Saut : hauteur au-dessus du sol + vitesse verticale.
@@ -164,9 +165,8 @@ export function usePlayerMovement(
           riding = true
         } else if (nearest === 'car') {
           k.interactQueued = false
-          group.position.set(car.parkedX, groundHeight(car.parkedX, car.parkedZ) + carTuning.SEAT_HEIGHT, car.parkedZ)
-          group.rotation.y = car.parkedRot
-          stopVehicle(carDrive.current)
+          group.position.set(car.driverX, car.driverY, car.driverZ)
+          group.rotation.y = car.physicsRot
           car.mount()
           useRadioStore.getState().startVehicleRadio(CAR_RADIO_ID)
           riding = true
@@ -182,11 +182,18 @@ export function usePlayerMovement(
         riding = false
       } else if (ridingCar) {
         k.interactQueued = false
-        const rot = group.rotation.y
-        car.parkAt(group.position.x, group.position.z, rot)
-        group.position.x += Math.cos(rot) * 1.9
-        group.position.z += -Math.sin(rot) * 1.9
-        stopVehicle(carDrive.current)
+        const carState = useCarStore.getState()
+        const rot = carState.physicsRot
+        const exitX = carState.physicsX + Math.cos(rot) * 1.9
+        const exitZ = carState.physicsZ + -Math.sin(rot) * 1.9
+        const exitGroundY = groundHeight(exitX, exitZ) + playerTuning.BODY_HEIGHT
+        const exitY = Math.max(carState.driverY, exitGroundY)
+        carState.parkAt(carState.physicsX, carState.physicsZ, rot)
+        group.position.set(exitX, exitY, exitZ)
+        group.rotation.y = rot
+        groundY.current = exitGroundY
+        jumpY.current = Math.max(0, exitY - exitGroundY)
+        vy.current = carState.velocityY
         useRadioStore.getState().stopRadio(CAR_RADIO_ID)
         riding = false
       }
@@ -198,24 +205,34 @@ export function usePlayerMovement(
 
     if (activeScooter) {
       const scooterState = useScooterStore.getState()
-      driveVehicle(group, scooterState.fuelLiters > 0 ? k : withoutThrottle(k), scooterDrive.current, scooterTuning, delta)
+      driveVehicle(
+        group,
+        scooterState.fuelLiters > 0 ? k : withoutThrottle(k),
+        scooterDrive.current,
+        scooterTuning,
+        delta,
+        rapierContext,
+      )
       if (Math.abs(scooterDrive.current.speed) > 0.2) {
         scooterState.consumeFuel((Math.abs(scooterDrive.current.speed) * 0.000009 + (k.forward ? 0.000015 : 0)) * delta)
       }
+      scooterState.setVisualAttitude(scooterDrive.current.pitch, scooterDrive.current.roll)
       publishTelemetry('scooter', scooterDrive.current, scooterTuning, scooterState)
     } else if (activeCar) {
       const carState = useCarStore.getState()
-      driveVehicle(group, carState.fuelLiters > 0 ? k : withoutThrottle(k), carDrive.current, carTuning, delta)
-      if (Math.abs(carDrive.current.speed) > 0.2) {
-        carState.consumeFuel((Math.abs(carDrive.current.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
+      carState.setControlsFromKeyboard(carState.fuelLiters > 0 ? k : withoutThrottle(k))
+      group.position.set(carState.driverX, carState.driverY, carState.driverZ)
+      group.rotation.y = carState.physicsRot
+      if (Math.abs(carState.speed) > 0.2) {
+        carState.consumeFuel((Math.abs(carState.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
       }
-      publishTelemetry('car', carDrive.current, carTuning, carState)
+      publishCarTelemetry(carState, carTuning)
     } else {
       useVehicleTelemetryStore.getState().clearTelemetry()
     }
 
     if (riding) {
-      const speed = activeScooter ? scooterDrive.current.speed : carDrive.current.speed
+      const speed = activeScooter ? scooterDrive.current.speed : useCarStore.getState().speed
       const vis = motion.current
       vis.action = Math.abs(speed) > 0.2 ? 'run' : 'idle'
       vis.attackProgress = 0
@@ -415,6 +432,20 @@ function publishTelemetry(
     maxRpm: config.ENGINE.MAX_RPM,
     maxSpeed: config.MAX_SPEED,
     fuelRatio: tank.fuelCapacityLiters > 0 ? tank.fuelLiters / tank.fuelCapacityLiters : 0,
+  })
+}
+
+function publishCarTelemetry(
+  car: ReturnType<typeof useCarStore.getState>,
+  config: VehicleDriveConfig,
+) {
+  useVehicleTelemetryStore.getState().setTelemetry('car', {
+    speed: car.speed,
+    rpm: car.rpm,
+    gear: car.gear,
+    maxRpm: config.ENGINE.MAX_RPM,
+    maxSpeed: config.MAX_SPEED,
+    fuelRatio: car.fuelCapacityLiters > 0 ? car.fuelLiters / car.fuelCapacityLiters : 0,
   })
 }
 

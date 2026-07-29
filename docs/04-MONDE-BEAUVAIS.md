@@ -404,12 +404,22 @@ grande carte (M), le HUD, le temps de jeu et les besoins — **et toute la donn�
    surface praticable finale : relief ou dessus de chaussee, selon le point. Tout ce qui se deplace
    ou se pose en jeu (joueur, vehicules, pickups, reperes) doit utiliser `groundHeight()` - jamais
    de hauteur en dur. Detail, pieges et verification chiffree : voir la section Le relief de Beauvais.
+   Le collider Rapier du sol proche passe par `driveSurfaceHeightAt()`, qui relaie cette surface
+   finale ; il ne doit pas revenir a un bitume central uniquement, sinon les bordures/raccords de
+   route redeviennent des coutures physiques invisibles.
    Les surfaces experimentales de route echantillonnent aussi le relief autour du point pour eviter un bitume enterre dans les bosses. Les collisions de deplacement sont testees en sous-pas et avec une empreinte au sol simplifiee,
    afin que les vehicules rapides ne traversent pas les facades entre deux frames.
 2. **Ce qui bloque doit être visible.** `Beauvais.tsx` affiche *tous* les bâtiments de la donnée,
    sans exception, et `collision.ts` bloque exactement les mêmes contours. Si tu exclus un
    bâtiment de l'affichage (pour le remplacer par un modèle fait main, par exemple), **exclus-le
    aussi des collisions** — sinon tu recrées un mur invisible.
+   Les colliders Rapier des facades sont streamés par tuiles stables : chaque tuile garde un seul
+   `RigidBody fixed` qui regroupe plusieurs murs `CuboidCollider`. Ne reviens pas a un recentrage
+   global qui remonte des centaines de rigidbodies a la fois : ca provoque des drops FPS et des
+   corrections physiques visibles en voiture.
+   Diagnostic gameplay actuel : si une voiture rollback au même instant qu'un drop FPS, chercher
+   d'abord un hitch de streaming/colliders ou un step Rapier trop cher. Le bug n'est pas a traiter
+   comme une simple erreur de hauteur de route tant que cette correlation FPS/rollback existe.
 3. **Une couche de sol = une entrée dans `groundLayers.ts`.** Ce fichier est la source unique de
    l'empilement (hauteur + rang de profondeur) : herbe, bois, eau, routes. Si tu ajoutes une
    couche, donne-lui sa place **là** et nulle part ailleurs. **Deux surfaces colorées différemment

@@ -392,17 +392,59 @@ Le joueur peut utiliser ou voler :
 Même si les sorties routières sont bloquées par les travaux, les véhicules restent essentiels pour
 circuler, fuir la police, faire des missions ou provoquer le chaos.
 
-**Deja en place :** un **scooter** et une **voiture prototype** conduisibles (`src/entities/vehicles/`).
-On s'en approche et on monte/descend avec **E** ; conduite a ZQSD (accelere, freine/recule, braque).
-Les vehicules partagent un noyau de physique commun (`vehicleDriving.ts` + `vehicleEngine.ts`) avec
-des reglages propres a chaque type.
+**Deja en place :** un **scooter** et une **voiture Chevrolet FBX** conduisibles
+(`src/entities/vehicles/`). On s'en approche et on monte/descend avec **E** ; conduite a ZQSD
+(accelere, freine/recule, braque). Les vehicules partagent un noyau de physique commun
+(`vehicleDriving.ts` + `vehicleEngine.ts`) avec des reglages propres a chaque type. La voiture
+utilise `public/models/Vehicule/Voiture/Chevrolet.fbx` : le mesh de caisse et les meshes d'essieux
+avant/arriere sont separes pour animer braquage, rotation de roues et suspension visuelle. La voiture
+est portée par un chassis Rapier `dynamic` invisible : moteur, frein, grip, direction et suspension
+sont appliqués comme des forces sur le rigidbody, puis le FBX suit la pose physique.
 
 **Physique.** Le vehicule a un vrai **vecteur vitesse**, decompose a chaque image dans son repere :
 la part longitudinale est celle que les roues poussent, la part laterale est la derive, que
 l'adherence mange progressivement. Le braquage suit le **modele bicyclette** (vitesse de rotation
 = vitesse / empattement x tan(braquage)), plafonne par une limite d'adherence laterale. Deux
 consequences : **on ne tourne plus a l'arret** (fini l'effet tourelle), et le sous-virage a haute
-vitesse apparait tout seul. Mesure : rayon de braquage de **5,8 m a 15 km/h** et **115 m a 120 km/h**.
+vitesse apparait tout seul. Pour rester jouable, une **aide arcade de direction** ajoute du grip
+progressivement au-dessus d'environ 45 km/h et une assistance basse vitesse renforce le yaw des que
+la voiture roule un minimum : elle reste credible, mais n'impose plus un rayon de simulateur pur dans
+les manoeuvres lentes. Mesure cible : rayon de braquage de **5,8 m a 15 km/h** et autour de **75 m a
+120 km/h**.
+
+**Assiette, terrain et vol.** Rapier devient l'autorite du sol proche : `WorldPhysicsColliders`
+stream des tuiles `TrimeshCollider` autour du joueur depuis la surface roulable officielle
+(`driveSurfaceHeightAt`, qui reprend la surface finale `groundHeight()` et pas seulement le bitume
+central). Le maillage physique proche est echantillonne a 1 m pour limiter les secousses de
+suspension sur les routes et les raccords. La voiture ne colle plus sa hauteur depuis une fonction maison : ses quatre
+roues raycastent vers le bas depuis le chassis dynamique, compriment des ressorts, amortissent la
+vitesse verticale au point de contact et appliquent la force sur chaque coin de caisse. Si les roues
+perdent le sol sur un tremplin, Rapier laisse le chassis voler, prendre du pitch/roll et retomber via
+les contacts physiques. Le rendu des roues ne reprend pas la compression brute : il soustrait la
+compression statique de repos, limite le debattement visuel et garde donc les roues lisibles dans les
+arches sans cacher le travail physique de la suspension.
+
+**Collisions physiques vehicule.** La caisse de la voiture est un `RigidBody dynamic` avec collider
+Rapier, CCD et solveur renforcé. Les routes/terrains proches sont des `TrimeshCollider` et les
+façades/bâtiments proches sont streamés en murs `CuboidCollider` fixes par `WorldBuildingColliders`.
+Les collisions latérales de la voiture doivent donc passer par Rapier ; l'ancien sweep/caisse 2D ne
+doit plus être utilisé pour la voiture. Le collider du chassis est légèrement rehaussé par rapport au
+visuel pour éviter les raclages invisibles sur les coutures de route ; la suspension garde le contact
+au sol, tandis que la force moteur conserve une traction minimale dès qu'au moins une roue touche.
+Le braquage physique peut rester généreux pour le gameplay, mais le braquage visuel des roues est
+clampé séparément pour éviter une lecture caricaturale du mesh. Ce clamp est exposé dans le panneau
+F2 avec `vehicles.car.VISUAL_STEER_MAX`, afin de regler la lecture des roues sans changer la tenue de
+route. En conduite, le `linearDamping` Rapier du chassis reste quasi neutre : la trainee d'air, le
+roulement et la transmission sont deja modelises a la main, donc ajouter un gros damping physique
+briderait artificiellement la voiture autour de 80-90 km/h.
+
+**Monter / sortir.** Avant la première utilisation, la voiture peut être maintenue à sa pose de spawn
+pour éviter qu'elle tombe avant que les colliders streamés soient prêts. Dès qu'elle a été utilisée,
+elle reste un corps Rapier libre même sans conducteur. Sortir en plein saut ne remet donc ni le joueur
+ni la voiture au sol : le joueur hérite de la hauteur/vitesse verticale de la voiture et retombe avec
+sa propre gravité, pendant que le chassis continue sa trajectoire physique. Quand le joueur est dans la
+voiture, son modèle 3D est masqué : le groupe joueur reste l'ancre logique suivie par la camera, mais
+Pierrot ne doit pas depasser du toit.
 
 **Chocs.** Ils utilisent la normale du mur rendue par la collision : la part de vitesse qui rentre
 dans le mur est renvoyee avec un petit rebond, celle qui longe le mur est presque entierement
@@ -518,9 +560,30 @@ Priorités de feeling :
 - impacts lisibles entre véhicules, joueur, PNJ et décor ;
 - interactions sandbox qui donnent envie d'expérimenter.
 
-Direction technique à garder en tête : une approche hybride est acceptable. Le moteur véhicule
-maison peut rester responsable du feeling arcade précis, tandis qu'un moteur physique dédié pourra
-servir aux objets dynamiques, props, ragdolls, joints et interactions plus générales.
+Direction technique retenue : **Rapier devient l'autorité physique**. `src/gameplay/physics/`
+centralise les constantes du monde (gravité, pas fixe, groupes de collision, matériaux physiques),
+l'enveloppe `<PhysicsRoot>`, les props dynamiques et la surface physique streamée autour du joueur.
+Les systèmes maison joueur/véhicule peuvent cohabiter avec Rapier pendant la migration uniquement
+comme contrôleurs ou fallbacks, mais les nouveaux sols, props dynamiques, joints, ragdolls et
+interactions sandbox doivent passer par cette couche.
+
+**Prototype en place :** le banc d'essai (`SandboxPhysicsProps`) attend le chargement du relief avant
+de creer ses corps Rapier, pour eviter des colliders figes a une hauteur provisoire. Les caisses et
+poubelles sont posees sur une petite dalle visible a cote de la zone de test. Le tremplin de reglage
+vehicule est deplace au bout de la Rue Saint-Pierre, avec une longue approche pour prendre de la
+vitesse ; il a un collider fixe incline Rapier et une plaque d'approche physique, afin que les
+raycasts de roues testent un vrai volume physique et pas seulement une courbe maison. La voiture est
+maintenant l'essai principal du chassis dynamique Rapier : `Car.tsx` monte le FBX Chevrolet,
+`carRapierController.ts` applique suspension/moteur/grip/direction, et le store voiture publie la
+pose physique pour le joueur et la camera. Les façades proches sont aussi migrées en colliders
+Rapier streamés par tuiles stables : un `RigidBody fixed` par tuile regroupe plusieurs murs
+`CuboidCollider`, afin d'eviter les remounts massifs et les drops FPS quand la voiture roule vite.
+Retour de test actuel : quand un rollback de voiture se produit, un drop FPS est visible au même
+moment. La prochaine passe ne doit donc pas commencer par retoucher le grip, la camera ou la
+suspension, mais par une vraie passe d'optimisation/profiling du monde physique : budget de
+colliders, streaming des tuiles, remounts React/Rapier et coût du step physique à haute vitesse.
+Ces briques servent à régler la gravite globale, les materiaux, le sommeil des
+objets, les groupes de collision, le decollage, les tonneaux et les atterrissages.
 
 ### Ragdoll
 
@@ -612,5 +675,5 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
 | Look cell-shading | `src/shaders/` + matériaux dans `src/world/` & `src/entities/` |
 | PNJ, routines et dialogues | `src/entities/` + `src/gameplay/npc/` + `src/data/npcs.*` |
 | Véhicules | `src/entities/vehicles/` |
-| Physique sandbox / ragdoll | `src/gameplay/physics/` + moteur physique dédié si retenu |
+| Physique sandbox / ragdoll | `src/gameplay/physics/` + Rapier (`@react-three/rapier`) |
 | Radios / audio | `src/audio/` + fichiers `.wav` dans `public/musique/radio/` |

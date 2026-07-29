@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useRef, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { useCarStore } from '../entities/vehicles/carStore'
@@ -59,6 +59,9 @@ const CAMERA_RADIUS = 0.35
 const LOOK_AHEAD = 0.45
 const DISTANCE_CLOSE_SPEED = 28
 const DISTANCE_RELEASE_SPEED = 3.2
+const CAR_TARGET_FOLLOW_XZ = 12
+const CAR_TARGET_FOLLOW_Y = 8
+const CAR_TARGET_PREDICT_SECONDS = 0.045
 
 /**
  * Regarder vers le haut, sans enterrer la caméra.
@@ -79,21 +82,33 @@ export default function FollowCamera() {
   const { camera } = useThree()
   const desiredPos = useRef(new THREE.Vector3())
   const lookAt = useRef(new THREE.Vector3())
+  const smoothedTarget = useRef(new THREE.Vector3())
+  const predictedCarTarget = useRef(new THREE.Vector3())
   const currentDistance = useRef<number | null>(null)
+  const smoothedTargetReady = useRef(false)
   const target = usePlayerStore((s) => s.playerObject)
 
   useFrame((_, delta) => {
     if (!target) return
 
     const rig = currentRig()
+    const car = useCarStore.getState()
+    const targetPosition = cameraTargetPosition(
+      target.position,
+      car,
+      delta,
+      smoothedTarget,
+      smoothedTargetReady,
+      predictedCarTarget,
+    )
     // Orientation BRUTE, sans lissage : la souris est déjà synchronisée à l'image
     // (voir cameraStore.ts). L'amortissement qui existait ici ne compensait que
     // cette irrégularité — il ne servait plus qu'à ajouter du retard au regard.
     const { yaw, pitch } = useCameraStore.getState()
 
-    const ox = target.position.x
-    const oy = target.position.y + rig.lookHeight
-    const oz = target.position.z
+    const ox = targetPosition.x
+    const oy = targetPosition.y + rig.lookHeight
+    const oz = targetPosition.z
 
     const horiz = Math.cos(pitch) * rig.distance
     const dirX = Math.sin(yaw) * horiz
@@ -156,6 +171,44 @@ function currentRig(): CameraRig {
   if (useCarStore.getState().riding) return CAR_RIG
   if (useScooterStore.getState().riding) return SCOOTER_RIG
   return ON_FOOT
+}
+
+function cameraTargetPosition(
+  target: THREE.Vector3,
+  car: ReturnType<typeof useCarStore.getState>,
+  delta: number,
+  smoothed: MutableRefObject<THREE.Vector3>,
+  ready: MutableRefObject<boolean>,
+  predicted: MutableRefObject<THREE.Vector3>,
+) {
+  if (!car.riding) {
+    ready.current = false
+    return target
+  }
+
+  predicted.current.set(
+    car.driverX + car.velocityX * CAR_TARGET_PREDICT_SECONDS,
+    car.driverY + car.velocityY * CAR_TARGET_PREDICT_SECONDS * 0.35,
+    car.driverZ + car.velocityZ * CAR_TARGET_PREDICT_SECONDS,
+  )
+
+  if (!ready.current) {
+    smoothed.current.copy(predicted.current)
+    ready.current = true
+    return smoothed.current
+  }
+
+  if (smoothed.current.distanceToSquared(predicted.current) > 64) {
+    smoothed.current.copy(predicted.current)
+    return smoothed.current
+  }
+
+  const txz = 1 - Math.exp(-CAR_TARGET_FOLLOW_XZ * delta)
+  const ty = 1 - Math.exp(-CAR_TARGET_FOLLOW_Y * delta)
+  smoothed.current.x += (predicted.current.x - smoothed.current.x) * txz
+  smoothed.current.z += (predicted.current.z - smoothed.current.z) * txz
+  smoothed.current.y += (predicted.current.y - smoothed.current.y) * ty
+  return smoothed.current
 }
 
 function cameraObstructed(x: number, y: number, z: number): boolean {

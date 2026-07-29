@@ -1,0 +1,24 @@
+{
+  "id": "appart_chibrux",
+  "name": "Appartement de Chibrux",
+  "type": "apartment",
+  "version": 1,
+  "defaultWallHeight": 2.7,
+  "defaultWallThickness": 0.18,
+  "floors": [
+    {
+      "id": "rdc",
+      "label": "RDC",
+      "elevation": 0,
+      "height": 2.7,
+      "rooms": [],
+      "removedWalls": [],
+      "doors": [],
+      "windows": [],
+      "props": [],
+      "spawnPoints": [],
+      "exits": [],
+      "stairs": []
+    }
+  ]
+}

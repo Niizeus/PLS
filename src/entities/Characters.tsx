@@ -1,4 +1,5 @@
 import ItemPickups from './items/ItemPickups'
+import MapMarkerEntities from './map/MapMarkerEntities'
 import Player from './player/Player'
 import Scooter from './vehicles/Scooter'
 import Car from './vehicles/Car'
@@ -18,6 +19,7 @@ export default function Characters() {
       <Player />
       <Scooter />
       <Car />
+      <MapMarkerEntities />
       <ItemPickups />
     </>
   )

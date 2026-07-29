@@ -124,7 +124,9 @@ Base de l'outil :
 - calques activables/desactivables ;
 - grille optionnelle ;
 - coordonnees monde visibles sous la souris ;
-- recherche par nom de lieu.
+- recherche par nom de lieu ;
+- edition des contours de quartier par sommets : selectionner un quartier, deplacer ses points,
+  ajouter un point, supprimer un point non essentiel, puis sauvegarder `src/data/zones.json`.
 
 La carte plein ecran actuelle (`WorldMap.tsx`) est une excellente base technique pour le plan 2D :
 elle sait deja dessiner Beauvais en 2D, zoomer, se deplacer et poser des points. La vue IG top-down
@@ -834,13 +836,16 @@ Critere de fin :
 
 Objectif : placer les premiers vrais lieux utiles dans Beauvais.
 
-Etat actuel : l'editeur expose deux outils, Selection et Placer. Un clic sur le plan 2D ou la
+Etat actuel : l'editeur expose Selection, Placer et Quartier. Un clic sur le plan 2D ou la
 vue IG top-down selectionne un point proche, ou cree un nouveau point quand l'outil Placer est
 actif. Les points peuvent etre modifies dans l'inspecteur : nom, type, icone, couleur, position,
 rayon d'interaction, prompt, tags, horaires, message si ferme et visibilites carte/jeu/dev-only.
-La suppression reste locale tant que l'utilisateur ne sauvegarde pas explicitement. Le bouton
-Sauver envoie les donnees a une route Vite de developpement `POST /__pls/map-markers`, qui reecrit
-`src/data/mapMarkers.json` avec un tri stable par id pour garder des diffs lisibles.
+Les points de test initiaux ont ete retires : `src/data/mapMarkers.json` demarre vide pour que les
+vrais lieux soient poses manuellement. L'edition ne trie plus les points a chaque frappe, afin de
+garder l'inspecteur stable ; le tri/formatage est fait a la sauvegarde. La suppression reste locale
+tant que l'utilisateur ne sauvegarde pas explicitement. Le bouton Sauver POI envoie les donnees a
+une route Vite de developpement `POST /__pls/map-markers`, qui reecrit `src/data/mapMarkers.json`
+avec un tri stable par id pour garder des diffs lisibles.
 
 Livrables :
 
@@ -862,6 +867,15 @@ Critere de fin :
 ### Session 4 - Affichage et interaction en jeu
 
 Objectif : faire exister les points d'interet dans le jeu, sans encore creer les interieurs.
+
+Etat actuel : les points d'interet de `src/data/mapMarkers.json` existent maintenant aussi dans
+le jeu. Les points `visibleOnMap` apparaissent sur la grande carte et la minimap, les points
+`visibleInGame` ont un marqueur 3D simple pose au sol via `groundHeight()`, et le joueur detecte
+le lieu le plus proche dans son rayon d'interaction. Le HUD affiche un prompt avec la touche `E`,
+le nom du lieu et son etat horaire. Les horaires optionnels sont compares au jour/heure du jeu :
+si le lieu est ferme, le message de fermeture est affiche ; sinon `E` declenche une interaction
+placeholder basee sur le prompt du marqueur. Les points `devOnly` restent visibles en developpement
+mais sont caches du runtime de production.
 
 Livrables :
 
@@ -900,6 +914,13 @@ Critere de fin :
 
 Objectif : preparer le passage exterieur -> interieur.
 
+Etat actuel : le dossier `src/data/interiors/` existe et contient un premier fichier test
+`appart_chibrux.json`. Les types, la validation et la serialization vivent dans
+`src/data/interiors.ts`. Chaque interieur contient ses etages, pieces, portes, fenetres, props,
+spawns, sorties et futurs escaliers. La route Vite dev-only `POST /__pls/interiors` reecrit un
+fichier `src/data/interiors/<interiorId>.json` avec un JSON stable. Le lien direct depuis un POI
+exterieur et le bouton "Creer interieur" depuis la carte restent a faire.
+
 Livrables :
 
 - ajouter aux points d'interet le type `entrance` ;
@@ -917,6 +938,25 @@ Critere de fin :
 ### Session 7 - Editeur d'interieur 2D minimal
 
 Objectif : construire un interieur simple avec des assets prefabriques.
+
+Etat actuel : `editor.html` est devenu un petit hub avec deux modules, Carte et Interieurs. Le
+module Interieurs affiche la liste des interieurs, les etages, une grille 2D zoomable/deplacable,
+un outil Piece par cliquer-glisser, et des outils de placement simples pour porte, fenetre, spawn,
+sortie et prop prototype. Les pieces peuvent etre selectionnees et modifiees dans l'inspecteur
+nom/x/z/largeur/profondeur. Le plan de base est vide : aucun point, aucune piece, aucun prop n'est
+pre-place. Les elements se deplacent par clic-glisser, `Suppr` efface, `Ctrl+D` duplique, `Escape`
+annule la selection, `Ctrl+Z` annule, `Ctrl+Y` retablit, et des boutons de pieces rapides posent une
+piece 3x3, une piece 4x5 ou un couloir au centre de la vue. L'outil Piece reste actif apres creation
+pour permettre de dessiner plusieurs salles a la suite. Coller deux pieces ne supprime pas
+automatiquement le mur entre elles : l'outil Mur permet de cliquer un mur pour l'ouvrir ou le
+refermer. Les murs ouverts sont stockes explicitement dans `removedWalls`, restent visibles en
+pointille dans le plan, disparaissent du rendu 3D, et la collision de test laisse passer le joueur a
+cet endroit. Les portes et fenetres s'aimantent au mur le plus proche dans un rayon court, prennent
+automatiquement l'orientation du mur et peuvent etre recalees depuis l'inspecteur. Les fenetres ont
+un cadre visible en test 3D. Une bibliotheque de placeholders en bas de l'ecran propose deja cube,
+table, chaise, comptoir et lumiere : on peut choisir un prop ou le glisser-deposer directement sur
+le plan. Le bouton Sauver enregistre l'interieur actif via Vite. Le bouton Tester ouvre le prototype
+3D decrit en Session 8.
 
 Livrables :
 
@@ -936,6 +976,17 @@ Critere de fin :
 ### Session 8 - Generation 3D et visite d'interieur
 
 Objectif : passer du plan 2D a une scene visitable.
+
+Etat actuel : le module Interieurs possede un bouton Tester actif. Il bascule la zone centrale
+vers une scene Three.js generee depuis le plan 2D : sols, murs simples, portes/fenetres en
+marqueurs transparents, props prototype et anneaux de sortie. Le personnage Pierrot est reutilise
+avec une logique de deplacement dediee aux interieurs : ZQSD pour bouger, Maj pour courir, camera
+de test suiveuse, collision simple qui garde le joueur dans l'union des pieces. La camera de test
+se controle avec clic droit ou molette : clic droit-glisser tourne autour du personnage et ajuste
+la hauteur, la molette rapproche/eloigne. Le deplacement suit l'orientation de la camera. Le bouton Plan 2D
+revient immediatement a l'edition. Ce test reste un prototype : les portes ne decoupent pas encore
+les murs, les escaliers/ascenseurs ne changent pas encore d'etage, et l'interieur n'est pas encore
+charge depuis une interaction en ville.
 
 Livrables :
 

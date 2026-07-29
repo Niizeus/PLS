@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { MAP_MARKERS } from '../data/mapMarkers'
+import { isRuntimeMapMarkerOnMap } from '../gameplay/map/mapMarkerRuntime'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { SPAWN } from '../world/beauvais/cityData'
 import { buildingsNear } from '../world/beauvais/collision'
-import { drawBuildings, drawPlayer, type MapView } from './mapDraw'
+import { drawBuildings, drawMapMarkers, drawPlayer, type MapView } from './mapDraw'
 import { HUD } from './hudStyle'
 
 /**
@@ -15,6 +17,7 @@ import { HUD } from './hudStyle'
 
 const SIZE = 160 // diamètre de la minimap en pixels
 const VIEW_RADIUS = 110 // rayon du monde affiché (mètres) autour du joueur
+const visibleMapMarkers = MAP_MARKERS.filter(isRuntimeMapMarkerOnMap)
 
 export default function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -44,6 +47,16 @@ export default function Minimap() {
       // Bâtiments proches uniquement, récupérés via la grille spatiale (rapide).
       const near = buildingsNear(px, pz, VIEW_RADIUS + 30)
       drawBuildings(ctx, view, '#d8cdb8', near)
+      drawMapMarkers(
+        ctx,
+        view,
+        visibleMapMarkers.filter((marker) => {
+          const dx = marker.position.x - px
+          const dz = marker.position.z - pz
+          return dx * dx + dz * dz <= (VIEW_RADIUS + 20) * (VIEW_RADIUS + 20)
+        }),
+        { labels: false, minSize: 3, maxSize: 5 },
+      )
       // Le joueur, au centre.
       drawPlayer(ctx, view, px, pz, angle, 6)
 

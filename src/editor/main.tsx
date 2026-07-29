@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import EditorApp from './EditorApp'
+import EditorHub from './EditorHub'
 import './EditorApp.css'
 
 /**
@@ -10,6 +10,6 @@ import './EditorApp.css'
  */
 createRoot(document.getElementById('editor')!).render(
   <StrictMode>
-    <EditorApp />
+    <EditorHub />
   </StrictMode>,
 )

@@ -1,35 +1,156 @@
 {
-  "_comment": "Quartiers de Beauvais. Chaque zone = un polygone (contour [x,z] en mètres monde, origine = cathédrale). PREMIÈRE ÉBAUCHE volontairement grossière : les contours seront redessinés précisément dans l'éditeur de carte (touche M). L'ordre compte : zoneAt() renvoie la PREMIÈRE zone qui contient le point → le centre-ville (petit, prioritaire) est en tête.",
+  "_comment": "Quartiers de Beauvais. Chaque zone = un polygone (contour [x,z] en metres monde, origine = cathedrale). Edite depuis editor.html.",
   "zones": [
     {
       "id": "centre-ville",
       "name": "Centre-ville",
       "color": "#e8b84b",
-      "pts": [[-550, -550], [550, -550], [550, 550], [-550, 550]]
+      "pts": [
+        [
+          584.1,
+          500.9
+        ],
+        [
+          382,
+          680.2
+        ],
+        [
+          -165.8,
+          729.1
+        ],
+        [
+          -491.9,
+          677
+        ],
+        [
+          -531,
+          311.8
+        ],
+        [
+          -136.5,
+          -125.1
+        ],
+        [
+          69,
+          -317.5
+        ],
+        [
+          189.6,
+          -412.1
+        ],
+        [
+          492.8,
+          -281.6
+        ],
+        [
+          678.7,
+          -174
+        ],
+        [
+          649.3,
+          161.8
+        ],
+        [
+          734.1,
+          285.7
+        ],
+        [
+          672.2,
+          419.4
+        ]
+      ]
     },
     {
       "id": "saint-jean",
       "name": "Quartier Saint-Jean",
       "color": "#5aa66a",
-      "pts": [[100, 100], [2400, 100], [2400, 2400], [100, 2400]]
+      "pts": [
+        [
+          100,
+          100
+        ],
+        [
+          2400,
+          100
+        ],
+        [
+          2400,
+          2400
+        ],
+        [
+          100,
+          2400
+        ]
+      ]
     },
     {
       "id": "soie-vauban",
       "name": "Quartier Soie-Vauban",
       "color": "#c96f5a",
-      "pts": [[-2400, 100], [-100, 100], [-100, 2400], [-2400, 2400]]
+      "pts": [
+        [
+          -2400,
+          100
+        ],
+        [
+          -100,
+          100
+        ],
+        [
+          -100,
+          2400
+        ],
+        [
+          -2400,
+          2400
+        ]
+      ]
     },
     {
       "id": "saint-just-des-marais",
       "name": "Saint-Just-des-Marais",
       "color": "#5a86c9",
-      "pts": [[-2900, -2400], [-100, -2400], [-100, -100], [-2900, -100]]
+      "pts": [
+        [
+          -2900,
+          -2400
+        ],
+        [
+          -100,
+          -2400
+        ],
+        [
+          -100,
+          -100
+        ],
+        [
+          -2900,
+          -100
+        ]
+      ]
     },
     {
       "id": "argentine",
       "name": "Quartier Argentine",
       "color": "#9a6fc9",
-      "pts": [[100, -2700], [2400, -2700], [2400, -100], [100, -100]]
+      "pts": [
+        [
+          100,
+          -2700
+        ],
+        [
+          2400,
+          -2700
+        ],
+        [
+          2400,
+          -100
+        ],
+        [
+          100,
+          -100
+        ]
+      ]
     }
   ]
 }

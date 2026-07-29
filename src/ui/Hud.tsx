@@ -3,6 +3,7 @@ import ControlsHint from './ControlsHint'
 import FpsCounter from './FpsCounter'
 import GameClock from './GameClock'
 import InventoryPanel from './InventoryPanel'
+import MapMarkerPrompt from './MapMarkerPrompt'
 import Minimap from './Minimap'
 import PickupPrompt from './PickupPrompt'
 import QuickBar from './QuickBar'
@@ -76,6 +77,7 @@ export default function Hud() {
 
       <ControlsHint />
       <PickupPrompt />
+      <MapMarkerPrompt />
       <InventoryPanel />
       <QuickBar />
       <VehicleDashboard />

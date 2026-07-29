@@ -145,6 +145,7 @@ L'ordre est maintenant explicite, via les constantes de `FRAME` :
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
 | Une radio jouable | depose le fichier audio dans `public/musique/radio/RXX_Nom/Musiques/` (ou `Jingles/`, `Publicites/`, `Emissions/<Emission>/`). **Aucun code a ecrire, le nom du fichier est libre** : `vite/radioManifestPlugin.ts` scanne le dossier et fournit le catalogue au jeu via le module virtuel `virtual:pls-radio-manifest`. La logique radio vit dans `src/audio/`. |
 | Un module de l'editeur PLS | `src/editor/` avec `editor.html` comme entree du hub actuel. L'editeur est dev-only et ne doit pas modifier le jeu principal sans necessite. |
+| Un interieur de batiment | `src/data/interiors/<interiorId>.json` (un fichier par interieur), avec les types/validateurs dans `src/data/interiors.ts` et l'edition dans le module Interieurs de `src/editor/`. |
 | Un effet visuel cartoon | `shaders/` |
 | Une référence à la vie du pote | `data/` (texte/JSON) |
 

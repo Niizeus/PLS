@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { MAP_MARKERS } from '../data/mapMarkers'
+import { isRuntimeMapMarkerOnMap } from '../gameplay/map/mapMarkerRuntime'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { BOUNDS, SPAWN } from '../world/beauvais/cityData'
-import { drawBuildings, drawPlayer, drawRoads, drawWater, drawZones, type MapView } from './mapDraw'
+import { drawBuildings, drawMapMarkers, drawPlayer, drawRoads, drawWater, drawZones, type MapView } from './mapDraw'
 
 /**
  * Grande carte de la ville (touche M) : plein écran, avec ZOOM (molette),
@@ -18,6 +20,7 @@ const WP_KEY = 'pls.waypoints.v1'
 
 const boundsCenter = { x: (BOUNDS.minX + BOUNDS.maxX) / 2, z: (BOUNDS.minZ + BOUNDS.maxZ) / 2 }
 const citySpan = Math.max(BOUNDS.maxX - BOUNDS.minX, BOUNDS.maxZ - BOUNDS.minZ)
+const visibleMapMarkers = MAP_MARKERS.filter(isRuntimeMapMarkerOnMap)
 
 // Ville pré-rendue une seule fois.
 let cityCanvas: HTMLCanvasElement | null = null
@@ -134,6 +137,7 @@ export default function WorldMap() {
       // Quartiers (contours + noms) par-dessus la ville.
       const zoneView: MapView = { centerX: cam.current.cx, centerZ: cam.current.cz, scale: ppm(), w: W, h: H }
       drawZones(ctx, zoneView)
+      drawMapMarkers(ctx, zoneView, visibleMapMarkers)
 
       // Points de passage.
       ctx.textAlign = 'center'

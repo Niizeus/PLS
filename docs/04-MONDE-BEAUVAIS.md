@@ -152,7 +152,9 @@ Les fichiers :
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/beauvais/debug-road-geometry.mjs` | Outil hors-jeu : genere `public/debug/road-geometry.html` et `data/road-surface-test.json`. La V2 compare les rubans actuels a une surface de chaussee fusionnee par polygones (`polygon-clipping`) et exporte les surfaces de toute la ville en tuiles streamables, avec un panneau de diagnostic prioritaire sur le centre-ville. Commande : `npm run debug:roads`. |
 | `src/world/Ground.tsx` | Le **sol avec son vrai relief**, affiché en dalles de 256 m autour du joueur. |
-| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement** et **points de passage** (texte + icône, sauvegardés en local), via `src/ui/mapDraw.ts`. |
+| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement**, POI de `mapMarkers.json` et **points de passage** locaux (texte + icône), via `src/ui/mapDraw.ts`. |
+| `src/entities/map/MapMarkerEntities.tsx` | Marqueurs 3D des points d'interet visibles en jeu, detection de proximite, prompt `E` et interaction placeholder avec prise en compte des horaires. |
+| `src/gameplay/map/` | Runtime des points d'interet : filtrage dev/prod, calcul ouvert/ferme selon l'heure du jeu, store du POI proche et message d'interaction. |
 
 ### 🏢 Les hauteurs et les toits : la BD TOPO de l'IGN
 
@@ -326,6 +328,7 @@ jeu fluide :
 - [x] Façades + toits colorés de façon variée. *(Beauvais.tsx)*
 - [x] Sol couvrant toute la zone générée. *(CityGround)*
 - [x] Minimap ronde + carte (M). *(ui/Minimap, ui/WorldMap)*
+- [x] Points d'interet issus de l'editeur visibles sur carte/minimap, en 3D et interactifs avec horaires. *(mapMarkers.json, MapMarkerEntities, MapMarkerPrompt)*
 - [x] Ajouter les routes (`highway`) au générateur. *(Roads.tsx)*
 - [x] Collisions (empêcher de traverser les bâtiments). *(collision.ts)*
 - [ ] Routes sur la minimap / la carte.

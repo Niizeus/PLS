@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MAP_MARKER_DAYS,
   MAP_MARKER_TYPES,
@@ -11,13 +11,13 @@ import {
   type MapMarkerType,
 } from '../data/mapMarkers'
 import { BOUNDS, BUILDINGS, ROADS, SPAWN, WATERS } from '../world/beauvais/cityData'
-import { ZONES } from '../world/beauvais/zones'
+import { ZONES, type Zone } from '../world/beauvais/zones'
 import { drawBuildings, drawRoads, drawWater, drawZones, type MapView } from '../ui/mapDraw'
 import EditorGameView, { type EditorCameraState } from './EditorGameView'
 
 type LayerId = 'water' | 'roads' | 'buildings' | 'zones' | 'markers'
 type ViewMode = 'plan' | 'gameTop' | 'gameTilt'
-type EditorTool = 'select' | 'place'
+type EditorTool = 'select' | 'place' | 'zone'
 
 interface LayerConfig {
   id: LayerId
@@ -36,6 +36,8 @@ const MIN_ZOOM = 0.06
 const MAX_ZOOM = 18
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 const GAME_FIT_MARGIN = 1.12
+const ZONES_COMMENT =
+  'Quartiers de Beauvais. Chaque zone = un polygone (contour [x,z] en metres monde, origine = cathedrale). Edite depuis editor.html.'
 
 const boundsCenter = {
   x: (BOUNDS.minX + BOUNDS.maxX) / 2,
@@ -203,6 +205,50 @@ function drawMapMarkers(
   ctx.restore()
 }
 
+function cloneZones(zones: Zone[]): Zone[] {
+  return zones.map((zone) => ({ ...zone, pts: zone.pts.map((point) => [point[0], point[1]]) }))
+}
+
+function drawEditableZonePoints(
+  ctx: CanvasRenderingContext2D,
+  toScreen: (wx: number, wz: number) => [number, number],
+  zone: Zone | null,
+  selectedPointIndex: number | null,
+) {
+  if (!zone) return
+  ctx.save()
+  zone.pts.forEach(([x, z], index) => {
+    const [sx, sy] = toScreen(x, z)
+    ctx.beginPath()
+    ctx.arc(sx, sy, selectedPointIndex === index ? 8 : 6, 0, Math.PI * 2)
+    ctx.fillStyle = selectedPointIndex === index ? '#fff7dc' : zone.color
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = '#15191d'
+    ctx.stroke()
+    ctx.font = '800 10px system-ui'
+    ctx.fillStyle = '#15191d'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(String(index + 1), sx, sy + 0.5)
+  })
+  ctx.restore()
+}
+
+function findNearestZonePoint(zone: Zone | null, point: MouseWorld, maxDistance: number) {
+  if (!zone) return null
+  let nearest: number | null = null
+  let bestDistance = maxDistance
+  zone.pts.forEach(([x, z], index) => {
+    const distance = Math.hypot(x - point.x, z - point.z)
+    if (distance <= bestDistance) {
+      nearest = index
+      bestDistance = distance
+    }
+  })
+  return nearest
+}
+
 function formatOpeningHours(hours: MapMarkerOpeningHours[] | undefined) {
   if (!hours?.length) return ''
   return hours.map((entry) => `${entry.days.join(',')} ${entry.open}-${entry.close}`).join('; ')
@@ -237,28 +283,41 @@ function parseOpeningHours(text: string): { ok: true; hours?: MapMarkerOpeningHo
   return { ok: true, hours: entries }
 }
 
-export default function EditorApp() {
+interface EditorAppProps {
+  moduleTabs?: ReactNode
+}
+
+export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mapPanelRef = useRef<HTMLElement>(null)
   const cameraRef = useRef<EditorCameraState>({ cx: SPAWN.x, cz: SPAWN.z, zoom: 2.2 })
   const layersRef = useRef(initialLayers)
   const toolRef = useRef<EditorTool>('select')
   const markersRef = useRef<MapMarker[]>(serializeMapMarkers(MAP_MARKERS))
+  const zonesRef = useRef<Zone[]>(cloneZones(ZONES))
   const selectedMarkerIdRef = useRef<string | null>(MAP_MARKERS[0]?.id ?? null)
+  const selectedZoneIdRef = useRef<string | null>(ZONES[0]?.id ?? null)
+  const selectedZonePointRef = useRef<number | null>(null)
   const worldClickRef = useRef<(point: MouseWorld) => void>(() => {})
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; startX: number; startY: number; moved: boolean } | null>(
-    null,
-  )
+  const dragRef = useRef<
+    | { mode: 'pan'; pointerId: number; x: number; y: number; startX: number; startY: number; moved: boolean }
+    | { mode: 'zonePoint'; pointerId: number; zoneId: string; pointIndex: number; moved: boolean }
+    | null
+  >(null)
   const [layers, setLayers] = useState(initialLayers)
   const [viewMode, setViewMode] = useState<ViewMode>('plan')
   const [editorTool, setEditorTool] = useState<EditorTool>('select')
-  const [markers, setMarkers] = useState<MapMarker[]>(() => serializeMapMarkers(MAP_MARKERS))
+  const [markers, setMarkers] = useState<MapMarker[]>(() => MAP_MARKERS)
+  const [zones, setZones] = useState<Zone[]>(() => cloneZones(ZONES))
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(() => MAP_MARKERS[0]?.id ?? null)
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(() => ZONES[0]?.id ?? null)
+  const [selectedZonePoint, setSelectedZonePoint] = useState<number | null>(null)
   const [saveStatus, setSaveStatus] = useState('Aucune modification')
   const [mouseWorld, setMouseWorld] = useState<MouseWorld | null>(null)
   const [viewInfo, setViewInfo] = useState(cameraRef.current)
 
   const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null
+  const selectedZone = zones.find((zone) => zone.id === selectedZoneId) ?? null
   const markerValidation = useMemo(() => validateMapMarkers(markers), [markers])
 
   useEffect(() => {
@@ -274,15 +333,62 @@ export default function EditorApp() {
   }, [markers])
 
   useEffect(() => {
+    zonesRef.current = zones
+  }, [zones])
+
+  useEffect(() => {
     selectedMarkerIdRef.current = selectedMarkerId
   }, [selectedMarkerId])
 
+  useEffect(() => {
+    selectedZoneIdRef.current = selectedZoneId
+  }, [selectedZoneId])
+
+  useEffect(() => {
+    selectedZonePointRef.current = selectedZonePoint
+  }, [selectedZonePoint])
+
   const updateSelectedMarker = (recipe: (marker: MapMarker) => MapMarker) => {
     if (!selectedMarkerId) return
-    setMarkers((current) =>
-      serializeMapMarkers(current.map((marker) => (marker.id === selectedMarkerId ? recipe(marker) : marker))),
-    )
+    setMarkers((current) => current.map((marker) => (marker.id === selectedMarkerId ? recipe(marker) : marker)))
     setSaveStatus('Modifications non sauvegardees')
+  }
+
+  const updateSelectedZone = (recipe: (zone: Zone) => Zone) => {
+    if (!selectedZoneId) return
+    setZones((current) => current.map((zone) => (zone.id === selectedZoneId ? recipe(zone) : zone)))
+    setSaveStatus('Quartiers modifies, sauvegarde requise')
+  }
+
+  const moveZonePoint = (zoneId: string, pointIndex: number, point: MouseWorld) => {
+    setZones((current) =>
+      current.map((zone) =>
+        zone.id === zoneId
+          ? {
+              ...zone,
+              pts: zone.pts.map((zonePoint, index) =>
+                index === pointIndex ? [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))] : zonePoint,
+              ),
+            }
+          : zone,
+      ),
+    )
+    setSaveStatus('Quartiers modifies, sauvegarde requise')
+  }
+
+  const addZonePoint = (point: MouseWorld) => {
+    if (!selectedZoneId) return
+    updateSelectedZone((zone) => ({
+      ...zone,
+      pts: [...zone.pts, [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))]],
+    }))
+    setSelectedZonePoint((selectedZone?.pts.length ?? 0))
+  }
+
+  const deleteSelectedZonePoint = () => {
+    if (!selectedZone || selectedZonePoint === null || selectedZone.pts.length <= 3) return
+    updateSelectedZone((zone) => ({ ...zone, pts: zone.pts.filter((_, index) => index !== selectedZonePoint) }))
+    setSelectedZonePoint(null)
   }
 
   const updateSelectedPosition = (axis: 'x' | 'z', value: number) => {
@@ -301,13 +407,17 @@ export default function EditorApp() {
   }
 
   const handleWorldClick = (point: MouseWorld) => {
+    if (toolRef.current === 'zone') {
+      addZonePoint(point)
+      return
+    }
+
     if (!layersRef.current.markers) return
 
     if (toolRef.current === 'place') {
       const marker = makeMarkerAt(point, markersRef.current)
-      setMarkers((current) => serializeMapMarkers([...current, marker]))
+      setMarkers((current) => [...current, marker])
       setSelectedMarkerId(marker.id)
-      setEditorTool('select')
       setSaveStatus('Nouveau point cree, sauvegarde requise')
       return
     }
@@ -387,7 +497,13 @@ export default function EditorApp() {
           w: width,
           h: height,
         }
-        drawZones(ctx, view)
+        drawZones(ctx, view, zonesRef.current)
+        drawEditableZonePoints(
+          ctx,
+          toScreen,
+          zonesRef.current.find((zone) => zone.id === selectedZoneIdRef.current) ?? null,
+          selectedZonePointRef.current,
+        )
       }
       if (activeLayers.markers) {
         drawMapMarkers(ctx, toScreen, markersRef.current, selectedMarkerIdRef.current)
@@ -424,7 +540,20 @@ export default function EditorApp() {
     }
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
+      const rect = canvas.getBoundingClientRect()
+      const [wx, wz] = toWorld(event.clientX - rect.left, event.clientY - rect.top)
+      if (toolRef.current === 'zone') {
+        const zone = zonesRef.current.find((item) => item.id === selectedZoneIdRef.current) ?? null
+        const pointIndex = findNearestZonePoint(zone, { x: wx, z: wz }, Math.max(5, 10 / pixelsPerMeter()))
+        if (pointIndex !== null && selectedZoneIdRef.current) {
+          setSelectedZonePoint(pointIndex)
+          dragRef.current = { mode: 'zonePoint', pointerId: event.pointerId, zoneId: selectedZoneIdRef.current, pointIndex, moved: false }
+          canvas.setPointerCapture(event.pointerId)
+          return
+        }
+      }
       dragRef.current = {
+        mode: 'pan',
         pointerId: event.pointerId,
         x: event.clientX,
         y: event.clientY,
@@ -441,6 +570,11 @@ export default function EditorApp() {
 
       const drag = dragRef.current
       if (!drag || drag.pointerId !== event.pointerId) return
+      if (drag.mode === 'zonePoint') {
+        drag.moved = true
+        moveZonePoint(drag.zoneId, drag.pointIndex, { x: wx, z: wz })
+        return
+      }
       if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) drag.moved = true
       const s = pixelsPerMeter()
       cameraRef.current.cx -= (event.clientX - drag.x) / s
@@ -452,6 +586,7 @@ export default function EditorApp() {
       const drag = dragRef.current
       if (drag?.pointerId === event.pointerId) {
         dragRef.current = null
+        if (drag.mode === 'zonePoint') return
         if (!drag.moved) {
           const rect = canvas.getBoundingClientRect()
           const [x, z] = toWorld(event.clientX - rect.left, event.clientY - rect.top)
@@ -526,6 +661,30 @@ export default function EditorApp() {
     }
   }
 
+  const saveZones = async () => {
+    const payload = {
+      _comment: ZONES_COMMENT,
+      zones: cloneZones(zones),
+    }
+    if (payload.zones.some((zone) => zone.pts.length < 3)) {
+      setSaveStatus('Sauvegarde quartiers bloquee : chaque quartier doit avoir au moins 3 points')
+      return
+    }
+
+    setSaveStatus('Sauvegarde quartiers en cours...')
+    try {
+      const response = await fetch('/__pls/zones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) throw new Error(await response.text())
+      setSaveStatus(`Sauvegarde quartiers OK : ${payload.zones.length} quartier(s)`)
+    } catch (error) {
+      setSaveStatus(`Sauvegarde quartiers impossible : ${(error as Error).message}`)
+    }
+  }
+
   return (
     <div className="editor-shell">
       <header className="editor-topbar">
@@ -533,6 +692,7 @@ export default function EditorApp() {
           <div className="editor-title">Editeur PLS</div>
           <div className="editor-subtitle">Plan 2D + vues IG de Beauvais</div>
         </div>
+        {moduleTabs}
         <div className="editor-mode-tabs" aria-label="Mode de vue">
           <button type="button" className={viewMode === 'plan' ? 'active' : ''} onClick={() => setViewMode('plan')}>
             Plan 2D
@@ -567,6 +727,13 @@ export default function EditorApp() {
           >
             Placer
           </button>
+          <button
+            type="button"
+            className={editorTool === 'zone' ? 'active' : ''}
+            onClick={() => setEditorTool('zone')}
+          >
+            Quartier
+          </button>
         </div>
         <div className="editor-actions">
           <button type="button" onClick={() => zoomBy(1.2)} title="Zoomer">
@@ -582,7 +749,10 @@ export default function EditorApp() {
             Ville
           </button>
           <button type="button" className="primary" onClick={saveMarkers}>
-            Sauver
+            Sauver POI
+          </button>
+          <button type="button" className="primary" onClick={saveZones}>
+            Sauver quartiers
           </button>
         </div>
       </header>
@@ -609,9 +779,33 @@ export default function EditorApp() {
         <section>
           <h2>Navigation</h2>
           <p className="editor-note">
-            Selection : cliquer un point. Placer : cliquer sur la carte pour creer un POI. Molette pour zoomer,
-            clic-glisser pour deplacer.
+            Selection : cliquer un point. Placer : cliquer sur la carte pour creer un POI. Quartier : cliquer un
+            sommet pour le deplacer, cliquer ailleurs pour ajouter un point au quartier selectionne.
           </p>
+        </section>
+
+        <section>
+          <h2>Quartiers</h2>
+          <div className="marker-list">
+            {zones.map((zone) => (
+              <button
+                key={zone.id}
+                type="button"
+                className={`marker-row ${zone.id === selectedZoneId ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedZoneId(zone.id)
+                  setSelectedZonePoint(null)
+                  setEditorTool('zone')
+                }}
+              >
+                <span className="layer-swatch" style={{ background: zone.color }} />
+                <span>
+                  <strong>{zone.name}</strong>
+                  <small>{zone.pts.length} points</small>
+                </span>
+              </button>
+            ))}
+          </div>
         </section>
 
         <section>
@@ -668,7 +862,7 @@ export default function EditorApp() {
             </div>
             <div>
               <dt>Outil</dt>
-              <dd>{editorTool === 'place' ? 'Placement' : 'Selection'}</dd>
+              <dd>{editorTool === 'place' ? 'Placement' : editorTool === 'zone' ? 'Quartier' : 'Selection'}</dd>
             </div>
             <div>
               <dt>Centre</dt>
@@ -693,6 +887,77 @@ export default function EditorApp() {
               <dd>{saveStatus}</dd>
             </div>
           </dl>
+        </section>
+
+        <section>
+          <h2>Quartier selectionne</h2>
+          {selectedZone ? (
+            <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Nom</span>
+                <input value={selectedZone.name} onChange={(event) => updateSelectedZone((zone) => ({ ...zone, name: event.currentTarget.value }))} />
+              </label>
+              <div className="field-pair">
+                <label>
+                  <span>Couleur</span>
+                  <input type="color" value={selectedZone.color} onChange={(event) => updateSelectedZone((zone) => ({ ...zone, color: event.currentTarget.value }))} />
+                </label>
+                <label>
+                  <span>Point actif</span>
+                  <select
+                    value={selectedZonePoint ?? ''}
+                    onChange={(event) => setSelectedZonePoint(event.currentTarget.value === '' ? null : Number(event.currentTarget.value))}
+                  >
+                    <option value="">Aucun</option>
+                    {selectedZone.pts.map((_, index) => (
+                      <option key={index} value={index}>
+                        Point {index + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {selectedZonePoint !== null && selectedZone.pts[selectedZonePoint] && (
+                <div className="field-pair">
+                  <label>
+                    <span>X</span>
+                    <input
+                      type="number"
+                      step="1"
+                      value={selectedZone.pts[selectedZonePoint][0]}
+                      onChange={(event) =>
+                        moveZonePoint(selectedZone.id, selectedZonePoint, {
+                          x: Number(event.currentTarget.value),
+                          z: selectedZone.pts[selectedZonePoint][1],
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Z</span>
+                    <input
+                      type="number"
+                      step="1"
+                      value={selectedZone.pts[selectedZonePoint][1]}
+                      onChange={(event) =>
+                        moveZonePoint(selectedZone.id, selectedZonePoint, {
+                          x: selectedZone.pts[selectedZonePoint][0],
+                          z: Number(event.currentTarget.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="form-actions">
+                <button type="button" onClick={deleteSelectedZonePoint} disabled={selectedZonePoint === null || selectedZone.pts.length <= 3}>
+                  Supprimer point
+                </button>
+              </div>
+            </form>
+          ) : (
+            <p className="editor-note">Aucun quartier selectionne.</p>
+          )}
         </section>
 
         <section>
@@ -908,7 +1173,7 @@ export default function EditorApp() {
             </div>
             <div>
               <dt>Quartiers</dt>
-              <dd>{ZONES.length.toLocaleString('fr-FR')}</dd>
+              <dd>{zones.length.toLocaleString('fr-FR')}</dd>
             </div>
           </dl>
           {markerValidation.errors.length > 0 && (

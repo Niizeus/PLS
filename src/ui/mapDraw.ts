@@ -1,5 +1,6 @@
 import { BUILDINGS, ROADS, WATERS, type Building } from '../world/beauvais/cityData'
-import { ZONES } from '../world/beauvais/zones'
+import { ZONES, type Zone } from '../world/beauvais/zones'
+import { type MapMarker } from '../data/mapMarkers'
 
 /**
  * Outils de dessin 2D "vue du dessus" partagés par la minimap et la grande carte.
@@ -75,11 +76,11 @@ export function drawBuildings(
  * Dessine les quartiers : contour teinté + remplissage léger + nom au centre.
  * Sert à visualiser (et bientôt éditer) le découpage de la ville.
  */
-export function drawZones(ctx: CanvasRenderingContext2D, view: MapView) {
+export function drawZones(ctx: CanvasRenderingContext2D, view: MapView, zones: Zone[] = ZONES) {
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  for (const zone of ZONES) {
+  for (const zone of zones) {
     const pts = zone.pts
     if (pts.length < 3) continue
     ctx.beginPath()
@@ -142,4 +143,41 @@ export function drawPlayer(
   ctx.lineWidth = 1.5
   ctx.strokeStyle = '#ffffff'
   ctx.stroke()
+}
+
+export function drawMapMarkers(
+  ctx: CanvasRenderingContext2D,
+  view: MapView,
+  markers: MapMarker[],
+  options: { labels?: boolean; minSize?: number; maxSize?: number } = {},
+) {
+  const labels = options.labels ?? true
+  const minSize = options.minSize ?? 5
+  const maxSize = options.maxSize ?? 9
+
+  ctx.save()
+  ctx.textAlign = 'center'
+  for (const marker of markers) {
+    const px = sx(view, marker.position.x)
+    const py = sy(view, marker.position.z)
+    const size = Math.min(maxSize, Math.max(minSize, marker.interactionRadius * view.scale))
+
+    ctx.beginPath()
+    ctx.arc(px, py, size, 0, Math.PI * 2)
+    ctx.fillStyle = marker.color
+    ctx.fill()
+    ctx.lineWidth = Math.max(1.4, size * 0.22)
+    ctx.strokeStyle = '#ffffff'
+    ctx.stroke()
+
+    if (!labels) continue
+    ctx.font = '700 12px system-ui'
+    ctx.textBaseline = 'top'
+    ctx.lineWidth = 3
+    ctx.strokeStyle = 'rgba(0,0,0,0.72)'
+    ctx.fillStyle = '#fffaf0'
+    ctx.strokeText(marker.name, px, py + size + 2)
+    ctx.fillText(marker.name, px, py + size + 2)
+  }
+  ctx.restore()
 }

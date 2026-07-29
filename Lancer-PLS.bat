@@ -63,22 +63,20 @@ echo Node.js : OK
 echo.
 
 REM ============================================================
-REM  2. Les librairies du jeu sont-elles installees ?
+REM  2. Les librairies du jeu sont-elles a jour ?
 REM ============================================================
-if not exist "node_modules\.bin\vite.cmd" (
-  echo Premiere utilisation : installation des librairies du jeu...
-  echo Ca peut prendre 1 a 2 minutes, c'est normal.
+echo Verification des librairies du jeu...
+echo Si une nouvelle dependance a ete ajoutee, elle sera installee ici.
+echo.
+call npm install
+if errorlevel 1 (
   echo.
-  call npm install
-  if errorlevel 1 (
-    echo.
-    echo [ERREUR] L'installation des librairies a echoue.
-    echo Verifie ta connexion internet, puis relance ce fichier.
-    pause
-    exit /b 1
-  )
-  echo.
+  echo [ERREUR] L'installation des librairies a echoue.
+  echo Verifie ta connexion internet, puis relance ce fichier.
+  pause
+  exit /b 1
 )
+echo.
 
 REM ============================================================
 REM  3. Lancer le jeu (ouvre le navigateur automatiquement)

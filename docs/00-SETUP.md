@@ -62,9 +62,9 @@ npm run dev
 Ouvre l'adresse affichée (souvent `http://localhost:5173`) dans ton navigateur.
 Pour arrêter : reviens dans le terminal et fais `Ctrl + C`.
 
-> ✅ La base du jeu existe : tu dois voir un **terrain de test cartoon** avec **Chibrux**
-> déplaçable (ZQSD), une caméra qui le suit et un compteur FPS. La liste des contrôles est
-> dans le [README](../README.md#-ce-qui-tourne-déjà-prototype-jouable).
+> ✅ La base du jeu existe : tu dois voir **Beauvais en prototype jouable**, avec **Chibrux**
+> déplaçable (ZQSD), une caméra qui le suit, le HUD et les systèmes déjà branchés. La liste des
+> contrôles est dans le [README](../README.md#-ce-qui-tourne-déjà-prototype-jouable).
 
 ---
 

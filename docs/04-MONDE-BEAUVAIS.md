@@ -69,7 +69,18 @@ mètres monde) défini dans **`src/data/zones.json`** :
 | Affichage du quartier courant (HUD) | `usePlayerMovement` → `playerStore.zoneName` → `Hud.tsx` |
 | Visualisation sur la grande carte (M) | `mapDraw.drawZones` |
 
-Quartiers actuels : **Centre-ville, Saint-Jean, Soie-Vauban, Saint-Just-des-Marais, Argentine**.
+Structure gameplay validée : **4 grands quartiers rivaux + le centre-ville**.
+
+- **Centre-ville** : zone municipale, contrôlée par la ville, la police et les autorités ;
+- **Saint-Jean** ;
+- **Soie-Vauban** ;
+- **Saint-Just-des-Marais** ;
+- **Argentine**.
+
+Le centre-ville n'est pas un territoire de gang. Il sert de zone plus surveillée : si des groupes
+rivaux viennent y traîner, s'affronter ou provoquer le chaos, la police intervient plus vite et plus
+fort. Les quatre autres quartiers peuvent porter des rivalités locales, des PNJ liés au territoire,
+des ambiances propres, des points chauds et des réactions différentes aux actions de Chibrux.
 
 > ⚠️ Les contours de `zones.json` sont une **première ébauche grossière** (rectangles autour de
 > la cathédrale, orientés selon la vraie géographie). Ils seront **redessinés précisément dans

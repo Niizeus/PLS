@@ -3,21 +3,52 @@
 Ce document regroupe les idees d'objets pour le jeu PLS. Il sert de base de game design avant
 integration dans les fichiers de donnees du jeu.
 
+## Direction inventaire
+
+L'inventaire cible est un **sac à dos en grille**, pas une simple liste avec poids maximum. Chaque
+objet prend une place physique dans le sac. Le joueur doit donc choisir quoi emporter et comment
+l'organiser.
+
+Base de départ à tester :
+
+- grille de sac principale : **8 x 5** cases ;
+- objets rectangulaires au début : `1x1`, `1x2`, `2x2`, `1x4`, `2x3`, etc. ;
+- rotation possible si l'objet l'autorise ;
+- stack réservé aux petits objets cohérents : médicaments, canettes, munitions, petits consommables ;
+- poids conservé comme information secondaire, utile pour le feeling, les véhicules, les sacs et
+  certains malus ;
+- contenants possibles plus tard : sac plastique, sac de sport, coffre de voiture, boîte à outils,
+  planque d'appartement.
+
+Les objets équipés ne prennent pas forcément de place dans le sac tant qu'ils sont portés, mais ils
+doivent pouvoir être rangés si le joueur les retire.
+
 ## Structure conseillee
 
 Chaque objet pourra ensuite etre decrit avec les champs suivants :
 
 | Champ | Role |
 |---|---|
+| `id` | Identifiant stable, jamais base sur le nom affiche |
 | `nom` | Nom affiche en jeu |
 | `categorie` | Famille de l'objet |
 | `rarete` | Commun, rare, epique, legendaire, etc. |
 | `prix` | Valeur chez les marchands ou a la revente |
+| `taille` | Largeur/hauteur dans la grille d'inventaire |
+| `forme` | Rectangulaire au debut, forme speciale plus tard si utile |
+| `rotatable` | Peut etre tourne dans la grille ou non |
+| `poids` | Poids secondaire, utile pour le feeling et certains malus |
+| `icone` | Image 2D dans l'inventaire |
+| `modele` | Modele 3D ou prefab visuel optionnel |
+| `emplacement` | Slot d'equipement si applicable : tete, bijoux, buste, bras, jambes, pieds |
+| `stackable` / `maxStack` | Empilement autorise et limite |
 | `degats` | Degats pour les armes |
 | `defense` | Protection pour les armures |
 | `soin` | Recuperation pour les consommables |
-| `effet_special` | Bonus, malus ou effet absurde |
+| `effets` | Bonus, malus ou effet absurde |
 | `durabilite` | Nombre d'utilisations ou solidite |
+| `legalite` | Legal, illegal, suspect, objet vole, etc. |
+| `tags` | Mots-clefs gameplay : nourriture, arme, drogue, mission, quartier, etc. |
 | `description` | Texte court dans l'inventaire |
 
 ## Categories
@@ -31,10 +62,11 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | `consommable_chelou` | Produits avec effets forts ou aleatoires |
 | `alcool` | Boissons alcoolisees |
 | `armure_tete` | Equipement de tete |
-| `armure_torse` | Equipement de torse |
+| `armure_buste` | Equipement de buste |
+| `armure_bras` | Equipement de bras |
 | `armure_jambes` | Equipement de jambes |
 | `armure_pieds` | Equipement de pieds |
-| `accessoire` | Bijoux, colliers, objets portes |
+| `bijoux` | Bijoux, colliers, bagues, accessoires portes |
 | `vehicule` | Moyens de deplacement |
 
 ## Armes
@@ -107,31 +139,31 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 
 | Objet | Emplacement | Idee d'effet |
 |---|---|---|
-| Nouveau maillot du PSG | Torse | Charisme et provocation |
-| Divers maillots de foot | Torse | Boost different selon le club ou la couleur |
-| Bagouze du gitan | Accessoire | Chance et intimidation |
-| Collier du bon samaritain | Accessoire | Bonus aux soins recus |
-| Collier d'expiation | Accessoire | Defense accrue, malus de vitesse |
+| Nouveau maillot du PSG | Buste | Charisme et provocation |
+| Divers maillots de foot | Buste | Boost different selon le club ou la couleur |
+| Bagouze du gitan | Bijoux | Chance et intimidation |
+| Collier du bon samaritain | Bijoux | Bonus aux soins recus |
+| Collier d'expiation | Bijoux | Defense accrue, malus de vitesse |
 | Casquette a l'envers | Tete | Style et esquive |
 | Casque de chantier | Tete | Defense de tete |
-| Gilet fluorescent | Torse | Visibilite et securite |
+| Gilet fluorescent | Buste | Visibilite et securite |
 | Pompes de securite | Pieds | Defense et stabilite |
 | Crocs | Pieds | Vitesse faible, bonus de style douteux |
 | Tong de touriste | Pieds | Mobilite legere, defense tres basse |
 | Jean troue | Jambes | Esquive legere |
 | Pantalon chic | Jambes | Charisme |
-| Chemise en lin de bobo | Torse | Charisme et negociation |
-| Debardeur en maille | Torse | Intimidation |
+| Chemise en lin de bobo | Buste | Charisme et negociation |
+| Debardeur en maille | Buste | Intimidation |
 | String | Jambes | Defense nulle, bonus absurde |
 | Nike ton pied | Pieds | Vitesse et esquive |
 | TeHaine du bled | Pieds | Endurance |
-| Gilet par balle | Torse | Defense contre les projectiles |
-| Blouson en cuir | Torse | Defense et style |
-| Veste Hidolf Aterre | Torse | Intimidation absurde, attire aussi les ennuis |
-| Veste de Ronoara Zoro | Torse | Bonus de determination et d'attaque au corps a corps |
-| Camelto | Accessoire | Bonus social ou absurde |
-| Lunette de Jeffrey D. | Accessoire | Bonus d'observation, malus de confiance des PNJ |
-| Croix de Jesus | Accessoire | Chance ou resistance morale |
+| Gilet par balle | Buste | Defense contre les projectiles |
+| Blouson en cuir | Buste | Defense et style |
+| Veste Hidolf Aterre | Buste | Intimidation absurde, attire aussi les ennuis |
+| Veste de Ronoara Zoro | Buste | Bonus de determination et d'attaque au corps a corps |
+| Camelto | Bijoux | Bonus social ou absurde |
+| Lunette de Jeffrey D. | Bijoux | Bonus d'observation, malus de confiance des PNJ |
+| Croix de Jesus | Bijoux | Chance ou resistance morale |
 | Kippa du seigneur | Tete | Bonus de sagesse ou de foi |
 | Casque VR | Tete | Bonus d'immersion, baisse la perception du danger reel |
 

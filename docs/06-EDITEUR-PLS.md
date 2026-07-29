@@ -29,7 +29,7 @@ Il doit devenir l'outil central de production du jeu :
 - creer les zones de travaux qui empechent la sortie directe ;
 - preparer les quetes secondaires, PNJ, boutiques, objets, evenements ;
 - tester rapidement en jeu ce qui vient d'etre pose ;
-- centraliser les outils deja existants, comme la Regie radio.
+- centraliser progressivement les outils de production utiles au gameplay.
 
 ---
 
@@ -52,7 +52,9 @@ Il doit devenir l'outil central de production du jeu :
 - Les pistes de fuite ne doivent pas etre listees explicitement au joueur comme un journal
   de quete principale. Elles doivent etre deduites par l'exploration, les indices, les lieux,
   les dialogues, les objets et les consequences.
-- La Regie radio doit etre integree dans l'editeur comme un module de l'outil global.
+- La Regie radio existe deja, mais elle est laissee de cote pour l'instant. Elle pourra etre
+  integree plus tard comme module de l'outil global, sans bloquer les priorites actuelles :
+  carte, interieurs, items, PNJ, quartiers et gameplay sandbox.
 - Un point d'interet peut avoir des horaires : bar, shop, mairie, travail, gare, evenement
   temporaire, PNJ ou activite peuvent etre ouverts, fermes ou disponibles selon l'heure et le jour.
 
@@ -93,16 +95,18 @@ Plus tard, on peut imaginer un hub de dev :
 
 - carte ;
 - interieurs ;
-- radio ;
 - objets ;
 - PNJ ;
+- quartiers / factions ;
 - quetes secondaires ;
+- smartphone ;
+- radio ;
 - tests rapides ;
 - validation des donnees.
 
 L'outil doit etre absent du jeu final ou protege derriere un mode developpeur. La Regie radio,
-actuellement accessible via `regie.html`, ne doit pas rester un outil isole a long terme :
-elle devient un module de ce hub.
+actuellement accessible via `regie.html`, peut rester separee pendant cette phase. Son integration
+dans le hub est une option de confort pour plus tard, pas une priorite de gameplay.
 
 ---
 
@@ -519,6 +523,8 @@ Outils possibles :
 
 - placer un PNJ ;
 - choisir son modele ;
+- choisir son type : nomme, fonctionnel, foule ambiante ;
+- definir son quartier ou sa faction ;
 - definir son planning ;
 - definir sa zone de deplacement ;
 - definir ses dialogues ;
@@ -528,6 +534,22 @@ Outils possibles :
 - lier a une piste de fuite ;
 - definir relation avec police ou groupes ;
 - definir comportement en cas de chaos.
+- definir son etat persistant : vivant, mort, disparu, arrete, indisponible.
+
+Principe important : les PNJ nommes et fonctionnels peuvent porter des consequences durables. Si le
+joueur tue un PNJ important, il ne doit pas reapparaitre comme un passant generique. Sa disparition
+peut fermer un dialogue, changer une boutique, modifier une tension de quartier, declencher une
+rumeur ou attirer la police. La foule ambiante peut rester plus souple et respawner pour garder la
+ville vivante.
+
+Quartiers et factions :
+
+- 4 grands quartiers rivaux + centre-ville municipal ;
+- centre-ville controle par la police et les autorites ;
+- tensions entre quartiers reglables ;
+- points chauds ou zones de rencontre ;
+- reaction policiere plus rapide en centre-ville ;
+- evenements de rue possibles : intimidation, bagarre, fuite, tirs, intervention police.
 
 Plus tard :
 
@@ -557,6 +579,19 @@ L'editeur peut servir a placer :
 - restrictions ;
 - objets illegaux ;
 - objets utiles pour quitter Beauvais.
+
+Editeur d'items :
+
+- creer une fiche item depuis une structure commune ;
+- definir nom, categorie, rarete, prix, description ;
+- definir taille dans la grille d'inventaire, rotation autorisee, poids et stack ;
+- choisir icone, modele ou prefab visuel ;
+- definir emplacement d'equipement si applicable : tete, bijoux, buste, bras, jambes, pieds ;
+- definir effets, degats, defense, soin, duree, contrecoup et durabilite ;
+- definir legalite : legal, suspect, illegal, vole ;
+- ajouter tags gameplay : nourriture, arme, drogue, mission, quartier, fuite, etc. ;
+- afficher un apercu de l'objet dans une grille de sac ;
+- valider les champs manquants, ids dupliques, icones absentes et tailles impossibles.
 
 Boutiques :
 
@@ -600,12 +635,13 @@ Outils debug :
 
 ## Mode 7 - Audio, radio et ambiance
 
-La Regie radio existe deja. Decision : elle doit etre integree dans l'editeur, pas rester
-une page durablement separee.
+La Regie radio existe deja et peut rester separee pour l'instant. L'audio spatial et les ambiances
+de lieux peuvent avancer sans attendre son integration dans le hub. Quand le reste de l'editeur sera
+plus stable, la Regie pourra etre reintegree comme module de confort.
 
 Idees :
 
-- onglet Regie radio ;
+- onglet Regie radio plus tard, quand ce sera utile ;
 - calendrier par station ;
 - preecoute ;
 - detection des fichiers manquants ;
@@ -893,7 +929,7 @@ Critere de fin :
 - le joueur peut aller devant un lieu, voir s'il est ouvert ou ferme, et interagir avec un
   message de test.
 
-### Session 5 - Hub d'editeur et integration Regie
+### Session 5 - Hub d'editeur
 
 Objectif : commencer le cote couteau suisse.
 
@@ -901,14 +937,14 @@ Livrables :
 
 - ajouter une navigation interne a l'editeur ;
 - onglet Carte ;
-- onglet Regie radio ;
-- integrer l'editeur de programmation radio existant sans casser `regie.html` tout de suite ;
+- onglet Interieurs ;
 - preparer une structure commune : layout, sauvegarde, messages, validation ;
 - centraliser les futurs outils dans `src/editor/`.
 
 Critere de fin :
 
-- depuis `editor.html`, on peut passer de la carte a la Regie radio.
+- depuis `editor.html`, on peut passer entre les modules principaux sans perdre le travail non
+  sauvegarde.
 
 ### Session 6 - Entrees de batiments et liens vers interieurs
 
@@ -1080,13 +1116,16 @@ Critere de fin :
 Modules a brancher ensuite dans le meme hub :
 
 - PNJ et dialogues ;
+- quartiers, factions et tensions ;
 - quetes secondaires ;
 - boutiques et economie ;
 - objets et loot ;
+- smartphone ;
 - police, patrouilles, zones de risque ;
 - routines horaires ;
 - evenements ;
 - audio spatial ;
+- Regie radio, quand on voudra la reintegrer au hub ;
 - monde psychique ;
 - outils de debug avance ;
 - validation globale des routes de fuite possibles, sans les exposer au joueur comme une

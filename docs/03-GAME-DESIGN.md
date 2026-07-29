@@ -163,18 +163,66 @@ Elles peuvent être augmentées ou modifiées par :
 Chibrux possède plusieurs emplacements d'équipement :
 
 - tête
-- collier
 - bijoux
 - buste
 - bras
 - jambes
 - pieds
-- accessoire
-- main droite
-- main gauche
 
-Les mains servent aux armes, outils ou objets utilisables. Les équipements peuvent donner des
-bonus de stats, des effets spéciaux ou débloquer certaines interactions.
+Les équipements peuvent donner des bonus de stats, des effets spéciaux ou débloquer certaines
+interactions. Les armes et objets utilisables ne sont pas des emplacements d'équipement séparés :
+ils passent par l'inventaire, les raccourcis rapides et l'objet actif du joueur.
+
+---
+
+## 🎒 Inventaire sac à dos
+
+L'inventaire doit être repensé comme un **sac à dos physique**, avec une place limitée sur une
+grille. L'objectif est d'avoir un mini puzzle lisible et amusant : le joueur ne gère pas seulement
+un poids maximum, il doit aussi organiser ses objets.
+
+Direction validée :
+
+- inventaire principal en grille, par exemple **8 x 5** au départ, à ajuster après test en jeu ;
+- chaque objet occupe une taille claire : `1x1`, `1x2`, `2x2`, `1x4`, `2x3`, etc. ;
+- les formes rectangulaires suffisent pour la première version ; les formes plus complexes peuvent
+  venir plus tard si elles apportent vraiment du fun ;
+- les objets peuvent garder un poids, mais le poids devient secondaire par rapport à la place prise ;
+- certains contenants peuvent modifier l'espace disponible : sac plastique, sac de sport, coffre de
+  voiture, boîte à outils, planque dans l'appartement ;
+- les objets équipés ne prennent pas forcément de place dans le sac, mais ils doivent pouvoir y
+  retourner si le joueur les retire.
+
+Chaque item doit être décrit par une structure commune, pensée comme une base de données de contenu :
+nom, catégorie, rareté, prix, taille, poids, icône, modèle, effets, tags, légalité, durabilité,
+stack éventuel et description. Le but est de pouvoir créer beaucoup d'objets sans recoder le
+système à chaque fois.
+
+À terme, l'éditeur PLS devra proposer un **éditeur d'items** : formulaire, aperçu d'icône, aperçu
+dans la grille, validation des champs et bouton pour tester l'objet en jeu.
+
+---
+
+## 📱 Smartphone
+
+Le smartphone de Chibrux doit devenir un **hub diégétique** : une interface qui existe dans le monde
+du jeu, pas seulement un menu abstrait.
+
+Applications prévues :
+
+- **Options** : paramètres du jeu ;
+- **Contacts** : appels, messages, quêtes, embrouilles, plans, réponses au téléphone ;
+- **Appareil photo** : photos de preuves, indices, missions, souvenirs ou publications ;
+- **Santé / Sport** : besoins, constantes, stats, fatigue, effets temporaires, substances ;
+- **Boutiques** : achats en ligne, livraisons, arnaques, objets rares ;
+- **Réseaux** : rumeurs, conséquences des actes, vidéos, tensions entre quartiers ;
+- **Carte / GPS** : lieux connus et points d'intérêt découverts ;
+- **Banque** : argent, salaire, amendes, dettes éventuelles ;
+- **Notes** : indices découverts sur les pistes pour quitter Beauvais.
+
+Le téléphone peut être cassé, sans batterie ou sans réseau dans certains cas, mais ces contraintes
+doivent rester ponctuelles. Elles doivent créer des situations drôles ou tendues, pas empêcher le
+joueur de jouer confortablement.
 
 ---
 
@@ -187,8 +235,8 @@ Chaque clic joue le coup suivant — poing 1, poing 2, poing 3 — à condition 
 vite. Si on attend trop, l'enchaînement retombe et le clic suivant repart au coup n°1. Après le
 3e coup, on repart aussi au coup n°1.
 
-**Avec une arme équipée** (main droite ou gauche, catégorie `arme`/`arme_lancer` — ex : la pelle) :
-une **animation d'attaque différente**, sans enchaînement pour l'instant.
+**Avec une arme active** (catégorie `arme`/`arme_lancer` — ex : la pelle) : une **animation
+d'attaque différente**, sans enchaînement pour l'instant.
 
 > ⏳ L'animation d'arme n'existe pas encore : en attendant, l'attaque à l'arme rejoue le 1er coup
 > de poing. Le mode d'emploi pour brancher le futur FBX est écrit en commentaire dans
@@ -243,6 +291,62 @@ En cas de mort ou d'arrestation :
 
 Il n'y a pas de système de réputation global. Les conséquences passent par le niveau de recherche,
 les amendes, les pertes, le temps perdu et les opportunités ratées.
+
+---
+
+## 🧱 Quartiers, gangs et tensions locales
+
+Beauvais est découpée en **4 grands quartiers rivaux**, plus le **centre-ville**. Le centre-ville
+n'est pas un territoire de gang : il est contrôlé par la ville, donc par la police et les autorités.
+
+Intention :
+
+- chaque quartier peut avoir ses groupes, ses habitudes, ses lieux, ses PNJ et son ambiance ;
+- les groupes rivaux peuvent s'intimider, se battre ou se tirer dessus s'ils se croisent ;
+- le centre-ville agit comme une zone plus surveillée : si des groupes rivaux y traînent ou y
+  provoquent le chaos, la police intervient plus vite ;
+- Chibrux peut déclencher, aggraver ou calmer certaines tensions par ses actions ;
+- les rivalités doivent faire vivre Beauvais même quand le joueur ne fait rien.
+
+Le système doit rester sandbox et lisible. Le joueur ne doit pas avoir l'impression d'une guerre
+permanente qui bloque toute la ville : les affrontements doivent être localisés, déclenchés par des
+conditions claires, et servir à créer des opportunités, du danger ou des scènes absurdes.
+
+Exemples de facteurs de tension :
+
+- heure de la journée ou de la nuit ;
+- quartier traversé ;
+- présence policière ;
+- PNJ important blessé ou tué ;
+- tag, vol, agression ou humiliation publique ;
+- mission terminée pour un groupe ;
+- rumeur diffusée par le smartphone ou la radio.
+
+---
+
+## 👥 PNJ et vie du monde
+
+Les PNJ doivent être pensés comme des entités data-driven, proches des items dans leur logique de
+création : une structure commune, puis beaucoup de fiches différentes.
+
+Types de PNJ :
+
+- **PNJ nommés** : personnages uniques, liés à des quêtes, boutiques, dialogues ou conséquences ;
+- **PNJ fonctionnels** : vendeurs, policiers, collègues, dealers, agents municipaux, etc. ;
+- **foule ambiante** : passants et présences de fond, utiles pour donner vie aux rues.
+
+Les PNJ importants doivent avoir une routine : horaires, lieux, déplacements, réactions, dialogues,
+relations et comportement en cas de chaos. Si le joueur tue un PNJ important, il ne doit pas
+réapparaître comme si rien ne s'était passé. Sa disparition peut fermer une opportunité, changer une
+boutique, modifier une tension de quartier, provoquer une rumeur, attirer la police ou créer une
+nouvelle situation.
+
+La foule ambiante peut rester plus souple et respawner pour garder Beauvais vivante, mais les PNJ
+nommés et fonctionnels doivent porter les vraies conséquences.
+
+À terme, l'éditeur PLS devra proposer un **éditeur de PNJ** : fiche d'identité, modèle, quartier,
+routine, dialogues, faction, rôle, réactions, état persistant et liens avec quêtes, boutiques ou
+pistes de fuite.
 
 ---
 
@@ -393,6 +497,44 @@ avec lui.
 
 ---
 
+## ⚙️ Physique sandbox et ragdoll
+
+La physique doit viser un ressenti **semi-réaliste mais fun**. Le but n'est pas de simuler la vraie
+vie au millimètre : le joueur doit sentir du poids, de l'inertie, des chocs et des réactions
+crédibles, tout en gardant un jeu agréable, lisible et drôle.
+
+Priorités de feeling :
+
+- collisions propres, sans murs invisibles ni objets qui accrochent partout ;
+- véhicules qui suivent le terrain et prennent une vraie assiette : hauteur, inclinaison, roulis,
+  tangage et suspension visuelle crédible ;
+- objets physiques manipulables ou projetables : poubelles, caisses, bouteilles, chaises, petits
+  props de chaos ;
+- impacts lisibles entre véhicules, joueur, PNJ et décor ;
+- interactions sandbox qui donnent envie d'expérimenter.
+
+Direction technique à garder en tête : une approche hybride est acceptable. Le moteur véhicule
+maison peut rester responsable du feeling arcade précis, tandis qu'un moteur physique dédié pourra
+servir aux objets dynamiques, props, ragdolls, joints et interactions plus générales.
+
+### Ragdoll
+
+Le ragdoll est une feature de fun prioritaire dès que la physique le permet.
+
+Déclencheurs possibles :
+
+- mort du joueur ou d'un PNJ ;
+- collision violente avec un véhicule ;
+- chute de trop haut ;
+- explosion ou choc important ;
+- trébuchement ou perte de contrôle spéciale.
+
+Le ragdoll doit être court, drôle et lisible. On ne cherche pas une anatomie parfaite : on veut une
+transition convaincante entre animation et corps physique, une impulsion adaptée à la cause, puis un
+retour à un état stable pour éviter de coûter trop cher en performance.
+
+---
+
 ## 🧩 Activités et mini-jeux
 
 Idées de contenus secondaires :
@@ -455,11 +597,15 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
 | Travail et salaire | `src/gameplay/work/` |
 | Besoins du joueur | `src/gameplay/needs/` |
 | Stats RPG | `src/gameplay/stats/` |
+| Inventaire sac à dos / items | `src/gameplay/inventory/` + `src/data/items.*` |
+| Smartphone | `src/gameplay/phone/` + `src/ui/phone/` |
 | Actions illégales | `src/gameplay/actions/` |
 | Police / niveau de recherche | `src/gameplay/police/` |
+| Quartiers, gangs et tensions | `src/data/zones.json` + `src/gameplay/factions/` |
 | Drogues et monde psychique | `src/gameplay/substances/` + `src/world/psychic/` |
 | Dialogues & réfs perso | `src/data/` |
 | Look cell-shading | `src/shaders/` + matériaux dans `src/world/` & `src/entities/` |
-| Personnages | `src/entities/` |
+| PNJ, routines et dialogues | `src/entities/` + `src/gameplay/npc/` + `src/data/npcs.*` |
 | Véhicules | `src/entities/vehicles/` |
+| Physique sandbox / ragdoll | `src/gameplay/physics/` + moteur physique dédié si retenu |
 | Radios / audio | `src/audio/` + fichiers `.wav` dans `public/musique/radio/` |

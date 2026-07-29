@@ -60,7 +60,7 @@ PLS/
     ├── core/          ← Canvas 3D, lumières, caméra qui suit le joueur
     ├── entities/      ← personnages (dont le joueur Chibrux)
     ├── gameplay/      ← entrées clavier/souris, état du jeu (Zustand)
-    ├── world/         ← le monde (playground de test, puis Beauvais)
+    ├── world/         ← le monde de Beauvais, son relief, ses routes et ses bâtiments
     ├── shaders/       ← cell-shading (gradient map toon)
     ├── ui/            ← interface 2D (HUD, compteur FPS, aide contrôles)
     └── lib/           ← utilitaires partagés
@@ -92,9 +92,9 @@ Puis ouvre l'adresse affichée (souvent `http://localhost:5173`) dans ton naviga
 
 ## 🕹️ Ce qui tourne déjà (prototype jouable)
 
-Une **base jouable** existe pour tester le rendu cartoon et le feeling du personnage :
-un terrain de test en cell-shading (avec ombres douces et contours BD), **Chibrux**
-(placeholder stylisé) contrôlable, une caméra qui le suit, et un HUD avec **compteur FPS**.
+Une **base jouable** existe dans la vraie ville de Beauvais : relief IGN, bâtiments et routes
+issus des données de ville, **Chibrux** contrôlable, véhicules prototypes, caméra suiveuse,
+HUD, inventaire, carte, points d'intérêt et radios.
 
 **Contrôles :**
 
@@ -113,5 +113,5 @@ un terrain de test en cell-shading (avec ombres douces et contours BD), **Chibru
 | **F1** | Déplier/replier le rappel des touches |
 | **Échap** | Libérer la souris |
 
-> C'est un **playground de test**, pas encore Beauvais : la vraie ville (OSM) viendra dans une
-> étape dédiée (voir [docs/04-MONDE-BEAUVAIS.md](docs/04-MONDE-BEAUVAIS.md)).
+> C'est encore un prototype : Beauvais existe déjà comme base jouable, mais les lieux faits main,
+> les PNJ, les boutiques, les routes de fuite et les systèmes sandbox restent à produire.

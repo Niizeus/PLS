@@ -1,0 +1,111 @@
+{
+  "id": "chez_pierrot",
+  "name": "Chez pierrot",
+  "type": "apartment",
+  "version": 2,
+  "defaultWallHeight": 2.7,
+  "defaultWallThickness": 0.18,
+  "floors": [
+    {
+      "id": "rdc",
+      "label": "RDC",
+      "elevation": 0,
+      "height": 2.7,
+      "walls": [
+        {
+          "id": "piece_ms6n8x6i_p6_mur_1",
+          "name": "Piece — mur 1",
+          "ax": -11,
+          "az": -9,
+          "bx": 12.375,
+          "bz": -9,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "piece_ms6n8x6i_p6_mur_2",
+          "name": "Piece — mur 2",
+          "ax": 12.25,
+          "az": -9,
+          "bx": 12.25,
+          "bz": 10,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "piece_ms6n8x6i_p6_mur_3",
+          "name": "Piece — mur 3",
+          "ax": 12.25,
+          "az": 10,
+          "bx": -11,
+          "bz": 10,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "piece_ms6n8x6i_p6_mur_4",
+          "name": "Piece — mur 4",
+          "ax": -11,
+          "az": 10,
+          "bx": -11,
+          "bz": -9,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        }
+      ],
+      "surfaces": [
+        {
+          "id": "piece_ms6n8x6i_p6_sol",
+          "name": "Piece — sol",
+          "pts": [
+            [
+              -11,
+              -9
+            ],
+            [
+              12.375,
+              -9
+            ],
+            [
+              12.344,
+              10
+            ],
+            [
+              -10.906,
+              10
+            ]
+          ],
+          "material": "proto_floor"
+        }
+      ],
+      "props": [],
+      "spawnPoints": [
+        {
+          "id": "spawn_chez_pierrot",
+          "name": "Arrivee",
+          "x": 0,
+          "z": 0,
+          "rotation": 0
+        }
+      ],
+      "exits": [
+        {
+          "id": "exit_chez_pierrot",
+          "name": "Sortie",
+          "x": 0,
+          "z": 1.9,
+          "rotation": 0,
+          "target": {
+            "kind": "exterior",
+            "markerId": "poi_ms6n3cjo"
+          }
+        }
+      ],
+      "stairs": []
+    }
+  ]
+}

@@ -17,6 +17,9 @@ import EditorGameView, { type EditorCameraState } from './EditorGameView'
 import { readNumberInput } from './editorInputs'
 import { saveData } from './editorSave'
 import { useEditorHistory } from './editorHistory'
+import { useEditorWorkspace } from './editorWorkspace'
+import { PanelToggle, type EditorPanelsApi } from './EditorPanels'
+import { makeInterior, slugifyInteriorId, uniqueInteriorId, type InteriorType } from '../data/interiors'
 
 type LayerId = 'water' | 'roads' | 'buildings' | 'zones' | 'markers'
 type ViewMode = 'plan' | 'gameTop' | 'gameTilt'
@@ -84,6 +87,27 @@ const markerTypeLabels: Record<MapMarkerType, string> = {
   npc: 'PNJ',
   test: 'Test',
   secret: 'Secret',
+}
+
+/**
+ * Type d'interieur propose par defaut quand on cree l'interieur d'un point d'interet.
+ * Les deux vocabulaires ne se recouvrent pas completement (un POI "npc" ou "secret" n'a pas
+ * d'equivalent direct) : tout ce qui ne correspond a rien devient une boutique, modifiable
+ * ensuite dans le module Interieurs.
+ */
+const interiorTypeByMarkerType: Partial<Record<MapMarkerType, InteriorType>> = {
+  apartment: 'apartment',
+  shop: 'shop',
+  bar: 'bar',
+  work: 'workplace',
+  station: 'station',
+  town_hall: 'town_hall',
+  police: 'police',
+  secret: 'secret',
+}
+
+function interiorTypeForMarker(type: MapMarkerType): InteriorType {
+  return interiorTypeByMarkerType[type] ?? 'shop'
 }
 
 const layerCanvasCache = new Map<Exclude<LayerId, 'zones' | 'markers'>, HTMLCanvasElement>()
@@ -330,6 +354,10 @@ function parseOpeningHours(text: string): { ok: true; hours?: MapMarkerOpeningHo
 
 interface EditorAppProps {
   moduleTabs?: ReactNode
+  /** Volets lateraux, partages avec l'autre module (voir EditorHub). */
+  panels: EditorPanelsApi
+  /** `false` quand un autre module est a l'ecran : le module reste monte mais se met en veille. */
+  active: boolean
 }
 
 /** Ce que l'historique annuler/retablir memorise a chaque modification. */
@@ -338,7 +366,7 @@ interface MapSnapshot {
   zones: Zone[]
 }
 
-export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
+export default function EditorApp({ moduleTabs, panels, active }: EditorAppProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mapPanelRef = useRef<HTMLElement>(null)
   const cameraRef = useRef<EditorCameraState>({ cx: SPAWN.x, cz: SPAWN.z, zoom: 2.2 })
@@ -374,9 +402,13 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   const [savedZonesJson, setSavedZonesJson] = useState(() => JSON.stringify(cloneZones(ZONES)))
   const [markerSearch, setMarkerSearch] = useState('')
   const history = useEditorHistory<MapSnapshot>()
+  const workspaceInteriors = useEditorWorkspace((state) => state.interiors)
 
   const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null
   const selectedZone = zones.find((zone) => zone.id === selectedZoneId) ?? null
+  const linkedInterior = selectedMarker?.interiorId
+    ? (workspaceInteriors.find((interior) => interior.id === selectedMarker.interiorId) ?? null)
+    : null
   const markerValidation = useMemo(() => validateMapMarkers(markers), [markers])
   const markersDirty = useMemo(
     () => JSON.stringify(serializeMapMarkers(markers)) !== savedMarkersJson,
@@ -411,6 +443,8 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
 
   useEffect(() => {
     markersRef.current = markers
+    // Copie en lecture pour le module Interieurs (voir editorWorkspace.ts).
+    useEditorWorkspace.getState().setMarkers(markers)
   }, [markers])
 
   useEffect(() => {
@@ -628,6 +662,39 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     setSelectedMarkerId(copy.id)
   }
 
+  /**
+   * Cree le niveau interieur d'un point d'interet, puis bascule dessus pour l'editer.
+   *
+   * L'interieur est fabrique EN MEMOIRE et ouvert tout de suite : pas besoin de sauvegarder
+   * pour pouvoir le dessiner. Il n'atterrit sur le disque qu'au bouton Sauver du module
+   * Interieurs, et le POI ne garde le lien que si on sauvegarde aussi les POI.
+   */
+  const createInteriorForSelectedMarker = () => {
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerIdRef.current)
+    if (!marker) return
+
+    const existingInteriors = useEditorWorkspace.getState().interiors
+    const interiorId = uniqueInteriorId(slugifyInteriorId(marker.name || marker.id), existingInteriors)
+    const interior = makeInterior({
+      id: interiorId,
+      name: marker.name || 'Nouvel interieur',
+      type: interiorTypeForMarker(marker.type),
+      markerId: marker.id,
+    })
+
+    updateSelectedMarker((current) => ({ ...current, interiorId }), undefined)
+    useEditorWorkspace.getState().addInterior(interior)
+  }
+
+  const openInteriorOfSelectedMarker = () => {
+    if (selectedMarker?.interiorId) useEditorWorkspace.getState().openInterior(selectedMarker.interiorId)
+  }
+
+  /** Detache le POI de son interieur. Le fichier de l'interieur, lui, reste sur le disque. */
+  const detachInteriorFromSelectedMarker = () => {
+    updateSelectedMarker((current) => ({ ...current, interiorId: undefined }), undefined)
+  }
+
   /** Recentre la vue sur un point du monde sans changer le zoom. */
   const centerOn = (point: MouseWorld) => {
     cameraRef.current = { ...cameraRef.current, cx: point.x, cz: point.z }
@@ -694,6 +761,8 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   // pour toujours agir sur la selection courante.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Module masque : les deux modules restent montes, seul celui a l'ecran ecoute le clavier.
+      if (!active) return
       // Ne jamais voler les touches a un champ de saisie : on doit pouvoir taper "v" dans un nom.
       const target = event.target as HTMLElement | null
       const tag = target?.tagName
@@ -776,6 +845,13 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     let raf = 0
     let lastInfoUpdate = 0
     const render = (now: number) => {
+      // Module masque (l'autre onglet est a l'ecran) : rien a dessiner, on se rendort.
+      // Le module reste monte pour ne pas perdre le travail en cours, mais il ne doit pas
+      // consommer de CPU pour rien.
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        raf = requestAnimationFrame(render)
+        return
+      }
       resize()
       const width = canvas.clientWidth
       const height = canvas.clientHeight
@@ -1025,7 +1101,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   }
 
   return (
-    <div className="editor-shell">
+    <div className={`editor-shell ${active ? '' : 'editor-hidden'}`} style={panels.shellStyle}>
       <header className="editor-topbar">
         <div>
           <div className="editor-title">Editeur PLS</div>
@@ -1115,7 +1191,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
         </div>
       </header>
 
-      <aside className="editor-left">
+      <aside className={`editor-left ${panels.layout.leftCollapsed ? 'collapsed' : ''}`}>
         <section>
           <h2>Calques</h2>
           <div className="layer-list">
@@ -1251,7 +1327,13 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
       </aside>
 
       <main ref={mapPanelRef} className="editor-map-panel">
-        {viewMode !== 'plan' && (
+        {/* Poignees et boutons vivent dans le panneau central : il ne defile pas, donc ils
+            restent toujours visibles, contrairement aux volets qui, eux, defilent. */}
+        {panels.renderHandle('left')}
+        {panels.renderHandle('right')}
+        <PanelToggle side="left" collapsed={panels.layout.leftCollapsed} onToggle={() => panels.toggle('left')} />
+        <PanelToggle side="right" collapsed={panels.layout.rightCollapsed} onToggle={() => panels.toggle('right')} />
+        {viewMode !== 'plan' && active && (
           <EditorGameView
             cameraRef={cameraRef}
             minZoom={MIN_ZOOM}
@@ -1273,7 +1355,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
         </div>
       </main>
 
-      <aside className="editor-right">
+      <aside className={`editor-right ${panels.layout.rightCollapsed ? 'collapsed' : ''}`}>
         <section>
           <h2>Inspecteur</h2>
           <dl className="inspector-list">
@@ -1566,6 +1648,59 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                   />
                   <span>Dev only</span>
                 </label>
+              </div>
+              <div className="interior-link">
+                <span className="interior-link-title">Interieur</span>
+                {selectedMarker.interiorId ? (
+                  <>
+                    <p className="editor-note">
+                      Ce point ouvre <strong>{linkedInterior?.name ?? selectedMarker.interiorId}</strong>
+                      {!linkedInterior && ' — introuvable, il a du etre supprime.'}
+                    </p>
+                    <div className="interior-link-actions">
+                      <button type="button" className="secondary-action" onClick={openInteriorOfSelectedMarker}>
+                        Editer l&apos;interieur
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={detachInteriorFromSelectedMarker}
+                        title="Le point ne mene plus nulle part. Le fichier de l'interieur reste sur le disque."
+                      >
+                        Detacher
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="editor-note">Ce point ne mene nulle part pour l&apos;instant.</p>
+                    <div className="interior-link-actions">
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={createInteriorForSelectedMarker}
+                        title="Cree une piece avec un point d'arrivee et une sortie, puis l'ouvre pour l'editer"
+                      >
+                        Creer l&apos;interieur
+                      </button>
+                      <select
+                        value=""
+                        aria-label="Rattacher un interieur existant"
+                        onChange={(event) => {
+                          const interiorId = event.currentTarget.value
+                          if (interiorId) updateSelectedMarker((current) => ({ ...current, interiorId }), undefined)
+                        }}
+                      >
+                        <option value="">Rattacher un existant...</option>
+                        {workspaceInteriors.map((interior) => (
+                          <option key={interior.id} value={interior.id}>
+                            {interior.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="form-actions">
                 <button type="button" className="secondary-action" onClick={focusSelection} title="Touche F">

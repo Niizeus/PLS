@@ -214,7 +214,18 @@ faut **toujours** lire la valeur d'un champ dans le corps du handler, jamais dan
 C'est pour ca que `updateSelectedMarker`, `updateSelectedZone` et `updateActiveInterior` appliquent
 leur recette immediatement. Voir aussi `src/editor/editorInputs.ts` (`Number('')` vaut `0`, pas NaN).
 
-**3. Historique annuler/retablir.** `src/editor/editorHistory.ts` fournit `useEditorHistory<T>()`,
+**3. Les deux modules restent montes.** `EditorHub.tsx` affiche Carte ET Interieurs en meme temps,
+et masque celui qui n'est pas a l'ecran (`.editor-hidden`). Demonter le module quitte jetait tout
+son travail non sauvegarde, ce qui est devenu inacceptable depuis que « Creer l'interieur » change
+d'onglet automatiquement. Consequence a respecter : **tout ce qui est global doit etre conditionne
+a la prop `active`** — ecoute du clavier, boucle `requestAnimationFrame`, scene 3D. Sinon les deux
+modules repondent en meme temps aux memes touches.
+
+L'etat partage entre modules vit dans `src/editor/editorWorkspace.ts` (store Zustand) : la liste des
+interieurs, l'interieur ouvert, le module affiche, et une copie en lecture des points d'interet. La
+source de verite des POI reste l'etat de `EditorApp` — le store n'en recoit qu'un reflet.
+
+**4. Historique annuler/retablir.** `src/editor/editorHistory.ts` fournit `useEditorHistory<T>()`,
 un historique par **photos de l'etat** (et non par actions inversibles : impossible de desynchroniser
 l'historique du contenu reel). Deux regles a respecter en l'utilisant :
 
@@ -229,7 +240,7 @@ l'inspecteur ne compte que pour une annulation, pas une par lettre.
 ⚠️ `InteriorEditor.tsx` a encore son propre historique fait main, anterieur a ce module. Les deux
 font la meme chose : a unifier quand on retouchera ce fichier.
 
-**4. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
+**5. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
 elargit le streaming de Beauvais. `src/world/editorStreaming.ts` plafonne ce rayon a 15 x 15 tuiles :
 sans ca, un dezoom complet demandait ~20 000 tuiles et la geometrie des 34 000 batiments d'un coup,
 ce qui figeait l'onglet. Pour voir la ville entiere, c'est le **plan 2D** qui sert, pas la vue 3D.

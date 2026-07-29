@@ -25,14 +25,97 @@ textarea {
   font: inherit;
 }
 
+/*
+ * Les largeurs des volets viennent de variables CSS pilotees par useEditorPanels
+ * (src/editor/EditorPanels.tsx). Un volet replie a une largeur de 0.
+ */
 .editor-shell {
+  --left-width: 250px;
+  --right-width: 300px;
   display: grid;
   grid-template:
     "top top top" 58px
-    "left map right" minmax(0, 1fr) / 250px minmax(0, 1fr) 280px;
+    "left map right" minmax(0, 1fr) / var(--left-width) minmax(0, 1fr) var(--right-width);
   width: 100%;
   height: 100%;
   background: #202326;
+}
+
+/*
+ * Module en arriere-plan. Les deux modules de l'editeur restent montes en permanence pour ne
+ * pas perdre le travail en cours quand on change d'onglet (voir EditorHub.tsx) : celui qui
+ * n'est pas a l'ecran est simplement masque.
+ */
+.editor-shell.editor-hidden {
+  display: none;
+}
+
+/* Pendant un redimensionnement : curseur partout, et pas de selection de texte parasite. */
+body.editor-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.editor-resizing * {
+  cursor: col-resize !important;
+}
+
+/* Poignee de redimensionnement, posee sur le bord interieur de chaque volet. */
+.panel-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 120ms;
+}
+
+.panel-handle:hover,
+.panel-handle:active {
+  background: #6c7f55;
+}
+
+.panel-handle-left {
+  left: 0;
+}
+
+.panel-handle-right {
+  right: 0;
+}
+
+/* Bouton fleche pour replier/deplier, ancre au bord de la carte. */
+.panel-toggle {
+  position: absolute;
+  top: 12px;
+  z-index: 6;
+  width: 22px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #4e575f;
+  background: rgba(32, 38, 42, 0.92);
+  color: #f4f0df;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-toggle:hover {
+  background: #3a4248;
+}
+
+.panel-toggle-left {
+  left: 0;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.panel-toggle-right {
+  right: 0;
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
 }
 
 .editor-topbar {
@@ -147,11 +230,20 @@ textarea {
 
 .editor-left,
 .editor-right {
+  position: relative;
   min-width: 0;
   padding: 14px;
   overflow: auto;
   border-color: #353a3f;
   background: #262b30;
+}
+
+/* Volet replie : largeur 0, on masque le contenu sans le demonter de l'arbre React. */
+.editor-left.collapsed,
+.editor-right.collapsed {
+  padding: 0;
+  overflow: hidden;
+  border: 0;
 }
 
 .editor-left {
@@ -490,6 +582,46 @@ textarea {
 .checkbox-list input {
   width: 16px;
   height: 16px;
+}
+
+/* Bloc "Interieur" de l'inspecteur d'un point d'interet. */
+.interior-link {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #4b4468;
+  border-radius: 7px;
+  background: #262336;
+}
+
+.interior-link-title {
+  color: #c3b4ff;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.interior-link .editor-note {
+  font-size: 12px;
+}
+
+.interior-link strong {
+  color: #efe9ff;
+}
+
+.interior-link-actions {
+  display: grid;
+  gap: 7px;
+}
+
+.interior-link-actions select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #465057;
+  border-radius: 6px;
+  background: #1d2227;
+  color: #eef1ea;
 }
 
 .form-actions {

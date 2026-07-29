@@ -1094,6 +1094,50 @@ Modules a brancher ensuite dans le meme hub :
 
 ---
 
+## Interieurs rattaches aux points d'interet
+
+Le circuit "je pose un lieu sur la carte, je fabrique son interieur" est en place.
+
+Depuis le module **Carte**, avec un point selectionne, le bloc *Interieur* de l'inspecteur permet de :
+
+- **creer l'interieur** du point : un niveau est fabrique et ouvert immediatement dans le module
+  Interieurs. Il n'est pas vide — une piece de 6x5 m, un point d'arrivee du joueur et une sortie
+  qui ramene au point de la carte. Un interieur sans piece ni sortie ne serait pas testable ;
+- **rattacher un interieur existant** a ce point, via la liste deroulante ;
+- **editer** l'interieur deja rattache, ou **detacher** le point (le fichier reste sur le disque).
+
+L'identifiant de l'interieur est derive du nom du point (`Kebab du General` -> `kebab_du_general`)
+et devient le nom du fichier dans `src/data/interiors/`. Il est **fige a la creation** : renommer
+l'interieur ensuite ne renomme pas le fichier, pour ne pas casser le lien `interiorId` du point.
+
+Cote donnees :
+
+- `MapMarker.interiorId` (optionnel) porte le lien, dans `src/data/mapMarkers.json` ;
+- la sortie de l'interieur pointe vers le POI via `target.markerId`, pour savoir ou reposer le
+  joueur quand il ressort ;
+- `src/data/interiors.ts` ramasse desormais **tous** les fichiers de `src/data/interiors/` via
+  `import.meta.glob`. Ajouter un interieur ne demande plus de toucher au code.
+
+Le module **Interieurs** permet aussi de creer un interieur autonome (bouton `+ Interieur`), de le
+renommer et d'en changer le type. L'inspecteur rappelle quel point de la carte l'ouvre, ou signale
+qu'aucun ne le fait — un interieur inaccessible est un interieur mort.
+
+⚠️ Rien n'est ecrit sur le disque tant qu'on ne sauvegarde pas, et les deux sauvegardes sont
+separees : le fichier de l'interieur (bouton Sauver du module Interieurs) et le lien `interiorId`
+du point (bouton Sauver POI du module Carte).
+
+## Ergonomie des volets
+
+- Les volets gauche et droite se **redimensionnent** en tirant leur bord, entre 180 et 560 px.
+- Ils se **replient** avec la fleche posee sur le bord de la carte, ou par un double-clic sur la
+  poignee. Largeurs et etat replie sont gardes d'une session a l'autre (`localStorage`).
+- Les deux modules partagent la meme disposition de volets.
+
+⚠️ Les deux modules restent **montes en permanence**, celui du fond etant masque. Avant, changer
+d'onglet demontait le module quitte et jetait tout son travail non sauvegarde en silence — ce qui
+devenait franchement dangereux maintenant que "Creer l'interieur" change d'onglet tout seul. Le
+module masque met en pause sa boucle de dessin, sa scene 3D et son ecoute du clavier.
+
 ## Confort d'edition disponible (module Carte)
 
 - **Outils** : Selection (`V`), Placer (`P`), Quartier (`Q`).

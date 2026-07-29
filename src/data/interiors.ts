@@ -1,4 +1,11 @@
-import appartChibrux from './interiors/appart_chibrux.json'
+/**
+ * Tous les niveaux interieurs du jeu, un fichier JSON par interieur.
+ *
+ * `import.meta.glob` (fourni par Vite) ramasse automatiquement tout `src/data/interiors/*.json` :
+ * quand l'editeur cree un nouvel interieur, son fichier est pris en compte sans qu'on ait a
+ * ajouter un import ici. `eager: true` charge tout au demarrage, comme un import classique.
+ */
+const interiorModules = import.meta.glob('./interiors/*.json', { eager: true, import: 'default' })
 
 export const INTERIOR_TYPES = [
   'apartment',
@@ -401,6 +408,96 @@ export function serializeInterior(interior: InteriorDefinition): InteriorDefinit
   }
 }
 
+/**
+ * Transforme un nom lisible en identifiant de fichier sur : "Kebab du Centre" -> "kebab_du_centre".
+ * Les accents sont retires, tout le reste devient underscore. Sert d'`interiorId`, donc de nom
+ * de fichier dans `src/data/interiors/`.
+ */
+export function slugifyInteriorId(label: string) {
+  const slug = label
+    // NFD separe la lettre de son accent, \p{Diacritic} enleve ensuite l'accent seul.
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return slug || 'interieur'
+}
+
+/** Rend l'identifiant unique dans la liste donnee, en suffixant _2, _3... si besoin. */
+export function uniqueInteriorId(base: string, interiors: InteriorDefinition[]) {
+  const taken = new Set(interiors.map((interior) => interior.id))
+  if (!taken.has(base)) return base
+  let index = 2
+  while (taken.has(`${base}_${index}`)) index += 1
+  return `${base}_${index}`
+}
+
+/**
+ * Fabrique un interieur pret a etre visite : une piece, un point d'apparition du joueur au
+ * centre, et une sortie qui ramene dehors.
+ *
+ * On ne cree PAS une coquille vide : un interieur sans piece ni sortie ne serait pas testable,
+ * et le joueur y serait bloque. Le createur n'a plus qu'a redimensionner et meubler.
+ */
+export function makeInterior(options: {
+  id: string
+  name: string
+  type: InteriorType
+  /** POI de la carte qui ouvre cet interieur, pour que la sortie sache ou reposer le joueur. */
+  markerId?: string
+}): InteriorDefinition {
+  const { id, name, type, markerId } = options
+  const width = 6
+  const depth = 5
+
+  return {
+    id,
+    name,
+    type,
+    version: 1,
+    defaultWallHeight: 2.7,
+    defaultWallThickness: 0.18,
+    floors: [
+      {
+        id: 'rdc',
+        label: 'RDC',
+        elevation: 0,
+        height: 2.7,
+        rooms: [
+          {
+            id: `room_${id}_1`,
+            name: 'Piece principale',
+            x: -width / 2,
+            z: -depth / 2,
+            w: width,
+            d: depth,
+            floorMaterial: 'proto_floor',
+            wallMaterial: 'proto_wall',
+          },
+        ],
+        removedWalls: [],
+        doors: [],
+        windows: [],
+        props: [],
+        spawnPoints: [{ id: `spawn_${id}`, name: 'Arrivee', x: 0, z: 0, rotation: 0 }],
+        // Sortie posee sur le mur du bas, la ou on entre naturellement.
+        exits: [
+          {
+            id: `exit_${id}`,
+            name: 'Sortie',
+            x: 0,
+            z: depth / 2,
+            rotation: 0,
+            target: markerId ? { kind: 'exterior', markerId } : { kind: 'exterior' },
+          },
+        ],
+        stairs: [],
+      },
+    ],
+  }
+}
+
 export function serializeInteriors(interiors: InteriorDefinition[]): InteriorDefinition[] {
   return interiors.map(serializeInterior).sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -413,4 +510,11 @@ function round4(value: number) {
   return Number(value.toFixed(4))
 }
 
-export const INTERIORS = validateInteriors([appartChibrux]).interiors
+// Tri par chemin de fichier : l'ordre de la liste reste le meme d'une machine a l'autre,
+// donc l'editeur affiche toujours les interieurs dans le meme ordre.
+const rawInteriors = Object.keys(interiorModules)
+  .sort()
+  .map((path) => interiorModules[path])
+
+export const interiorValidation = validateInteriors(rawInteriors)
+export const INTERIORS = interiorValidation.interiors

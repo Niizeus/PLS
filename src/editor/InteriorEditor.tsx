@@ -1,7 +1,12 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   INTERIORS,
+  INTERIOR_TYPES,
+  makeInterior,
   serializeInterior,
+  slugifyInteriorId,
+  uniqueInteriorId,
+  type InteriorType,
   validateInteriors,
   type InteriorDefinition,
   type InteriorDoor,
@@ -16,6 +21,8 @@ import {
 import InteriorTestView from './InteriorTestView'
 import { readNumberInput } from './editorInputs'
 import { saveData } from './editorSave'
+import { useEditorWorkspace } from './editorWorkspace'
+import { PanelToggle, type EditorPanelsApi } from './EditorPanels'
 import { getVisibleWallSegments, getWallSegments, isWallRemoved, type InteriorWallSegment } from './interiorGeometry'
 
 type InteriorTool = 'select' | 'room' | 'wall' | 'door' | 'window' | 'spawn' | 'exit' | 'prop'
@@ -30,6 +37,10 @@ type SelectedInteriorItem =
 
 interface InteriorEditorProps {
   moduleTabs?: ReactNode
+  /** Volets lateraux, partages avec l'autre module (voir EditorHub). */
+  panels: EditorPanelsApi
+  /** `false` quand un autre module est a l'ecran : le module reste monte mais se met en veille. */
+  active: boolean
 }
 
 interface PlanPoint {
@@ -174,7 +185,7 @@ function findSelection(floor: InteriorFloor, point: PlanPoint): SelectedInterior
   return null
 }
 
-export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
+export default function InteriorEditor({ moduleTabs, panels, active }: InteriorEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cameraRef = useRef({ cx: 0, cz: 0, zoom: 32 })
   const interiorsRef = useRef<InteriorDefinition[]>(cloneInteriors(INTERIORS))
@@ -193,8 +204,12 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     | null
   >(null)
 
-  const [interiors, setInteriors] = useState(() => cloneInteriors(INTERIORS))
-  const [activeInteriorId, setActiveInteriorId] = useState(INTERIORS[0]?.id ?? '')
+  // Liste et interieur actif viennent de l'atelier partage : le module Carte peut creer un
+  // interieur et l'ouvrir ici directement (voir editorWorkspace.ts).
+  const interiors = useEditorWorkspace((state) => state.interiors)
+  const setInteriors = useEditorWorkspace((state) => state.setInteriors)
+  const activeInteriorId = useEditorWorkspace((state) => state.activeInteriorId) ?? ''
+  const setActiveInteriorId = useEditorWorkspace((state) => state.setActiveInteriorId)
   const [activeFloorId, setActiveFloorId] = useState(INTERIORS[0]?.floors[0]?.id ?? '')
   const [tool, setTool] = useState<InteriorTool>('select')
   const [selected, setSelected] = useState<SelectedInteriorItem | null>(null)
@@ -204,16 +219,35 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
   const [testMode, setTestMode] = useState(false)
   const [pendingPropAssetId, setPendingPropAssetId] = useState<(typeof PLACEHOLDER_ASSETS)[number]['id']>('proto_cube')
   const [, setHistoryVersion] = useState(0)
-  // Photo du dernier etat ecrit sur le disque : sert a savoir s'il reste des modifs a sauver.
-  const [savedInteriorsJson, setSavedInteriorsJson] = useState(() => JSON.stringify(cloneInteriors(INTERIORS)))
+  /**
+   * Photo du dernier etat ecrit sur le disque, PAR interieur.
+   * Un seul instantane global ne marcherait pas : on sauvegarde un interieur a la fois, et
+   * enregistrer le bar ne doit pas faire croire que l'appartement est sauvegarde lui aussi.
+   * Un interieur cree dans la session n'a pas d'entree ici : il est donc "a sauver".
+   */
+  const [savedInteriorsJson, setSavedInteriorsJson] = useState<Record<string, string>>(() =>
+    Object.fromEntries(INTERIORS.map((interior) => [interior.id, JSON.stringify(serializeInterior(interior))])),
+  )
+
+  const workspaceMarkers = useEditorWorkspace((state) => state.markers)
 
   const activeInterior = interiors.find((interior) => interior.id === activeInteriorId) ?? interiors[0]
+  /** Point de la carte qui ouvre cet interieur, s'il y en a un. */
+  const linkedMarker = activeInterior
+    ? (workspaceMarkers.find((marker) => marker.interiorId === activeInterior.id) ?? null)
+    : null
   const activeFloor = activeInterior ? getFloor(activeInterior, activeFloorId) : null
   const validation = useMemo(() => validateInteriors(interiors), [interiors])
-  const isDirty = useMemo(
-    () => JSON.stringify(cloneInteriors(interiors)) !== savedInteriorsJson,
+  /** Y a-t-il au moins un interieur qui differe de sa version sur le disque ? */
+  const dirtyInteriorIds = useMemo(
+    () =>
+      interiors
+        .filter((interior) => JSON.stringify(serializeInterior(interior)) !== savedInteriorsJson[interior.id])
+        .map((interior) => interior.id),
     [interiors, savedInteriorsJson],
   )
+  const isDirty = dirtyInteriorIds.length > 0
+  const activeIsDirty = activeInterior ? dirtyInteriorIds.includes(activeInterior.id) : false
   const selectedRoom = selected?.kind === 'room' ? activeFloor?.rooms.find((room) => room.id === selected.id) ?? null : null
   const selectedPointItem = selected && activeFloor ? getSelectedPointItem(activeFloor, selected) : null
 
@@ -463,6 +497,29 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     setSelected({ kind: 'room', id: room.id })
   }
 
+  /** Interieur autonome, sans point d'interet associe. On pourra le rattacher depuis la carte. */
+  const addInterior = () => {
+    const name = 'Nouvel interieur'
+    const interior = makeInterior({
+      id: uniqueInteriorId(slugifyInteriorId(name), interiorsRef.current),
+      name,
+      type: 'shop',
+    })
+    pushHistory()
+    const list = [...interiorsRef.current, serializeInterior(interior)]
+    interiorsRef.current = list
+    setInteriors(list)
+    setActiveInteriorId(interior.id)
+    setActiveFloorId(interior.floors[0].id)
+    setSelected(null)
+    setSaveStatus('Nouvel interieur cree, sauvegarde requise')
+  }
+
+  /** Renomme / retypes l'interieur ouvert. Le nom n'est PAS l'identifiant : l'id reste fige. */
+  const updateActiveInteriorMeta = (recipe: (interior: InteriorDefinition) => InteriorDefinition) => {
+    updateActiveInterior(recipe)
+  }
+
   const addFloor = () => {
     if (!activeInterior) return
     const index = activeInterior.floors.length + 1
@@ -485,6 +542,20 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     setSelected(null)
   }
 
+  /**
+   * Garde l'etage actif coherent avec l'interieur ouvert.
+   * Indispensable depuis que le module Carte peut ouvrir un interieur de l'exterieur : sans ca,
+   * `activeFloorId` resterait sur l'etage de l'interieur precedent, et toutes les modifications
+   * seraient appliquees a un etage introuvable — donc silencieusement perdues.
+   */
+  useEffect(() => {
+    if (!activeInterior) return
+    if (!activeInterior.floors.some((floor) => floor.id === activeFloorId)) {
+      setActiveFloorId(activeInterior.floors[0]?.id ?? '')
+      setSelected(null)
+    }
+  }, [activeInterior, activeFloorId])
+
   // Avertit avant de fermer/recharger l'onglet si l'interieur n'est pas sauvegarde.
   useEffect(() => {
     if (!isDirty) return
@@ -498,6 +569,8 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Module masque : les deux modules restent montes, seul celui a l'ecran ecoute le clavier.
+      if (!active) return
       const target = event.target as HTMLElement | null
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -564,6 +637,11 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
 
     let raf = 0
     const render = () => {
+      // Module masque : voir le commentaire equivalent dans EditorApp.tsx.
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        raf = requestAnimationFrame(render)
+        return
+      }
       resize()
       const width = canvas.clientWidth
       const height = canvas.clientHeight
@@ -746,7 +824,7 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
       const list = interiorsRef.current.map((interior) => (interior.id === serialized.id ? serialized : interior))
       interiorsRef.current = list
       setInteriors(list)
-      setSavedInteriorsJson(JSON.stringify(list))
+      setSavedInteriorsJson((current) => ({ ...current, [serialized.id]: JSON.stringify(serialized) }))
     }
     setSaveStatus(outcome.message)
   }
@@ -827,7 +905,7 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
     : 0
 
   return (
-    <div className="editor-shell">
+    <div className={`editor-shell ${active ? '' : 'editor-hidden'}`} style={panels.shellStyle}>
       <header className="editor-topbar">
         <div>
           <div className="editor-title">Editeur PLS</div>
@@ -868,16 +946,20 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
           </button>
           <button
             type="button"
-            className={`primary ${isDirty ? 'dirty' : ''}`}
+            className={`primary ${activeIsDirty ? 'dirty' : ''}`}
             onClick={saveInterior}
-            title={isDirty ? 'Interieur modifie, pas encore sur le disque' : 'Interieur a jour sur le disque'}
+            title={
+              activeIsDirty
+                ? "Interieur ouvert modifie, pas encore sur le disque"
+                : 'Interieur ouvert a jour sur le disque'
+            }
           >
-            Sauver{isDirty ? ' •' : ''}
+            Sauver{activeIsDirty ? ' •' : ''}
           </button>
         </div>
       </header>
 
-      <aside className="editor-left">
+      <aside className={`editor-left ${panels.layout.leftCollapsed ? 'collapsed' : ''}`}>
         <section>
           <h2>Interieurs</h2>
           <div className="marker-list">
@@ -900,6 +982,60 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
               </button>
             ))}
           </div>
+          <div className="list-actions">
+            <button type="button" onClick={addInterior}>
+              + Interieur
+            </button>
+          </div>
+          <p className="editor-note">
+            Pour rattacher un interieur a un lieu de la ville, passe par le module Carte : selectionne le
+            point et clique « Creer l&apos;interieur ».
+          </p>
+        </section>
+
+        <section>
+          <h2>Interieur ouvert</h2>
+          {activeInterior ? (
+            <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Identifiant</span>
+                <input value={activeInterior.id} readOnly title="Nom du fichier JSON, fige a la creation" />
+              </label>
+              <label>
+                <span>Nom</span>
+                <input
+                  value={activeInterior.name}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    updateActiveInteriorMeta((interior) => ({ ...interior, name }))
+                  }}
+                />
+              </label>
+              <label>
+                <span>Type</span>
+                <select
+                  value={activeInterior.type}
+                  onChange={(event) => {
+                    const type = event.currentTarget.value as InteriorType
+                    updateActiveInteriorMeta((interior) => ({ ...interior, type }))
+                  }}
+                >
+                  {INTERIOR_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="editor-note">
+                {linkedMarker
+                  ? `Ouvert depuis le point « ${linkedMarker.name} » sur la carte.`
+                  : "Aucun point de la carte n'ouvre cet interieur pour l'instant."}
+              </p>
+            </form>
+          ) : (
+            <p className="editor-note">Aucun interieur. Clique « + Interieur » pour en creer un.</p>
+          )}
         </section>
 
         <section>
@@ -951,7 +1087,12 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
       </aside>
 
       <main className="editor-map-panel interior-plan-panel">
-        {testMode && activeInterior && activeFloor ? (
+        {/* Poignees et boutons de volet : voir le commentaire equivalent dans EditorApp.tsx. */}
+        {panels.renderHandle('left')}
+        {panels.renderHandle('right')}
+        <PanelToggle side="left" collapsed={panels.layout.leftCollapsed} onToggle={() => panels.toggle('left')} />
+        <PanelToggle side="right" collapsed={panels.layout.rightCollapsed} onToggle={() => panels.toggle('right')} />
+        {testMode && active && activeInterior && activeFloor ? (
           <InteriorTestView interior={activeInterior} floor={activeFloor} />
         ) : (
           <canvas ref={canvasRef} className="editor-map-canvas visible" />
@@ -989,7 +1130,7 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
         </div>
       </main>
 
-      <aside className="editor-right">
+      <aside className={`editor-right ${panels.layout.rightCollapsed ? 'collapsed' : ''}`}>
         <section>
           <h2>Inspecteur</h2>
           <dl className="inspector-list">
@@ -1020,7 +1161,9 @@ export default function InteriorEditor({ moduleTabs }: InteriorEditorProps) {
             <div>
               <dt>A sauver</dt>
               <dd className={isDirty ? 'inspector-dirty' : ''}>
-                {isDirty ? 'Modifications en attente' : 'Rien, tout est sur le disque'}
+                {isDirty
+                  ? `${dirtyInteriorIds.length} interieur(s) : ${dirtyInteriorIds.join(', ')}`
+                  : 'Rien, tout est sur le disque'}
               </dd>
             </div>
           </dl>

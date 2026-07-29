@@ -45,6 +45,12 @@ export interface MapMarker {
   devOnly: boolean
   openingHours?: MapMarkerOpeningHours[]
   closedMessage?: string
+  /**
+   * Niveau interieur ouvert par ce point, s'il en a un (`id` d'un fichier de
+   * `src/data/interiors/`). Le joueur interagit avec le point et se retrouve dans ce niveau.
+   * Absent = le point ne mene nulle part (repere, PNJ, sortie bloquee...).
+   */
+  interiorId?: string
   tags: string[]
 }
 
@@ -118,6 +124,7 @@ function validateMarker(value: unknown, index: number, seenIds: Set<string>, err
   const visibleOnMap = value.visibleOnMap
   const devOnly = value.devOnly
   const closedMessage = value.closedMessage
+  const interiorId = value.interiorId
   const tags = value.tags
 
   const markerLabel = typeof id === 'string' && id ? id : `marker[${index}]`
@@ -157,6 +164,9 @@ function validateMarker(value: unknown, index: number, seenIds: Set<string>, err
   if (closedMessage != null && typeof closedMessage !== 'string') {
     errors.push(`${id}: closedMessage doit etre une chaine.`)
   }
+  if (interiorId != null && (typeof interiorId !== 'string' || interiorId.trim() === '')) {
+    errors.push(`${id}: interiorId doit etre l'identifiant d'un interieur.`)
+  }
   if (!isStringArray(tags)) errors.push(`${id}: tags doit etre une liste de chaines.`)
 
   const openingHours = validateOpeningHours(value.openingHours, id, errors)
@@ -192,6 +202,7 @@ function validateMarker(value: unknown, index: number, seenIds: Set<string>, err
     devOnly,
     openingHours,
     closedMessage: typeof closedMessage === 'string' ? closedMessage : undefined,
+    interiorId: typeof interiorId === 'string' && interiorId.trim() ? interiorId.trim() : undefined,
     tags,
   }
 }
@@ -245,6 +256,9 @@ export function serializeMapMarkers(markers: MapMarker[]): MapMarker[] {
     }
     if (marker.closedMessage?.trim()) {
       serialized.closedMessage = marker.closedMessage.trim()
+    }
+    if (marker.interiorId?.trim()) {
+      serialized.interiorId = marker.interiorId.trim()
     }
 
     return serialized

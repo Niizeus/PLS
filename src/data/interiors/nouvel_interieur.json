@@ -1,0 +1,241 @@
+{
+  "id": "nouvel_interieur",
+  "name": "Nouvel interieur",
+  "type": "shop",
+  "version": 2,
+  "defaultWallHeight": 2.7,
+  "defaultWallThickness": 0.18,
+  "floors": [
+    {
+      "id": "rdc",
+      "label": "RDC",
+      "elevation": 0,
+      "height": 2.7,
+      "walls": [
+        {
+          "id": "nouvel_interieur_p1_mur_1",
+          "name": "Piece principale — mur 1",
+          "ax": -3,
+          "az": 0.5,
+          "bx": 1,
+          "bz": 0.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "nouvel_interieur_p1_mur_2",
+          "name": "Piece principale — mur 2",
+          "ax": 4.25,
+          "az": -6,
+          "bx": 4.25,
+          "bz": 2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "nouvel_interieur_p1_mur_3",
+          "name": "Piece principale — mur 3",
+          "ax": 4.25,
+          "az": 2.5,
+          "bx": -3,
+          "bz": 2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": [
+            {
+              "id": "nouvel_interieur_porte_entree",
+              "name": "Entree",
+              "kind": "door",
+              "offset": 4.25,
+              "width": 1,
+              "sillHeight": 0,
+              "topHeight": 2.1
+            }
+          ]
+        },
+        {
+          "id": "nouvel_interieur_p1_mur_4",
+          "name": "Piece principale — mur 4",
+          "ax": -9,
+          "az": 2.5,
+          "bx": -9,
+          "bz": -2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dth4w_1b",
+          "name": "Mur",
+          "ax": 4.25,
+          "az": -6,
+          "bx": -9,
+          "bz": -6,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dtiua_5a",
+          "name": "Mur",
+          "ax": -9,
+          "az": -6,
+          "bx": -9,
+          "bz": -2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dtoie_18",
+          "name": "Mur",
+          "ax": -3,
+          "az": 2.5,
+          "bx": -9,
+          "bz": 2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6duh0p_al",
+          "name": "Mur",
+          "ax": -2.25,
+          "az": 0.375,
+          "bx": -2.25,
+          "bz": -1.875,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6duu27_lh",
+          "name": "Mur",
+          "ax": 1,
+          "az": 0.5,
+          "bx": 1,
+          "bz": -1.25,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dvxc5_q8",
+          "name": "Mur",
+          "ax": 1,
+          "az": -1.25,
+          "bx": -0.75,
+          "bz": -1.25,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dw3pu_kj",
+          "name": "Mur",
+          "ax": -0.75,
+          "az": -1.25,
+          "bx": -0.75,
+          "bz": -1.75,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dw6m0_74",
+          "name": "Mur",
+          "ax": -0.75,
+          "az": -2.5,
+          "bx": 4.25,
+          "bz": -2.5,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dwbyn_pa",
+          "name": "Mur",
+          "ax": 1,
+          "az": -1.25,
+          "bx": 3.25,
+          "bz": -1.25,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dwjo3_fy",
+          "name": "Mur",
+          "ax": -0.75,
+          "az": -3.5,
+          "bx": -0.75,
+          "bz": -6,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        },
+        {
+          "id": "mur_ms6dx26q_ne",
+          "name": "Mur",
+          "ax": -0.75,
+          "az": -2.5,
+          "bx": -0.75,
+          "bz": -2,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        }
+      ],
+      "surfaces": [
+        {
+          "id": "sol_ms6dtw7c_9",
+          "name": "Sol",
+          "pts": [
+            [
+              -9,
+              -6
+            ],
+            [
+              4.25,
+              -6
+            ],
+            [
+              4.25,
+              2.5
+            ],
+            [
+              -9,
+              2.5
+            ]
+          ],
+          "material": "proto_floor"
+        }
+      ],
+      "props": [],
+      "spawnPoints": [
+        {
+          "id": "spawn_nouvel_interieur",
+          "name": "Arrivee",
+          "x": 0,
+          "z": 1.75,
+          "rotation": 0
+        }
+      ],
+      "exits": [
+        {
+          "id": "exit_nouvel_interieur",
+          "name": "Sortie",
+          "x": 0,
+          "z": 2.25,
+          "rotation": 0,
+          "target": {
+            "kind": "exterior"
+          }
+        }
+      ],
+      "stairs": []
+    }
+  ]
+}

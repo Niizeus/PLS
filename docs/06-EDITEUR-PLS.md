@@ -1137,6 +1137,59 @@ Modules a brancher ensuite dans le meme hub :
 
 ---
 
+## Modele des interieurs : murs et sols (refonte)
+
+L'ancien modele (une liste de pieces rectangulaires, un mur = un COTE de rectangle) bloquait tout :
+supprimer la separation entre deux pieces de tailles differentes supprimait tout le cote, y compris
+la partie qui donnait sur l'exterieur ; et rien ne pouvait sortir des axes.
+
+Le modele est maintenant :
+
+- **mur** = un segment A -> B, a n'importe quel angle, avec son epaisseur, sa hauteur et ses
+  **ouvertures** percees sur une portion seulement ;
+- **sol** = un polygone quelconque — donc rond, en demi-cercle, en diagonale ;
+- **piece** = plus une donnee, juste un raccourci d'outil qui pose 4 murs + 1 sol, chacun editable
+  ensuite separement.
+
+Les anciens fichiers restent lisibles : la conversion est faite au chargement
+(`migrateFloor` dans `src/data/interiors.ts`). Elle fusionne au passage les murs colineaires qui se
+recouvraient, et transforme un ancien « mur supprime » en passage de la bonne largeur — donc elle
+corrige l'ancien defaut au lieu de le recopier.
+
+### Outils de trace
+
+| Outil | Raccourci | Ce qu'il fait |
+|---|---|---|
+| Selection | `V` | selectionne, deplace, attrape les extremites d'un mur et les sommets d'un sol |
+| Mur | `M` | clic-clic en **chaine** ; `Maj` bloque l'angle sur 15° (donc 45° et 90° gratuits) |
+| Piece | `R` | clic-glisser : 4 murs + 1 sol |
+| Sol | `G` | clic-glisser : un sol rectangulaire, sans aucun mur |
+| Forme | `C` | clic-glisser depuis le centre : rond, demi-cercle, ou polygone regulier |
+| Ouverture | `O` | glisser le long d'un mur : perce un passage, une porte ou une fenetre |
+| Couper | `X` | clic sur un mur : le scinde en deux murs independants |
+
+Le **magnetisme** accroche les extremites de mur, les sommets de sol et les milieux, avant de
+retomber sur la grille ; un repere affiche ce qui a ete accroche, pour que ce ne soit jamais une
+surprise. Le **clic molette** deplace la vue dans tous les outils, puisque le clic gauche sert a tracer.
+
+⚠️ Une separation entre deux pieces est faite de **deux murs superposes** (chaque piece a pose le
+sien). Percer une ouverture les traverse donc tous les deux d'un coup : sinon on aurait l'impression
+que l'outil ne fait rien.
+
+### Rendu et collisions
+
+Un mur est construit en morceaux (`getWallChunks`) : les troncons pleins de part et d'autre d'une
+ouverture, un linteau au-dessus, et une allege sous une fenetre. Le mur n'est jamais supprime entier.
+
+Les collisions du mode test partent du **meme** modele que l'affichage : etre au-dessus d'un sol, et
+ne pas etre dans l'epaisseur d'un mur — sauf en face d'une ouverture qui touche le sol, et assez
+large pour le joueur. C'est la regle a ne pas casser : sinon un mur en diagonale serait traversable.
+
+### Reste a faire (voir plus haut)
+
+Mur en arc, prefabs, miroir, reseau, mesure de distance, verifications automatiques (piece non
+fermee, spawn dans un mur, sortie qui ne mene nulle part), et test 3D demarrant a l'endroit edite.
+
 ## Interieurs rattaches aux points d'interet
 
 Le circuit "je pose un lieu sur la carte, je fabrique son interieur" est en place.

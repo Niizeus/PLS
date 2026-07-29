@@ -761,6 +761,56 @@ body.editor-resizing * {
   background: #252a2f;
 }
 
+/* Reglages propres a l'outil actif (type d'ouverture, finesse d'un rond...). */
+.tool-settings {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #3c444b;
+  border-radius: 7px;
+  background: #20252a;
+}
+
+.tool-settings-title {
+  color: #fff7dc;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tool-settings .marker-form {
+  gap: 4px;
+}
+
+.tool-settings input[type='range'] {
+  width: 100%;
+}
+
+.tool-settings .marker-list {
+  gap: 5px;
+}
+
+/* Compteur affiche par-dessus le test 3D d'un interieur. */
+.interior-test-badge {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(24, 28, 31, 0.82);
+  color: #f4f0df;
+  font-size: 12px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+/* L'outil actif change le curseur : on sait tout de suite qu'on est en mode trace. */
+.interior-plan-panel .editor-map-canvas {
+  cursor: crosshair;
+}
+
 /* Ecran affiche par EditorErrorBoundary quand un composant plante. */
 .editor-crash {
   height: 100%;

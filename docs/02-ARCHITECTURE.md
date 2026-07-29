@@ -264,7 +264,18 @@ L'etat partage entre modules vit dans `src/editor/editorWorkspace.ts` (store Zus
 interieurs, l'interieur ouvert, le module affiche, et une copie en lecture des points d'interet. La
 source de verite des POI reste l'etat de `EditorApp` — le store n'en recoit qu'un reflet.
 
-**4. Historique annuler/retablir.** `src/editor/editorHistory.ts` fournit `useEditorHistory<T>()`,
+**4. Geometrie des interieurs : une seule source.** `src/data/interiorGeometry.ts` ne connait ni React
+ni Three.js : il ne fait que du calcul sur des murs (segments) et des sols (polygones). L'editeur 2D
+**et** la vue 3D partent tous les deux de la, et c'est obligatoire : si l'affichage et les collisions
+calculaient chacun leur geometrie, on obtiendrait des murs qu'on voit mais qu'on traverse — le bug
+classique que `docs/03-GAME-DESIGN.md` interdit deja pour la ville.
+
+Un mur est un segment A -> B avec ses ouvertures ; `getWallChunks()` le decoupe en morceaux pleins
+(troncons, linteau, allege) et sert aussi bien a construire les boites 3D qu'a savoir ou le joueur
+passe. Un sol est un polygone : `pointInPolygon()` dit si on est dessus. Ajouter une forme (arc,
+biseau...) se fait ICI, jamais dans un composant.
+
+**5. Historique annuler/retablir.** `src/editor/editorHistory.ts` fournit `useEditorHistory<T>()`,
 un historique par **photos de l'etat** (et non par actions inversibles : impossible de desynchroniser
 l'historique du contenu reel). Deux regles a respecter en l'utilisant :
 
@@ -276,10 +287,9 @@ l'historique du contenu reel). Deux regles a respecter en l'utilisant :
 Le `coalesceKey` regroupe les modifications rapprochees de meme nature : taper un nom dans
 l'inspecteur ne compte que pour une annulation, pas une par lettre.
 
-⚠️ `InteriorEditor.tsx` a encore son propre historique fait main, anterieur a ce module. Les deux
-font la meme chose : a unifier quand on retouchera ce fichier.
+Les deux modules de l'editeur utilisent ce meme module — pas de second historique fait main.
 
-**5. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
+**6. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
 elargit le streaming de Beauvais. `src/world/editorStreaming.ts` plafonne ce rayon a 15 x 15 tuiles :
 sans ca, un dezoom complet demandait ~20 000 tuiles et la geometrie des 34 000 batiments d'un coup,
 ce qui figeait l'onglet. Pour voir la ville entiere, c'est le **plan 2D** qui sert, pas la vue 3D.

@@ -474,23 +474,72 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
    * differentes s'ouvre sans emporter la partie du mur qui donne sur l'exterieur.
    */
   const createOpening = (wallId: string, offset: number, width: number) => {
-    const wall = activeFloor?.walls.find((item) => item.id === wallId)
-    if (!wall) return
+    const floor = activeFloor
+    const wall = floor?.walls.find((item) => item.id === wallId)
+    if (!floor || !wall) return
     const preset = openingPresets[openingKindRef.current]
     const length = wallLength(wall)
     const finalWidth = Math.max(0.2, Math.min(width, length))
-    const opening: InteriorOpening = {
-      id: makeId('ouverture'),
-      name: preset.label,
-      kind: openingKindRef.current,
-      offset: Math.min(length - finalWidth / 2, Math.max(finalWidth / 2, offset)),
-      width: finalWidth,
-      sillHeight: preset.sillHeight,
-      topHeight: preset.topHeight,
+    const finalOffset = Math.min(length - finalWidth / 2, Math.max(finalWidth / 2, offset))
+
+    // Les deux bouts de l'ouverture, en coordonnees monde.
+    const startPoint = wallPointAt(wall, finalOffset - finalWidth / 2)
+    const endPoint = wallPointAt(wall, finalOffset + finalWidth / 2)
+
+    /**
+     * Une separation entre deux pieces est faite de DEUX murs superposes (chaque piece a pose
+     * le sien). Percer un seul laisserait l'autre debout, et on aurait l'impression que
+     * l'outil ne marche pas. On perce donc tous les murs confondus avec la portion visee.
+     */
+    const targets: { id: string; offset: number; width: number }[] = []
+    for (const candidate of floor.walls) {
+      const candidateLength = wallLength(candidate)
+      const startProjection = projectOnWall(candidate, startPoint)
+      const endProjection = projectOnWall(candidate, endPoint)
+      const reach = candidate.thickness / 2 + 0.06
+      if (startProjection.distance > reach || endProjection.distance > reach) continue
+      const from = Math.min(startProjection.distanceAlong, endProjection.distanceAlong)
+      const to = Math.max(startProjection.distanceAlong, endProjection.distanceAlong)
+      if (to - from < 0.15) continue
+      targets.push({
+        id: candidate.id,
+        offset: (from + to) / 2,
+        width: Math.min(to - from, candidateLength),
+      })
     }
-    updateWall(wallId, (item) => ({ ...item, openings: [...item.openings, opening] }))
-    setSelected({ kind: 'opening', wallId, id: opening.id })
-    setSaveStatus(`${preset.label} perce, sauvegarde requise`)
+    if (!targets.length) return
+
+    const firstId = targets[0].id
+    let firstOpeningId = ''
+    record()
+    updateActiveFloor(
+      (currentFloor) => ({
+        ...currentFloor,
+        walls: currentFloor.walls.map((item) => {
+          const target = targets.find((entry) => entry.id === item.id)
+          if (!target) return item
+          const opening: InteriorOpening = {
+            id: makeId('ouverture'),
+            name: preset.label,
+            kind: openingKindRef.current,
+            offset: target.offset,
+            width: target.width,
+            sillHeight: preset.sillHeight,
+            topHeight: preset.topHeight,
+          }
+          if (item.id === firstId) firstOpeningId = opening.id
+          return { ...item, openings: [...item.openings, opening] }
+        }),
+      }),
+      {
+        record: false,
+        status:
+          targets.length > 1
+            ? `${preset.label} perce dans ${targets.length} murs superposes, sauvegarde requise`
+            : `${preset.label} perce, sauvegarde requise`,
+      },
+    )
+    if (firstOpeningId) setSelected({ kind: 'opening', wallId: firstId, id: firstOpeningId })
   }
 
   /** Coupe un mur en deux murs independants, chacun gardant les ouvertures de son cote. */
@@ -1119,11 +1168,18 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       if (!drag || drag.pointerId !== event.pointerId) return
       dragRef.current = null
 
+      // ⚠️ On repart de la position du RELACHEMENT, pas du dernier `pointermove` :
+      // un geste rapide relache entre deux evenements de deplacement, et la forme
+      // s'arretait alors quelques centimetres avant l'endroit vise.
+      const raw = planFromEvent(event)
+      const floor = currentFloor()
+
       if (drag.mode === 'rect') {
-        const x = Math.min(drag.start.x, drag.current.x)
-        const z = Math.min(drag.start.z, drag.current.z)
-        const w = Math.abs(drag.current.x - drag.start.x)
-        const d = Math.abs(drag.current.z - drag.start.z)
+        const end = snapped(raw).point
+        const x = Math.min(drag.start.x, end.x)
+        const z = Math.min(drag.start.z, end.z)
+        const w = Math.abs(end.x - drag.start.x)
+        const d = Math.abs(end.z - drag.start.z)
         if (w < MIN_WALL_LENGTH || d < MIN_WALL_LENGTH) return
         if (drag.kind === 'room') actionsRef.current.createRoom(x, z, w, d)
         else actionsRef.current.createFloorSurface(makeRectanglePolygon(x, z, w, d), 'Sol')
@@ -1131,7 +1187,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       }
 
       if (drag.mode === 'shape') {
-        const polygon = buildShapePolygon(drag.center, drag.current)
+        const polygon = buildShapePolygon(drag.center, raw)
         if (polygon) {
           const shape = shapeRef.current
           const name = shape.kind === 'circle' ? 'Sol rond' : shape.kind === 'half' ? 'Sol demi-cercle' : `Sol ${shape.sides} cotes`
@@ -1141,8 +1197,10 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       }
 
       if (drag.mode === 'opening') {
-        const from = Math.min(drag.from, drag.to)
-        const to = Math.max(drag.from, drag.to)
+        const wall = floor?.walls.find((item) => item.id === drag.wallId)
+        const endDistance = wall ? projectOnWall(wall, raw).distanceAlong : drag.to
+        const from = Math.min(drag.from, endDistance)
+        const to = Math.max(drag.from, endDistance)
         const preset = openingPresets[openingKindRef.current]
         // Un simple clic (sans glisser) pose une ouverture de largeur standard.
         const width = to - from < 0.15 ? preset.width : to - from

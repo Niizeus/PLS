@@ -1,12 +1,14 @@
 import {
   openingSpan,
   polygonCentroid,
+  stairsCorners,
+  stairsToWorld,
   wallAngle,
   wallLength,
   wallPointAt,
   type Point2,
 } from '../data/interiorGeometry'
-import { type InteriorFloor, type InteriorOpening, type InteriorWall } from '../data/interiors'
+import { type InteriorFloor, type InteriorOpening, type InteriorStairs, type InteriorWall } from '../data/interiors'
 
 /**
  * 🎨 Dessin du plan 2D de l'editeur d'interieur.
@@ -27,6 +29,7 @@ export type InteriorSelection =
   | { kind: 'spawn'; id: string }
   | { kind: 'exit'; id: string }
   | { kind: 'prop'; id: string }
+  | { kind: 'stairs'; id: string }
 
 const COLORS = {
   surface: '#4d5946',
@@ -39,6 +42,7 @@ const COLORS = {
   window: '#62b6cb',
   handle: '#f0b84d',
   preview: '#f0b84d',
+  stairs: '#7c5cff',
 }
 
 export function drawGrid(
@@ -255,6 +259,71 @@ export function drawPoint(
   ctx.textBaseline = 'alphabetic'
 }
 
+/**
+ * Un escalier vu du dessus : son emprise, ses marches, et une fleche vers le HAUT de la volee.
+ *
+ * La fleche n'est pas decorative : la volee monte le long de son axe Z local, donc sans repere on
+ * ne saurait pas de quel cote elle debouche a l'etage.
+ */
+export function drawStairs(
+  ctx: CanvasRenderingContext2D,
+  stairs: InteriorStairs,
+  toScreen: ToScreen,
+  selected: boolean,
+) {
+  const corners = stairsCorners(stairs)
+  ctx.save()
+  polygonPath(ctx, corners, toScreen)
+  ctx.fillStyle = selected ? 'rgba(124,92,255,0.35)' : 'rgba(124,92,255,0.2)'
+  ctx.fill()
+  ctx.lineWidth = selected ? 2.5 : 1.5
+  ctx.strokeStyle = selected ? COLORS.wallSelected : COLORS.stairs
+  ctx.stroke()
+
+  // Les marches, du bas vers le haut de la volee.
+  const steps = Math.max(3, Math.round(stairs.length / 0.28))
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(214,205,255,0.55)'
+  for (let index = 1; index < steps; index += 1) {
+    const localZ = -stairs.length / 2 + (stairs.length * index) / steps
+    const left = stairsToWorld(stairs, -stairs.width / 2, localZ)
+    const right = stairsToWorld(stairs, stairs.width / 2, localZ)
+    const [lx, ly] = toScreen(left)
+    const [rx, ry] = toScreen(right)
+    ctx.beginPath()
+    ctx.moveTo(lx, ly)
+    ctx.lineTo(rx, ry)
+    ctx.stroke()
+  }
+
+  // Fleche du bas vers le haut.
+  const from = stairsToWorld(stairs, 0, -stairs.length / 2 + 0.15)
+  const to = stairsToWorld(stairs, 0, stairs.length / 2 - 0.15)
+  const [fx, fy] = toScreen(from)
+  const [tx, ty] = toScreen(to)
+  ctx.strokeStyle = selected ? COLORS.wallSelected : '#c9bcff'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(fx, fy)
+  ctx.lineTo(tx, ty)
+  ctx.stroke()
+  const angle = Math.atan2(ty - fy, tx - fx)
+  ctx.beginPath()
+  ctx.moveTo(tx, ty)
+  ctx.lineTo(tx - Math.cos(angle - 0.5) * 9, ty - Math.sin(angle - 0.5) * 9)
+  ctx.moveTo(tx, ty)
+  ctx.lineTo(tx - Math.cos(angle + 0.5) * 9, ty - Math.sin(angle + 0.5) * 9)
+  ctx.stroke()
+
+  const center = toScreen({ x: stairs.x, z: stairs.z })
+  ctx.font = '700 10px system-ui'
+  ctx.fillStyle = '#d6cdff'
+  ctx.textAlign = 'center'
+  ctx.fillText(`↑ ${stairs.targetFloorId}`, center[0], center[1] - 3)
+  ctx.textAlign = 'start'
+  ctx.restore()
+}
+
 export function drawMarkers(
   ctx: CanvasRenderingContext2D,
   floor: InteriorFloor,
@@ -262,6 +331,10 @@ export function drawMarkers(
   selected: InteriorSelection | null,
   propColor: (assetId: string) => { color: string; label: string },
 ) {
+  // Les escaliers d'abord : ils occupent une surface, ils ne doivent pas masquer les reperes.
+  for (const stairs of floor.stairs) {
+    drawStairs(ctx, stairs, toScreen, selected?.kind === 'stairs' && selected.id === stairs.id)
+  }
   for (const prop of floor.props) {
     const asset = propColor(prop.assetId)
     drawPoint(ctx, toScreen, prop.x, prop.z, asset.color, asset.label, selected?.kind === 'prop' && selected.id === prop.id)

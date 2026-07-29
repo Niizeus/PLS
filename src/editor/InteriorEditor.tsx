@@ -13,6 +13,7 @@ import {
   type InteriorOpening,
   type InteriorOpeningKind,
   type InteriorProp,
+  type InteriorStairs,
   type InteriorSurface,
   type InteriorType,
   type InteriorWall,
@@ -28,6 +29,7 @@ import {
   wallPointAt,
   type Point2,
 } from '../data/interiorGeometry'
+import { INTERIOR_TEMPLATES, buildTemplateInterior } from '../data/interiorTemplates'
 import InteriorTestView from './InteriorTestView'
 import {
   drawGrid,
@@ -43,7 +45,7 @@ import {
 } from './interiorDraw'
 import { findWallNear, hitTest, snapPoint } from './interiorTools'
 import { readNumberInput } from './editorInputs'
-import { saveData } from './editorSave'
+import { deleteData, saveData } from './editorSave'
 import { useEditorHistory } from './editorHistory'
 import { useEditorWorkspace } from './editorWorkspace'
 import { PanelToggle, type EditorPanelsApi } from './EditorPanels'
@@ -67,6 +69,7 @@ type InteriorTool =
   | 'spawn'
   | 'exit'
   | 'prop'
+  | 'stairs'
 
 type ShapeKind = 'circle' | 'half' | 'polygon'
 
@@ -96,6 +99,7 @@ const toolLabels: Record<InteriorTool, string> = {
   spawn: 'Spawn',
   exit: 'Sortie',
   prop: 'Prop',
+  stairs: 'Escalier',
 }
 
 const toolHints: Record<InteriorTool, string> = {
@@ -109,6 +113,8 @@ const toolHints: Record<InteriorTool, string> = {
   spawn: 'Clic : pose le point d’arrivee du joueur.',
   exit: 'Clic : pose une sortie.',
   prop: 'Clic : pose l’objet choisi dans la bibliotheque en bas.',
+  stairs:
+    'Clic : pose une volee d’escalier vers l’etage suivant. Elle monte vers le haut du plan ; l’inspecteur permet de la tourner. Il faut au moins deux etages.',
 }
 
 const openingPresets: Record<InteriorOpeningKind, { label: string; width: number; sillHeight: number; topHeight: number }> = {
@@ -152,7 +158,15 @@ function assetOf(assetId: string) {
 function countFloorItems(floor: InteriorFloor | null) {
   if (!floor) return 0
   const openings = floor.walls.reduce((total, wall) => total + wall.openings.length, 0)
-  return floor.walls.length + floor.surfaces.length + openings + floor.props.length + floor.spawnPoints.length + floor.exits.length
+  return (
+    floor.walls.length +
+    floor.surfaces.length +
+    openings +
+    floor.props.length +
+    floor.spawnPoints.length +
+    floor.exits.length +
+    floor.stairs.length
+  )
 }
 
 export default function InteriorEditor({ moduleTabs, panels, active }: InteriorEditorProps) {
@@ -178,6 +192,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
   const [shapeSegments, setShapeSegments] = useState(16)
   const [shapeSides, setShapeSides] = useState(6)
   const [snapEnabled, setSnapEnabled] = useState(true)
+  const [templateId, setTemplateId] = useState(INTERIOR_TEMPLATES[0]?.id ?? '')
   const [savedInteriorsJson, setSavedInteriorsJson] = useState<Record<string, string>>(() =>
     Object.fromEntries(INTERIORS.map((interior) => [interior.id, JSON.stringify(serializeInterior(interior))])),
   )
@@ -264,6 +279,8 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         : selected?.kind === 'prop'
           ? (activeFloor?.props.find((item) => item.id === selected.id) ?? null)
           : null
+  const selectedStairs =
+    selected?.kind === 'stairs' ? (activeFloor?.stairs.find((item) => item.id === selected.id) ?? null) : null
 
   useEffect(() => {
     interiorsRef.current = interiors
@@ -405,6 +422,17 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
   ) => {
     updateActiveFloor(
       (floor) => ({ ...floor, surfaces: floor.surfaces.map((surface) => (surface.id === surfaceId ? recipe(surface) : surface)) }),
+      options,
+    )
+  }
+
+  const updateStairs = (
+    stairsId: string,
+    recipe: (stairs: InteriorStairs) => InteriorStairs,
+    options?: { record?: boolean; coalesceKey?: string },
+  ) => {
+    updateActiveFloor(
+      (floor) => ({ ...floor, stairs: floor.stairs.map((stairs) => (stairs.id === stairsId ? recipe(stairs) : stairs)) }),
       options,
     )
   }
@@ -592,6 +620,26 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       const prop: InteriorProp = { id: makeId('prop'), assetId: asset.id, name: asset.label, x, z, rotation: 0 }
       updateActiveFloor((floor) => ({ ...floor, props: [...floor.props, prop] }))
       setSelected({ kind: 'prop', id: prop.id })
+    } else if (current === 'stairs') {
+      // Une volee relie DEUX etages : sans second etage, elle ne menerait nulle part.
+      const interior = interiorsRef.current.find((item) => item.id === activeInteriorIdRef.current)
+      const target = interior?.floors.find((item) => item.id !== activeFloorIdRef.current)
+      if (!interior || !target) {
+        setSaveStatus('Ajoute un deuxieme etage avant de poser un escalier')
+        return
+      }
+      const stairs: InteriorStairs = {
+        id: makeId('escalier'),
+        name: `Escalier vers ${target.label}`,
+        x,
+        z,
+        rotation: 0,
+        width: 1.1,
+        length: 4,
+        targetFloorId: target.id,
+      }
+      updateActiveFloor((floor) => ({ ...floor, stairs: [...floor.stairs, stairs] }))
+      setSelected({ kind: 'stairs', id: stairs.id })
     }
   }
 
@@ -681,6 +729,11 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         (floor) => ({ ...floor, props: floor.props.map((item) => (item.id === selection.id ? { ...item, x, z } : item)) }),
         options,
       )
+    } else if (selection.kind === 'stairs') {
+      updateActiveFloor(
+        (floor) => ({ ...floor, stairs: floor.stairs.map((item) => (item.id === selection.id ? { ...item, x, z } : item)) }),
+        options,
+      )
     }
   }
 
@@ -719,6 +772,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
         }
         if (selection.kind === 'spawn') return { ...floor, spawnPoints: floor.spawnPoints.filter((item) => item.id !== selection.id) }
         if (selection.kind === 'exit') return { ...floor, exits: floor.exits.filter((item) => item.id !== selection.id) }
+        if (selection.kind === 'stairs') return { ...floor, stairs: floor.stairs.filter((item) => item.id !== selection.id) }
         return { ...floor, props: floor.props.filter((item) => item.id !== selection.id) }
       },
       { status: 'Element supprime, sauvegarde requise' },
@@ -756,6 +810,14 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       }
       updateActiveFloor((floor) => ({ ...floor, surfaces: [...floor.surfaces, copy] }))
       setSelected({ kind: 'surface', id: copy.id })
+      return
+    }
+    if (selection.kind === 'stairs') {
+      const stairs = activeFloor.stairs.find((item) => item.id === selection.id)
+      if (!stairs) return
+      const copy: InteriorStairs = { ...stairs, id: makeId('escalier'), x: stairs.x + 0.5, z: stairs.z + 0.5 }
+      updateActiveFloor((floor) => ({ ...floor, stairs: [...floor.stairs, copy] }))
+      setSelected({ kind: 'stairs', id: copy.id })
     }
   }
 
@@ -791,6 +853,33 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     setActiveInteriorId(interior.id)
     setActiveFloorId(interior.floors[0].id)
     setSelected(null)
+  }
+
+  /**
+   * Cree un interieur a partir d'un plan type (maison, appartement, boutique, egouts...).
+   *
+   * La graine change a chaque clic : recliquer sur le meme template donne une **variante** (autres
+   * dimensions, autre decoupe) plutot que deux fois le meme plan. Une fois genere, tout est
+   * editable mur par mur comme un plan trace a la main — le generateur ne fait que le degrossi.
+   */
+  const addInteriorFromTemplate = () => {
+    const template = INTERIOR_TEMPLATES.find((item) => item.id === templateId)
+    if (!template) return
+    const interior = buildTemplateInterior({
+      templateId: template.id,
+      id: uniqueInteriorId(slugifyInteriorId(template.label), interiorsRef.current),
+      name: template.label,
+    })
+    if (!interior) return
+    record()
+    applyInteriors(
+      [...interiorsRef.current, serializeInterior(interior)],
+      `Plan « ${template.label} » genere, sauvegarde requise`,
+    )
+    setActiveInteriorId(interior.id)
+    setActiveFloorId(interior.floors[0].id)
+    setSelected(null)
+    fitFloor(interior.floors[0])
   }
 
   useEffect(() => {
@@ -840,6 +929,7 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
       if (event.code === 'KeyC') setTool('shape')
       if (event.code === 'KeyO') setTool('opening')
       if (event.code === 'KeyX') setTool('split')
+      if (event.code === 'KeyE') setTool('stairs')
       if (event.code === 'Delete' || event.code === 'Backspace') {
         event.preventDefault()
         deleteSelection()
@@ -1300,6 +1390,39 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
 
   // --- Sauvegarde -------------------------------------------------------------------------
 
+  /**
+   * Retire un interieur de la liste ET supprime son fichier JSON.
+   *
+   * Sans la suppression du fichier, l'interieur reviendrait au prochain rechargement
+   * (`import.meta.glob` ramasse tout `src/data/interiors/`) — donc l'utilisateur croirait avoir
+   * supprime quelque chose qui reste. Le serveur de dev en garde une copie dans `.backups/`.
+   */
+  const removeInterior = async () => {
+    const interior = activeInterior
+    if (!interior) return
+    const confirmed = window.confirm(
+      `Supprimer l'interieur « ${interior.name} » ?\n\nSon fichier src/data/interiors/${interior.id}.json sera supprime.\nUne copie de secours est gardee dans src/data/.backups/.`,
+    )
+    if (!confirmed) return
+
+    const remaining = interiorsRef.current.filter((item) => item.id !== interior.id)
+    record()
+    applyInteriors(remaining, `Suppression de « ${interior.name} »...`)
+    setActiveInteriorId(remaining[0]?.id ?? '')
+    setActiveFloorId(remaining[0]?.floors[0]?.id ?? '')
+    setSelected(null)
+
+    const outcome = await deleteData('/__pls/interior-delete', { id: interior.id }, `Interieur « ${interior.name} » supprime`)
+    setSaveStatus(outcome.message)
+    if (outcome.status === 'ok') {
+      setSavedInteriorsJson((current) => {
+        const next = { ...current }
+        delete next[interior.id]
+        return next
+      })
+    }
+  }
+
   const saveInterior = async () => {
     if (!activeInterior) return
     const serialized = serializeInterior(activeInterior)
@@ -1324,13 +1447,19 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     setSaveStatus(outcome.message)
   }
 
-  const fitPlan = () => {
+  /**
+   * Cadre la vue sur un etage precis.
+   *
+   * ⚠️ On passe l'etage en argument au lieu de lire `activeFloor` : juste apres avoir genere un
+   * plan, `activeFloor` vient encore du rendu precedent et vaut l'ancien etage (ou rien).
+   */
+  const fitFloor = (floor: InteriorFloor | null) => {
     // Cadre sur ce qui existe, plutot que de revenir bêtement a l'origine.
     const points: Point2[] = []
-    for (const wall of activeFloor?.walls ?? []) {
+    for (const wall of floor?.walls ?? []) {
       points.push({ x: wall.ax, z: wall.az }, { x: wall.bx, z: wall.bz })
     }
-    for (const surface of activeFloor?.surfaces ?? []) {
+    for (const surface of floor?.surfaces ?? []) {
       for (const [x, z] of surface.pts) points.push({ x, z })
     }
     if (!points.length) {
@@ -1351,6 +1480,8 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
     }
     setViewInfo({ ...cameraRef.current })
   }
+
+  const fitPlan = () => fitFloor(activeFloor)
 
   const itemCount = countFloorItems(activeFloor)
 
@@ -1428,7 +1559,44 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
             <button type="button" onClick={addInterior}>
               + Interieur
             </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => void removeInterior()}
+              disabled={!activeInterior}
+              title="Supprime l'interieur ouvert et son fichier JSON"
+            >
+              Supprimer
+            </button>
           </div>
+        </section>
+
+        <section>
+          <h2>Generer un plan</h2>
+          <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+            <label>
+              <span>Plan type</span>
+              <select value={templateId} onChange={(event) => setTemplateId(event.currentTarget.value)}>
+                {INTERIOR_TEMPLATES.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="editor-note">
+              {INTERIOR_TEMPLATES.find((template) => template.id === templateId)?.description ?? ''}
+            </p>
+            <div className="list-actions">
+              <button type="button" onClick={addInteriorFromTemplate}>
+                Generer ce plan
+              </button>
+            </div>
+            <p className="editor-note">
+              Chaque clic donne une variante (dimensions et decoupe differentes). Le plan genere est un
+              plan normal : murs, portes, fenetres et sols restent modifiables un par un.
+            </p>
+          </form>
         </section>
 
         <section>
@@ -2121,6 +2289,94 @@ export default function InteriorEditor({ moduleTabs, panels, active }: InteriorE
               </div>
               <p className="editor-note">Glisse l&apos;element sur le plan pour le deplacer.</p>
               <div className="form-actions">
+                <button type="button" className="danger" onClick={deleteSelection}>
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          ) : selectedStairs ? (
+            <form className="marker-form" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Nom</span>
+                <input
+                  value={selectedStairs.name}
+                  onChange={(event) => {
+                    const name = event.currentTarget.value
+                    updateStairs(selectedStairs.id, (stairs) => ({ ...stairs, name }), { coalesceKey: 'stairs-name' })
+                  }}
+                />
+              </label>
+              <label>
+                <span>Mene a l&apos;etage</span>
+                <select
+                  value={selectedStairs.targetFloorId}
+                  onChange={(event) => {
+                    const targetFloorId = event.currentTarget.value
+                    updateStairs(selectedStairs.id, (stairs) => ({ ...stairs, targetFloorId }))
+                  }}
+                >
+                  {(activeInterior?.floors ?? [])
+                    .filter((item) => item.id !== activeFloorId)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <div className="field-pair">
+                <label>
+                  <span>Largeur</span>
+                  <input
+                    type="number"
+                    min="0.6"
+                    step="0.1"
+                    value={selectedStairs.width}
+                    onChange={(event) => {
+                      const width = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(width) || width < 0.6) return
+                      updateStairs(selectedStairs.id, (stairs) => ({ ...stairs, width }), { coalesceKey: 'stairs-width' })
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Longueur</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.1"
+                    value={selectedStairs.length}
+                    onChange={(event) => {
+                      const length = readNumberInput(event.currentTarget.value)
+                      if (!Number.isFinite(length) || length < 1) return
+                      updateStairs(selectedStairs.id, (stairs) => ({ ...stairs, length }), { coalesceKey: 'stairs-length' })
+                    }}
+                  />
+                </label>
+              </div>
+              <label>
+                <span>Sens de montee (°)</span>
+                <input
+                  type="number"
+                  step="15"
+                  value={Math.round((selectedStairs.rotation * 180) / Math.PI)}
+                  onChange={(event) => {
+                    const degrees = readNumberInput(event.currentTarget.value)
+                    if (!Number.isFinite(degrees)) return
+                    updateStairs(selectedStairs.id, (stairs) => ({ ...stairs, rotation: (degrees * Math.PI) / 180 }), {
+                      coalesceKey: 'stairs-rotation',
+                    })
+                  }}
+                />
+              </label>
+              <p className="editor-note">
+                La fleche du plan montre vers ou la volee monte. Le mode test part de l&apos;etage
+                affiche : monte l&apos;escalier pour passer a l&apos;autre niveau.
+              </p>
+              <div className="form-actions">
+                <button type="button" className="secondary-action" onClick={duplicateSelection} title="Ctrl+D">
+                  Dupliquer
+                </button>
                 <button type="button" className="danger" onClick={deleteSelection}>
                   Supprimer
                 </button>

@@ -34,6 +34,22 @@ async function post(endpoint: string, payload: unknown, force: boolean) {
   return fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) })
 }
 
+/**
+ * Demande au serveur de dev de supprimer un fichier de donnees.
+ *
+ * Le serveur en garde une copie dans `src/data/.backups/` : une suppression depuis l'editeur reste
+ * rattrapable, contrairement a un `rm` a la main.
+ */
+export async function deleteData(endpoint: string, payload: unknown, successMessage: string): Promise<SaveOutcome> {
+  try {
+    const response = await post(endpoint, payload, false)
+    if (!response.ok) return { status: 'error', message: `Suppression impossible : ${await response.text()}` }
+    return { status: 'ok', message: successMessage }
+  } catch (error) {
+    return { status: 'error', message: `Suppression impossible : ${(error as Error).message}` }
+  }
+}
+
 export async function saveData<T>({
   endpoint,
   payload,

@@ -1,8 +1,14 @@
 import path from 'node:path'
 import type { Plugin } from 'vite'
-import { DestructiveWriteError, hasForceHeader, writeDataFile } from './plsDataFile'
+import { DestructiveWriteError, deleteDataFile, hasForceHeader, writeDataFile } from './plsDataFile'
 
 export const INTERIORS_ENDPOINT = '/__pls/interiors'
+/**
+ * Suppression d'un interieur. Chemin volontairement distinct de `INTERIORS_ENDPOINT` (et non
+ * `/__pls/interiors/delete`) : les middlewares Vite matchent par prefixe, on ne veut pas qu'une
+ * suppression puisse atterrir dans le handler d'ecriture.
+ */
+export const INTERIOR_DELETE_ENDPOINT = '/__pls/interior-delete'
 const INTERIORS_DIR = path.join('src', 'data', 'interiors')
 const MAX_BODY_BYTES = 2_000_000
 
@@ -49,6 +55,33 @@ export default function interiorsPlugin(): Plugin {
       root = config.root
     },
     configureServer(server) {
+      server.middlewares.use(INTERIOR_DELETE_ENDPOINT, (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end('POST attendu')
+          return
+        }
+
+        let body = ''
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString('utf8')
+        })
+        req.on('end', () => {
+          try {
+            const parsed: unknown = JSON.parse(body || '{}')
+            const id = isRecord(parsed) ? parsed.id : null
+            if (typeof id !== 'string' || id.trim() === '') throw new Error('id interieur obligatoire')
+            // Une copie de secours est gardee : la suppression reste rattrapable.
+            const removed = deleteDataFile({ root, relativePath: path.join(INTERIORS_DIR, safeInteriorFileName(id)) })
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, id, removed }))
+          } catch (error) {
+            res.statusCode = 400
+            res.end(`Suppression impossible : ${(error as Error).message}`)
+          }
+        })
+      })
+
       server.middlewares.use(INTERIORS_ENDPOINT, (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405

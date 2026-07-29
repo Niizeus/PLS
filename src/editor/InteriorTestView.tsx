@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import PlayerModel from '../entities/player/PlayerModel'
@@ -8,58 +8,22 @@ import { toonGradient } from '../shaders/toonGradient'
 import { type InteriorDefinition, type InteriorFloor, type InteriorWall } from '../data/interiors'
 import {
   getWallChunks,
-  openingSpan,
-  pointInPolygon,
   polygonCentroid,
-  projectOnWall,
+  stairsToWorld,
   wallAngle,
   wallLength,
   wallPointAt,
 } from '../data/interiorGeometry'
+import { collectStairsRuns, walkStep, type StairsRun, type WalkState } from '../data/interiorWalk'
 
 interface InteriorTestViewProps {
   interior: InteriorDefinition
   floor: InteriorFloor
 }
 
-const PLAYER_RADIUS = 0.34
 const FLOOR_THICKNESS = 0.08
-
-/**
- * 🚶 Collisions du mode test, derivees du MEME modele que l'affichage.
- *
- * C'est la regle a ne pas casser : ce qui bloque doit etre ce qu'on voit. Avant, la collision
- * testait "suis-je dans un rectangle de piece", donc un mur pose en diagonale aurait ete
- * traversable et un sol rond aurait eu des bords invisibles.
- *
- * Deux conditions pour pouvoir avancer :
- *  1. etre au-dessus d'un sol ;
- *  2. ne pas etre dans l'epaisseur d'un mur — sauf en face d'une ouverture qui touche le sol
- *     (un passage ou une porte se franchissent, une fenetre non).
- */
-function isWalkable(x: number, z: number, floor: InteriorFloor) {
-  const point = { x, z }
-
-  // Un etage sans sol n'est pas une prison : on laisse circuler pour pouvoir tester tot.
-  if (floor.surfaces.length > 0) {
-    const onFloor = floor.surfaces.some((surface) => pointInPolygon(point, surface.pts))
-    if (!onFloor) return false
-  }
-
-  for (const wall of floor.walls) {
-    const projection = projectOnWall(wall, point)
-    if (projection.distance > wall.thickness / 2 + PLAYER_RADIUS) continue
-
-    // Le joueur doit tenir dans l'ouverture, pas seulement la toucher du bord.
-    const throughOpening = wall.openings.some((opening) => {
-      if (opening.sillHeight > 0.01) return false
-      const span = openingSpan(wall, opening)
-      return projection.distanceAlong >= span.start + PLAYER_RADIUS && projection.distanceAlong <= span.end - PLAYER_RADIUS
-    })
-    if (!throughOpening) return false
-  }
-  return true
-}
+/** Hauteur d'une marche confortable : sert a savoir combien de marches dessiner dans une volee. */
+const STEP_RISE = 0.185
 
 function getInitialSpawn(floor: InteriorFloor) {
   const spawn = floor.spawnPoints[0]
@@ -72,20 +36,42 @@ function getInitialSpawn(floor: InteriorFloor) {
   return { x: 0, z: 0, rotation: 0 }
 }
 
-function InteriorPlayerController({ floor }: { floor: InteriorFloor }) {
+function InteriorPlayerController({
+  interior,
+  startFloorIndex,
+  runs,
+  onFloorChange,
+}: {
+  interior: InteriorDefinition
+  startFloorIndex: number
+  runs: StairsRun[]
+  onFloorChange: (index: number) => void
+}) {
   const groupRef = useRef<THREE.Group>(null)
   const keysRef = useRef({ forward: false, backward: false, left: false, right: false, run: false })
   const cameraControlRef = useRef({ yaw: 0, distance: 8, height: 6.2 })
   const cameraDragRef = useRef<{ x: number; y: number } | null>(null)
-  const spawn = useMemo(() => getInitialSpawn(floor), [floor])
+  const startFloor = interior.floors[startFloorIndex] ?? interior.floors[0]
+  const spawn = useMemo(() => getInitialSpawn(startFloor), [startFloor])
+  /** Position complete du joueur : c'est l'etage et la hauteur qui changent dans un escalier. */
+  const stateRef = useRef<WalkState>({
+    x: 0,
+    z: 0,
+    y: startFloor?.elevation ?? 0,
+    floorIndex: startFloorIndex,
+  })
+  /** Dernier etage annonce au parent, pour ne pas declencher un rendu React a chaque image. */
+  const visibleFloorRef = useRef(startFloorIndex)
   const { camera, gl } = useThree()
 
   useEffect(() => {
     const group = groupRef.current
     if (!group) return
-    group.position.set(spawn.x, 1, spawn.z)
+    stateRef.current = { x: spawn.x, z: spawn.z, y: startFloor?.elevation ?? 0, floorIndex: startFloorIndex }
+    group.position.set(spawn.x, stateRef.current.y, spawn.z)
     group.rotation.y = spawn.rotation
-  }, [spawn])
+    onFloorChange(startFloorIndex)
+  }, [spawn, startFloorIndex, startFloor, onFloorChange])
 
   useEffect(() => {
     const setKey = (code: string, pressed: boolean) => {
@@ -171,25 +157,33 @@ function InteriorPlayerController({ floor }: { floor: InteriorFloor }) {
       const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw))
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw))
       const move = forward.multiplyScalar(fwd).add(right.multiplyScalar(strafe)).normalize().multiplyScalar(speed * delta)
-      const nextX = group.position.x + move.x
-      const nextZ = group.position.z + move.z
-      // Les deux axes sont testes separement : on glisse le long d'un mur au lieu de s'y coller.
-      if (isWalkable(nextX, group.position.z, floor)) group.position.x = nextX
-      if (isWalkable(group.position.x, nextZ, floor)) group.position.z = nextZ
+
+      // Sols, murs, ouvertures et escaliers : tout vient de `interiorWalk`, la seule source.
+      stateRef.current = walkStep(interior, runs, stateRef.current, { x: move.x, z: move.z })
+      group.position.x = stateRef.current.x
+      group.position.z = stateRef.current.z
       group.rotation.y = Math.atan2(move.x, move.z)
       usePlayerStore.getState().setAction(keys.run ? 'run' : 'walk')
     } else {
       usePlayerStore.getState().setAction('idle')
     }
 
+    const state = stateRef.current
+    // La montee est lissee : sans ca, chaque marche ferait un a-coup vertical de la camera.
+    group.position.y += (state.y - group.position.y) * (1 - Math.exp(-12 * delta))
+    if (state.floorIndex !== visibleFloorRef.current) {
+      visibleFloorRef.current = state.floorIndex
+      onFloorChange(state.floorIndex)
+    }
+
     const controls = cameraControlRef.current
     const targetCamera = new THREE.Vector3(
       group.position.x + Math.sin(controls.yaw) * controls.distance,
-      controls.height,
+      group.position.y + controls.height,
       group.position.z + Math.cos(controls.yaw) * controls.distance,
     )
     camera.position.lerp(targetCamera, 1 - Math.exp(-8 * delta))
-    camera.lookAt(group.position.x, 0.9, group.position.z)
+    camera.lookAt(group.position.x, group.position.y + 0.9, group.position.z)
   })
 
   return (
@@ -340,6 +334,42 @@ function PrototypeProp({ assetId, x, z, rotation }: { assetId: string; x: number
   )
 }
 
+/**
+ * Une volee d'escalier : une marche = une boite qui part du plancher du bas.
+ *
+ * Les marches sont dessinees a partir de la MEME emprise que celle qui sert a la montee du joueur
+ * (`stairsToWorld`), donc on monte exactement ce qu'on voit.
+ */
+function StairsMeshes({ run }: { run: StairsRun }) {
+  const { stairs, lowerElevation, upperElevation } = run
+  const rise = upperElevation - lowerElevation
+  const steps = Math.max(3, Math.round(rise / STEP_RISE))
+  const stepLength = stairs.length / steps
+
+  return (
+    <group>
+      {Array.from({ length: steps }, (_, index) => {
+        // Hauteur du nez de la marche : la derniere arrive pile au plancher du dessus.
+        const top = lowerElevation + (rise * (index + 1)) / steps
+        const center = stairsToWorld(stairs, 0, -stairs.length / 2 + (index + 0.5) * stepLength)
+        const height = top - lowerElevation
+        return (
+          <mesh
+            key={`${stairs.id}-${index}`}
+            position={[center.x, lowerElevation + height / 2, center.z]}
+            rotation={[0, stairs.rotation, 0]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[stairs.width, height, stepLength]} />
+            <meshToonMaterial color="#c2a878" gradientMap={toonGradient} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
 function FloorMeshes({ floor, wallHeight }: { floor: InteriorFloor; wallHeight: number }) {
   const empty = floor.walls.length === 0 && floor.surfaces.length === 0
   return (
@@ -371,8 +401,17 @@ export default function InteriorTestView({ interior, floor }: InteriorTestViewPr
     }
   }, [])
 
-  const wallCount = floor.walls.length
-  const totalLength = floor.walls.reduce((sum, wall) => sum + wallLength(wall), 0)
+  const startFloorIndex = Math.max(
+    0,
+    interior.floors.findIndex((item) => item.id === floor.id),
+  )
+  const runs = useMemo(() => collectStairsRuns(interior), [interior])
+  const [visibleFloorIndex, setVisibleFloorIndex] = useState(startFloorIndex)
+  const onFloorChange = useCallback((index: number) => setVisibleFloorIndex(index), [])
+
+  const currentFloor = interior.floors[visibleFloorIndex] ?? floor
+  const wallCount = currentFloor.walls.length
+  const totalLength = currentFloor.walls.reduce((sum, wall) => sum + wallLength(wall), 0)
 
   return (
     <>
@@ -387,11 +426,29 @@ export default function InteriorTestView({ interior, floor }: InteriorTestViewPr
         <hemisphereLight args={['#f6fbff', '#575044', 1.2]} />
         <ambientLight intensity={0.45} />
         <directionalLight position={[5, 8, 4]} intensity={1.5} castShadow />
-        <FloorMeshes floor={floor} wallHeight={interior.defaultWallHeight} />
-        <InteriorPlayerController floor={floor} />
+        {/*
+          Vue en coupe : on ne dessine que les etages jusqu'a celui ou se trouve le joueur. Sinon la
+          dalle du dessus masquerait entierement la piece ou il marche, la camera etant en plongee.
+        */}
+        {interior.floors.map((item, index) =>
+          index <= visibleFloorIndex ? (
+            <group key={item.id} position={[0, item.elevation, 0]}>
+              <FloorMeshes floor={item} wallHeight={item.height || interior.defaultWallHeight} />
+            </group>
+          ) : null,
+        )}
+        {runs.map((run) => (run.lowerIndex <= visibleFloorIndex ? <StairsMeshes key={run.stairs.id} run={run} /> : null))}
+        <InteriorPlayerController
+          interior={interior}
+          startFloorIndex={startFloorIndex}
+          runs={runs}
+          onFloorChange={onFloorChange}
+        />
       </Canvas>
       <div className="interior-test-badge">
-        {wallCount} murs · {totalLength.toFixed(1)} m de mur · {floor.surfaces.length} sols
+        {interior.floors.length > 1 ? `${currentFloor.label} · ` : ''}
+        {wallCount} murs · {totalLength.toFixed(1)} m de mur · {currentFloor.surfaces.length} sols
+        {runs.length > 0 ? ` · ${runs.length} escalier${runs.length > 1 ? 's' : ''}` : ''}
       </div>
     </>
   )

@@ -110,6 +110,21 @@ export function writeDataFile({
   fs.writeFileSync(target, JSON.stringify(content, null, 2) + '\n', 'utf8')
 }
 
+/**
+ * Supprime un fichier de donnees de l'editeur, apres l'avoir copie dans `.backups/`.
+ *
+ * La copie de secours n'est pas un detail : supprimer un interieur efface un travail qui peut
+ * representer des heures, et l'editeur n'a pas de corbeille. Renvoie `false` si le fichier
+ * n'existait pas — cas normal d'un interieur cree mais jamais sauvegarde.
+ */
+export function deleteDataFile({ root, relativePath }: { root: string; relativePath: string }) {
+  const target = path.join(root, relativePath)
+  if (!fs.existsSync(target)) return false
+  backupExisting(root, target)
+  fs.rmSync(target, { force: true })
+  return true
+}
+
 /** Le client a-t-il confirme l'ecrasement ? */
 export function hasForceHeader(headers: Record<string, string | string[] | undefined>) {
   const value = headers[FORCE_HEADER]

@@ -1185,10 +1185,60 @@ Les collisions du mode test partent du **meme** modele que l'affichage : etre au
 ne pas etre dans l'epaisseur d'un mur — sauf en face d'une ouverture qui touche le sol, et assez
 large pour le joueur. C'est la regle a ne pas casser : sinon un mur en diagonale serait traversable.
 
+### Generateur de plans (plans types)
+
+Le volet gauche du module Interieurs a un bloc **Generer un plan** : une liste de plans types et un
+bouton. Chaque clic cree un nouvel interieur deja structure, ouvert immediatement, et **cadre la vue
+dessus**.
+
+| Plan type | Taille | Ce qu'il pose |
+|---|---|---|
+| Maison (RDC + etage) | 11-14 x 10-13 m | **Couloir central** qui dessert tout, des deux cotes. RDC : cuisine, sejour, WC, plus cellier / buanderie / bureau / salle a manger tires au hasard. Etage : deux ou trois chambres, salle de bain, parfois un dressing. **Escalier praticable** au fond du couloir. |
+| Studio (T1) | 8-10 x 6,5-8 m | Grande piece a vivre, cuisine ouverte **ou** fermee, salle de bain, rangement. |
+| Appartement (T2) / (T3) | 10-15 x 7-10 m | Sejour, cuisine ouverte ou fermee, une ou deux chambres, salle de bain, parfois un WC separe. |
+| Commerce / boutique | 12-16 x 12-16 m | Vitrine sur la rue, espace de vente (parfois en L avec un rayon du fond), reserve, bureau, WC. |
+| Bar / troquet | 13-17 x 11-14 m | Grande salle vitree (parfois en L avec un coin billard), comptoir, cuisine, WC (parfois hommes/dames), arriere-salle. |
+| Egouts (galeries) | 30-40 m de long | Galerie principale, **deux a quatre branches** au nord ou au sud, croisements **ouverts**, une ou deux chambres techniques. |
+| Cave / sous-sol | 10-13 x 8-11 m | Grande cave et deux a quatre reserves, parfois un local technique, passages sans portes, aucune fenetre. |
+
+La **diversite** ne vient pas seulement des dimensions : le plan est retourne de gauche a droite une
+fois sur deux, les pieces optionnelles sont tirees au sort, les proportions de chaque bande sont
+bruitees, et certaines pieces changent de cote. Deux clics sur le meme plan type ne donnent pas deux
+fois la meme maison.
+
+**Un template ne decrit pas des murs, il decrit des pieces rectangulaires.**
+`src/data/interiorTemplates.ts` en deduit le reste : chaque piece donne ses 4 aretes, les aretes sont
+coupees aux angles des pieces voisines (sinon deux pieces de tailles differentes ne reconnaitraient
+jamais leur bout de mur commun), les morceaux identiques sont dedupliques — donc **une cloison
+partagee ne fait qu'un seul mur**, pas deux superposes comme l'outil Piece — puis chaque morceau est
+classe en tatant a 8 cm de part et d'autre : deux pieces autour = cloison, une seule = facade. Les
+morceaux alignes et jointifs sont refusionnes, pour obtenir un mur de facade plutot que six bouts.
+
+Deux pieces qui portent le meme `group` ne sont **pas** separees : c'est comme ca qu'on obtient une
+cuisine ouverte sur le sejour (piece en L) ou un croisement d'egouts sans mur en travers.
+
+Deux regles evitent les plans absurdes :
+
+- les portes partent en priorite des pieces de **circulation** (couloir, palier, sejour, salle,
+  galerie) ; une chambre ne sert donc pas de couloir vers la piece suivante ;
+- une chambre, une salle de bain, un WC, un bureau ou une reserve n'a droit qu'a **une** porte.
+
+⚠️ La **graine** change a chaque clic : recliquer sur le meme plan type donne une variante (autres
+dimensions, autre decoupe), pas deux fois le meme plan. Et le resultat est un plan **normal** :
+chaque mur, porte, fenetre et sol reste modifiable un par un. Le generateur ne fait que le degrossi,
+il ne cree aucun objet special.
+
+Chaque plan genere arrive avec une porte d'entree sur sa facade sud, un point d'arrivee du joueur et
+une sortie derriere cette porte — meme raison que pour `+ Interieur` : un interieur sans spawn ni
+sortie n'est pas testable et enferme le joueur.
+
 ### Reste a faire (voir plus haut)
 
 Mur en arc, prefabs, miroir, reseau, mesure de distance, verifications automatiques (piece non
 fermee, spawn dans un mur, sortie qui ne mene nulle part), et test 3D demarrant a l'endroit edite.
+
+Cote generateur : rattacher un plan genere directement a un point d'interet depuis la carte, choisir
+le nombre de chambres/etages avant de generer, et rejouer une graine precise pour retrouver un plan.
 
 ## Interieurs rattaches aux points d'interet
 

@@ -242,6 +242,82 @@ export function makeRegularPolygon(cx: number, cz: number, radius: number, sides
   return makeArcPolygon(cx, cz, radius, Math.max(3, Math.round(sides)), Math.PI * 2, rotation)
 }
 
+// --- Escaliers ----------------------------------------------------------------------------
+
+/**
+ * Une volee d'escalier, vue du dessus : un rectangle pose a plat.
+ *
+ * ⚠️ Convention a ne pas casser : la volee **monte le long de son axe Z local**, sa largeur est
+ * sur son axe X local. Le bas de la volee est donc a `z local = -length / 2`, le haut a
+ * `+length / 2`, et `rotation` decide vers ou ca monte dans le monde. Sans cette convention, un
+ * escalier tourne monterait dans le vide.
+ *
+ * Une volee n'existe qu'**une fois**, sur l'etage du BAS, et relie cet etage a `targetFloorId`.
+ * On ne la duplique pas en haut : ce serait deux escaliers superposes.
+ */
+export interface StairsLike {
+  x: number
+  z: number
+  rotation: number
+  width: number
+  length: number
+}
+
+/** Passe des coordonnees locales de la volee aux coordonnees du monde. */
+export function stairsToWorld(stairs: StairsLike, localX: number, localZ: number): Point2 {
+  const cos = Math.cos(stairs.rotation)
+  const sin = Math.sin(stairs.rotation)
+  return {
+    x: stairs.x + localX * cos + localZ * sin,
+    z: stairs.z - localX * sin + localZ * cos,
+  }
+}
+
+/** Passe d'un point du monde aux coordonnees locales de la volee. */
+export function stairsToLocal(stairs: StairsLike, point: Point2) {
+  const dx = point.x - stairs.x
+  const dz = point.z - stairs.z
+  const cos = Math.cos(stairs.rotation)
+  const sin = Math.sin(stairs.rotation)
+  return { x: dx * cos - dz * sin, z: dx * sin + dz * cos }
+}
+
+/** Les 4 coins de l'emprise, dans l'ordre du contour. Sert au dessin du plan 2D. */
+export function stairsCorners(stairs: StairsLike): [number, number][] {
+  const halfWidth = stairs.width / 2
+  const halfLength = stairs.length / 2
+  return (
+    [
+      [-halfWidth, -halfLength],
+      [halfWidth, -halfLength],
+      [halfWidth, halfLength],
+      [-halfWidth, halfLength],
+    ] as [number, number][]
+  ).map(([localX, localZ]) => {
+    const point = stairsToWorld(stairs, localX, localZ)
+    return [point.x, point.z] as [number, number]
+  })
+}
+
+/**
+ * Ou en est-on dans la montee ? `0` = en bas, `1` = arrive en haut, `null` = hors de l'emprise.
+ *
+ * `margin` elargit l'emprise : le joueur a un rayon, il doit pouvoir aborder la marche du bas
+ * sans etre deja pile dessus.
+ */
+export function stairsProgress(stairs: StairsLike, point: Point2, margin = 0): number | null {
+  const local = stairsToLocal(stairs, point)
+  if (Math.abs(local.x) > stairs.width / 2 + margin) return null
+  if (Math.abs(local.z) > stairs.length / 2 + margin) return null
+  const raw = (local.z + stairs.length / 2) / Math.max(0.01, stairs.length)
+  return Math.min(1, Math.max(0, raw))
+}
+
+/** Hauteur du nez de marche a cet endroit de la volee. */
+export function stairsHeightAt(progress: number, fromElevation: number, toElevation: number) {
+  return fromElevation + (toElevation - fromElevation) * progress
+}
+
 // --- Aides au trace -----------------------------------------------------------------------
 
 /**

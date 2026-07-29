@@ -2,6 +2,7 @@ import {
   distanceToWall,
   pointInPolygon,
   projectOnWall,
+  stairsProgress,
   wallLength,
   wallPointAt,
   type Point2,
@@ -151,7 +152,12 @@ export function hitTest(
     return { kind: 'wall', id: wall.id }
   }
 
-  // 4. Sols en dernier : ils occupent de grandes zones, ils ne doivent jamais voler un clic.
+  // 4. Escaliers : une emprise, donc apres les murs, mais avant les sols.
+  for (const stairs of floor.stairs) {
+    if (stairsProgress(stairs, point, tolerance) !== null) return { kind: 'stairs', id: stairs.id }
+  }
+
+  // 5. Sols en dernier : ils occupent de grandes zones, ils ne doivent jamais voler un clic.
   for (let index = floor.surfaces.length - 1; index >= 0; index -= 1) {
     const surface = floor.surfaces[index]
     if (pointInPolygon(point, surface.pts)) return { kind: 'surface', id: surface.id }

@@ -27,15 +27,38 @@ interface EditorGameViewProps {
   markers: MapMarker[]
   selectedMarkerId: string | null
   onWorldClick: (point: { x: number; z: number }) => void
+  /** Outil actif : seul l'outil Selection permet d'attraper un point pour le deplacer. */
+  tool: 'select' | 'place' | 'zone'
+  /** Appele pendant le glisser d'un POI. `first` marque le debut, pour l'historique. */
+  onMarkerDrag: (markerId: string, point: { x: number; z: number }, first: boolean) => void
 }
 
 const TOP_CAMERA_HEIGHT = 760
 const TILTED_CAMERA_DISTANCE = 980
 const MARKER_COLOR = '#e6493f'
 const WORLD_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+/**
+ * Rayon d'accroche d'un POI a la souris, en metres monde. Fixe (et pas dependant du zoom)
+ * parce que les pastilles de la vue IG gardent une taille constante dans le monde.
+ */
+const GRAB_RADIUS_METERS = 8
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+/** POI le plus proche du point, dans la limite du rayon donne. */
+function findMarkerNear(markers: MapMarker[], point: { x: number; z: number }, maxDistance: number) {
+  let nearest: MapMarker | null = null
+  let nearestDistance = maxDistance
+  for (const marker of markers) {
+    const distance = Math.hypot(marker.position.x - point.x, marker.position.z - point.z)
+    if (distance <= nearestDistance) {
+      nearest = marker
+      nearestDistance = distance
+    }
+  }
+  return nearest
 }
 
 function EditorWorldFocus({ cameraRef }: { cameraRef: MutableRefObject<EditorCameraState> }) {
@@ -147,6 +170,8 @@ export default function EditorGameView({
   markers,
   selectedMarkerId,
   onWorldClick,
+  tool,
+  onMarkerDrag,
 }: EditorGameViewProps) {
   const dragRef = useRef<{
     x: number
@@ -155,6 +180,8 @@ export default function EditorGameView({
     startY: number
     moved: boolean
     anchor: { x: number; z: number } | null
+    /** Renseigne quand le clic a attrape un POI : on deplace le point au lieu de la camera. */
+    marker: { id: string; offset: { x: number; z: number } } | null
   } | null>(null)
   const cameraObjectRef = useRef<THREE.OrthographicCamera | null>(null)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
@@ -201,27 +228,50 @@ export default function EditorGameView({
 
         const drag = dragRef.current
         if (!drag) return
+        const wasMoved = drag.moved
         if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) drag.moved = true
-        if (event.buttons !== 1 || !drag.anchor || !point) return
+        if (event.buttons !== 1 || !point) return
 
+        // Un POI attrape suit la souris ; sinon c'est la camera qui se deplace.
+        if (drag.marker) {
+          if (!drag.moved) return
+          onMarkerDrag(
+            drag.marker.id,
+            { x: point.x + drag.marker.offset.x, z: point.z + drag.marker.offset.z },
+            !wasMoved,
+          )
+          return
+        }
+
+        if (!drag.anchor) return
         cameraRef.current.cx += drag.anchor.x - point.x
         cameraRef.current.cz += drag.anchor.z - point.z
         setViewInfo({ ...cameraRef.current })
       }}
       onPointerDown={(event) => {
         if (event.button !== 0) return
+        const anchor = screenToWorld(event.currentTarget, event.clientX, event.clientY)
+        const grabbed =
+          tool === 'select' && showMarkers && anchor ? findMarkerNear(markers, anchor, GRAB_RADIUS_METERS) : null
         dragRef.current = {
           x: event.clientX,
           y: event.clientY,
           startX: event.clientX,
           startY: event.clientY,
           moved: false,
-          anchor: screenToWorld(event.currentTarget, event.clientX, event.clientY),
+          anchor,
+          marker: grabbed
+            ? {
+                id: grabbed.id,
+                offset: { x: grabbed.position.x - anchor!.x, z: grabbed.position.z - anchor!.z },
+              }
+            : null,
         }
       }}
       onPointerUp={(event) => {
         const drag = dragRef.current
         dragRef.current = null
+        // Un clic sans deplacement reste un clic : il selectionne le POI vise.
         if (!drag || drag.moved) return
         const point = screenToWorld(event.currentTarget, event.clientX, event.clientY)
         if (point) onWorldClick(point)

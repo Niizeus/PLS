@@ -214,7 +214,22 @@ faut **toujours** lire la valeur d'un champ dans le corps du handler, jamais dan
 C'est pour ca que `updateSelectedMarker`, `updateSelectedZone` et `updateActiveInterior` appliquent
 leur recette immediatement. Voir aussi `src/editor/editorInputs.ts` (`Number('')` vaut `0`, pas NaN).
 
-**3. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
+**3. Historique annuler/retablir.** `src/editor/editorHistory.ts` fournit `useEditorHistory<T>()`,
+un historique par **photos de l'etat** (et non par actions inversibles : impossible de desynchroniser
+l'historique du contenu reel). Deux regles a respecter en l'utilisant :
+
+- deposer la photo de l'etat **d'avant** la modification, avec `push()` ;
+- pendant un glisser a la souris, ne prendre qu'**une** photo, au premier deplacement reel — sinon
+  chaque pixel parcouru devient une annulation. C'est le role du parametre `recordHistory` de
+  `moveMarker` / `moveZonePoint` dans `EditorApp.tsx`.
+
+Le `coalesceKey` regroupe les modifications rapprochees de meme nature : taper un nom dans
+l'inspecteur ne compte que pour une annulation, pas une par lettre.
+
+⚠️ `InteriorEditor.tsx` a encore son propre historique fait main, anterieur a ce module. Les deux
+font la meme chose : a unifier quand on retouchera ce fichier.
+
+**4. Plafond de streaming 3D.** Les vues IG de l'editeur montent le monde avec `mode="editor"`, qui
 elargit le streaming de Beauvais. `src/world/editorStreaming.ts` plafonne ce rayon a 15 x 15 tuiles :
 sans ca, un dezoom complet demandait ~20 000 tuiles et la geometrie des 34 000 batiments d'un coup,
 ce qui figeait l'onglet. Pour voir la ville entiere, c'est le **plan 2D** qui sert, pas la vue 3D.

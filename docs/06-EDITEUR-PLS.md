@@ -1094,6 +1094,27 @@ Modules a brancher ensuite dans le meme hub :
 
 ---
 
+## Confort d'edition disponible (module Carte)
+
+- **Outils** : Selection (`V`), Placer (`P`), Quartier (`Q`).
+- **Glisser-deposer** : avec l'outil Selection, attraper un point d'interet le deplace
+  directement sur la carte. Avec l'outil Quartier, on attrape un sommet du contour.
+- **Annuler / retablir** : `Ctrl+Z` / `Ctrl+Y`, ou les fleches de la barre du haut. Un
+  glisser complet compte pour une seule annulation, et une frappe au clavier dans
+  l'inspecteur est regroupee en un seul point d'annulation (voir `editorHistory.ts`).
+- **Autres raccourcis** : `F` centre sur la selection, `Suppr` supprime, `Ctrl+D` duplique
+  le point, `Ctrl+S` sauvegarde ce qui a change, `Echap` deselectionne. Aucun raccourci
+  n'est intercepte quand le curseur est dans un champ de saisie.
+- **Recherche** : le volet gauche filtre les points par nom, type, tag ou identifiant. Un
+  double-clic sur une ligne de liste recentre la vue sur l'element.
+- **Quartiers** : creation d'un quartier (carre de 200 m au centre de la vue) et
+  suppression, avec confirmation. Un nouveau sommet est **insere** dans le contour au plus
+  pres du bord clique, au lieu d'etre ajoute en fin de liste — sinon le polygone se repliait
+  sur lui-meme des qu'on ne cliquait pas dans l'ordre du contour.
+
+Reste a faire cote confort (voir plus haut) : selection multiple, groupes, verrouillage de
+calque, mesure de distance, copier/coller entre quartiers.
+
 ## Garde-fous en place (mis a jour au fil des sessions)
 
 Cette section liste ce qui est **deja implemente** pour proteger le travail, par opposition au

@@ -259,6 +259,86 @@ textarea {
   font-size: 11px;
 }
 
+/* Champ de recherche au-dessus d'une liste du volet gauche. */
+.list-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 8px;
+  border: 1px solid #465057;
+  border-radius: 6px;
+  background: #1d2227;
+  color: #eef1ea;
+  user-select: text;
+}
+
+.list-search::placeholder {
+  color: #7f8a85;
+}
+
+/* Boutons d'action sous une liste (creer / supprimer). */
+.list-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.list-actions button {
+  flex: 1;
+  min-height: 32px;
+  border: 1px solid #4e575f;
+  border-radius: 6px;
+  background: #30363b;
+  color: #f4f0df;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.list-actions button:hover:not(:disabled) {
+  background: #3a4248;
+}
+
+.list-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.list-actions button.danger {
+  border-color: #5d4541;
+  background: #3c2726;
+  color: #ffd7cf;
+}
+
+.list-actions button.danger:hover:not(:disabled) {
+  background: #51302d;
+}
+
+/* Rappel des raccourcis clavier. */
+.shortcut-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.shortcut-list div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.shortcut-list dt {
+  color: #fff7dc;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.shortcut-list dd {
+  margin: 0;
+  color: #c5ccc7;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .editor-map-panel {
   position: relative;
   grid-area: map;

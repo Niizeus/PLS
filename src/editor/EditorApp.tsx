@@ -16,6 +16,7 @@ import { drawBuildings, drawRoads, drawWater, drawZones, type MapView } from '..
 import EditorGameView, { type EditorCameraState } from './EditorGameView'
 import { readNumberInput } from './editorInputs'
 import { saveData } from './editorSave'
+import { useEditorHistory } from './editorHistory'
 
 type LayerId = 'water' | 'roads' | 'buildings' | 'zones' | 'markers'
 type ViewMode = 'plan' | 'gameTop' | 'gameTilt'
@@ -211,6 +212,48 @@ function cloneZones(zones: Zone[]): Zone[] {
   return zones.map((zone) => ({ ...zone, pts: zone.pts.map((point) => [point[0], point[1]]) }))
 }
 
+/**
+ * Copie profonde des points d'interet, pour les photos d'historique.
+ * ⚠️ Ne pas utiliser `serializeMapMarkers` ici : elle trie la liste, ce qui ferait sauter
+ * l'ordre d'affichage a chaque annulation.
+ */
+function cloneMarkers(markers: MapMarker[]): MapMarker[] {
+  return markers.map((marker) => ({
+    ...marker,
+    position: { ...marker.position },
+    tags: [...marker.tags],
+    openingHours: marker.openingHours?.map((entry) => ({ ...entry, days: [...entry.days] })),
+  }))
+}
+
+/** Index du segment de contour le plus proche du point, pour y inserer un sommet. */
+function findNearestZoneEdge(zone: Zone, point: MouseWorld) {
+  let bestIndex = 0
+  let bestDistance = Infinity
+  for (let index = 0; index < zone.pts.length; index += 1) {
+    const [ax, az] = zone.pts[index]
+    const [bx, bz] = zone.pts[(index + 1) % zone.pts.length]
+    const dx = bx - ax
+    const dz = bz - az
+    const lengthSq = dx * dx + dz * dz
+    // Projection du point sur le segment, bornee a [0,1] pour rester entre les deux sommets.
+    const t = lengthSq === 0 ? 0 : clamp(((point.x - ax) * dx + (point.z - az) * dz) / lengthSq, 0, 1)
+    const distance = Math.hypot(point.x - (ax + t * dx), point.z - (az + t * dz))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestIndex = index
+    }
+  }
+  return bestIndex
+}
+
+function makeZoneId(zones: Zone[]) {
+  const ids = new Set(zones.map((zone) => zone.id))
+  let index = zones.length + 1
+  while (ids.has(`quartier_${index}`)) index += 1
+  return `quartier_${index}`
+}
+
 function drawEditableZonePoints(
   ctx: CanvasRenderingContext2D,
   toScreen: (wx: number, wz: number) => [number, number],
@@ -289,6 +332,12 @@ interface EditorAppProps {
   moduleTabs?: ReactNode
 }
 
+/** Ce que l'historique annuler/retablir memorise a chaque modification. */
+interface MapSnapshot {
+  markers: MapMarker[]
+  zones: Zone[]
+}
+
 export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mapPanelRef = useRef<HTMLElement>(null)
@@ -301,9 +350,11 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   const selectedZoneIdRef = useRef<string | null>(ZONES[0]?.id ?? null)
   const selectedZonePointRef = useRef<number | null>(null)
   const worldClickRef = useRef<(point: MouseWorld) => void>(() => {})
+  const recordRef = useRef<(coalesceKey?: string) => void>(() => {})
   const dragRef = useRef<
     | { mode: 'pan'; pointerId: number; x: number; y: number; startX: number; startY: number; moved: boolean }
-    | { mode: 'zonePoint'; pointerId: number; zoneId: string; pointIndex: number; moved: boolean }
+    | { mode: 'zonePoint'; pointerId: number; zoneId: string; pointIndex: number; startX: number; startY: number; moved: boolean }
+    | { mode: 'marker'; pointerId: number; markerId: string; grabOffset: MouseWorld; startX: number; startY: number; moved: boolean }
     | null
   >(null)
   const [layers, setLayers] = useState(initialLayers)
@@ -321,6 +372,8 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   // modifications attendent d'etre sauvegardees (voir markersDirty / zonesDirty).
   const [savedMarkersJson, setSavedMarkersJson] = useState(() => JSON.stringify(serializeMapMarkers(MAP_MARKERS)))
   const [savedZonesJson, setSavedZonesJson] = useState(() => JSON.stringify(cloneZones(ZONES)))
+  const [markerSearch, setMarkerSearch] = useState('')
+  const history = useEditorHistory<MapSnapshot>()
 
   const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null
   const selectedZone = zones.find((zone) => zone.id === selectedZoneId) ?? null
@@ -331,6 +384,22 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
   )
   const zonesDirty = useMemo(() => JSON.stringify(cloneZones(zones)) !== savedZonesJson, [zones, savedZonesJson])
   const hasUnsavedChanges = markersDirty || zonesDirty
+
+  /**
+   * Liste de POI affichee dans le volet gauche.
+   * La recherche porte sur le nom, le type (libelle francais compris) et les tags, pour
+   * retrouver un lieu aussi bien par "kebab" que par "bar" ou "sortie".
+   */
+  const visibleMarkers = useMemo(() => {
+    const needle = markerSearch.trim().toLowerCase()
+    if (!needle) return markers
+    return markers.filter((marker) =>
+      [marker.name, marker.type, markerTypeLabels[marker.type] ?? '', marker.id, ...marker.tags]
+        .join(' ')
+        .toLowerCase()
+        .includes(needle),
+    )
+  }, [markers, markerSearch])
 
   useEffect(() => {
     layersRef.current = layers
@@ -360,62 +429,154 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     selectedZonePointRef.current = selectedZonePoint
   }, [selectedZonePoint])
 
+  /** Photo de l'etat courant, lue depuis les refs (a jour meme au milieu d'un glisser). */
+  const snapshot = (): MapSnapshot => ({
+    markers: cloneMarkers(markersRef.current),
+    zones: cloneZones(zonesRef.current),
+  })
+
+  /** A appeler AVANT toute modification, pour rendre l'action annulable (Ctrl+Z). */
+  const record = (coalesceKey?: string) => history.push(snapshot(), coalesceKey)
+
+  const applyMarkers = (list: MapMarker[], status: string) => {
+    markersRef.current = list // garde le ref a jour meme entre deux rendus (glisser souris)
+    setMarkers(list)
+    setSaveStatus(status)
+  }
+
+  const applyZones = (list: Zone[], status: string) => {
+    zonesRef.current = list
+    setZones(list)
+    setSaveStatus(status)
+  }
+
+  /** Remet l'editeur dans un etat memorise par l'historique. */
+  const applySnapshot = (snap: MapSnapshot, status: string) => {
+    applyMarkers(snap.markers, status)
+    applyZones(snap.zones, status)
+    // La selection peut pointer vers un element qui n'existe plus dans cette version.
+    if (!snap.markers.some((marker) => marker.id === selectedMarkerIdRef.current)) setSelectedMarkerId(null)
+    if (!snap.zones.some((zone) => zone.id === selectedZoneIdRef.current)) {
+      setSelectedZoneId(snap.zones[0]?.id ?? null)
+    }
+    setSelectedZonePoint(null)
+  }
+
+  const undo = () => {
+    const previous = history.undo(snapshot())
+    if (previous) applySnapshot(previous, 'Annulation locale, sauvegarde requise')
+  }
+
+  const redo = () => {
+    const next = history.redo(snapshot())
+    if (next) applySnapshot(next, 'Retablissement local, sauvegarde requise')
+  }
+
   // ⚠️ IMPORTANT : `recipe` est appliquee TOUT DE SUITE, pas a l'interieur du callback
   // passe a setMarkers/setZones. React n'execute ce callback-la qu'au rendu suivant, et
   // les champs de l'inspecteur y liraient un `event.currentTarget` deja remis a null par
   // React -> TypeError en plein rendu -> l'editeur entier se demonte (page blanche).
   // En appliquant la recette ici, on lit l'evenement pendant qu'il est encore valide.
-  const updateSelectedMarker = (recipe: (marker: MapMarker) => MapMarker) => {
+  const updateSelectedMarker = (recipe: (marker: MapMarker) => MapMarker, coalesceKey = 'marker-field') => {
     if (!selectedMarkerId) return
     const current = markersRef.current.find((marker) => marker.id === selectedMarkerId)
     if (!current) return
+    record(coalesceKey)
     const next = recipe(current)
-    const list = markersRef.current.map((marker) => (marker.id === selectedMarkerId ? next : marker))
-    markersRef.current = list // garde le ref a jour meme entre deux rendus (drag souris)
-    setMarkers(list)
-    setSaveStatus('Modifications non sauvegardees')
+    applyMarkers(
+      markersRef.current.map((marker) => (marker.id === selectedMarkerId ? next : marker)),
+      'Modifications non sauvegardees',
+    )
   }
 
-  const updateSelectedZone = (recipe: (zone: Zone) => Zone) => {
+  const updateSelectedZone = (recipe: (zone: Zone) => Zone, coalesceKey: string | undefined = 'zone-field') => {
     if (!selectedZoneId) return
     const current = zonesRef.current.find((zone) => zone.id === selectedZoneId)
     if (!current) return
+    record(coalesceKey)
     const next = recipe(current)
-    const list = zonesRef.current.map((zone) => (zone.id === selectedZoneId ? next : zone))
-    zonesRef.current = list
-    setZones(list)
-    setSaveStatus('Quartiers modifies, sauvegarde requise')
-  }
-
-  const moveZonePoint = (zoneId: string, pointIndex: number, point: MouseWorld) => {
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.z)) return
-    const list = zonesRef.current.map((zone) =>
-      zone.id === zoneId
-        ? {
-            ...zone,
-            pts: zone.pts.map((zonePoint, index) =>
-              index === pointIndex ? [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))] : zonePoint,
-            ),
-          }
-        : zone,
+    applyZones(
+      zonesRef.current.map((zone) => (zone.id === selectedZoneId ? next : zone)),
+      'Quartiers modifies, sauvegarde requise',
     )
-    zonesRef.current = list
-    setZones(list)
-    setSaveStatus('Quartiers modifies, sauvegarde requise')
   }
 
+  /**
+   * Deplace un sommet de quartier.
+   * `recordHistory` est a `false` pendant un glisser : l'historique a deja ete pris au
+   * moment ou on a attrape le sommet, sinon chaque pixel parcouru serait une annulation.
+   */
+  const moveZonePoint = (zoneId: string, pointIndex: number, point: MouseWorld, recordHistory = true) => {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.z)) return
+    if (recordHistory) record('zone-point')
+    applyZones(
+      zonesRef.current.map((zone) =>
+        zone.id === zoneId
+          ? {
+              ...zone,
+              pts: zone.pts.map((zonePoint, index) =>
+                index === pointIndex ? [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))] : zonePoint,
+              ),
+            }
+          : zone,
+      ),
+      'Quartiers modifies, sauvegarde requise',
+    )
+  }
+
+  /**
+   * Ajoute un sommet au quartier selectionne, INSERE dans le contour au bon endroit :
+   * au milieu du segment le plus proche du clic. Avant, le point partait toujours en fin de
+   * liste, ce qui repliait le polygone sur lui-meme des qu'on ne cliquait pas dans l'ordre.
+   */
   const addZonePoint = (point: MouseWorld) => {
-    if (!selectedZoneId) return
-    updateSelectedZone((zone) => ({
-      ...zone,
-      pts: [...zone.pts, [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))]],
-    }))
-    setSelectedZonePoint((selectedZone?.pts.length ?? 0))
+    const zone = zonesRef.current.find((item) => item.id === selectedZoneIdRef.current)
+    if (!zone) return
+    const insertAt = zone.pts.length >= 2 ? findNearestZoneEdge(zone, point) + 1 : zone.pts.length
+    updateSelectedZone((current) => {
+      const pts = [...current.pts]
+      pts.splice(insertAt, 0, [Number(point.x.toFixed(1)), Number(point.z.toFixed(1))])
+      return { ...current, pts }
+    }, undefined)
+    setSelectedZonePoint(insertAt)
   }
 
   const deleteSelectedZonePoint = () => {
     if (!selectedZone || selectedZonePoint === null || selectedZone.pts.length <= 3) return
-    updateSelectedZone((zone) => ({ ...zone, pts: zone.pts.filter((_, index) => index !== selectedZonePoint) }))
+    updateSelectedZone((zone) => ({ ...zone, pts: zone.pts.filter((_, index) => index !== selectedZonePoint) }), undefined)
+    setSelectedZonePoint(null)
+  }
+
+  /** Nouveau quartier : un carre de 200 m au centre de la vue, a redessiner ensuite. */
+  const addZone = () => {
+    const { cx, cz } = cameraRef.current
+    const half = 100
+    const zone: Zone = {
+      id: makeZoneId(zonesRef.current),
+      name: 'Nouveau quartier',
+      color: '#f0b84d',
+      pts: [
+        [Number((cx - half).toFixed(1)), Number((cz - half).toFixed(1))],
+        [Number((cx + half).toFixed(1)), Number((cz - half).toFixed(1))],
+        [Number((cx + half).toFixed(1)), Number((cz + half).toFixed(1))],
+        [Number((cx - half).toFixed(1)), Number((cz + half).toFixed(1))],
+      ],
+    }
+    record()
+    applyZones([...zonesRef.current, zone], 'Nouveau quartier cree, sauvegarde requise')
+    setSelectedZoneId(zone.id)
+    setSelectedZonePoint(null)
+    setEditorTool('zone')
+  }
+
+  const deleteSelectedZone = () => {
+    const zone = zonesRef.current.find((item) => item.id === selectedZoneIdRef.current)
+    if (!zone) return
+    if (!window.confirm(`Supprimer le quartier "${zone.name}" et ses ${zone.pts.length} points ?`)) return
+    record()
+    const list = zonesRef.current.filter((item) => item.id !== zone.id)
+    applyZones(list, 'Quartier supprime localement, sauvegarde requise')
+    setSelectedZoneId(list[0]?.id ?? null)
     setSelectedZonePoint(null)
   }
 
@@ -427,11 +588,66 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     }))
   }
 
+  /** Deplace un POI a la souris. Meme logique d'historique que `moveZonePoint`. */
+  const moveMarker = (markerId: string, point: MouseWorld, recordHistory = true) => {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.z)) return
+    if (recordHistory) record('marker-move')
+    applyMarkers(
+      markersRef.current.map((marker) =>
+        marker.id === markerId
+          ? { ...marker, position: { x: Number(point.x.toFixed(2)), z: Number(point.z.toFixed(2)) } }
+          : marker,
+      ),
+      'Point deplace, sauvegarde requise',
+    )
+  }
+
   const deleteSelectedMarker = () => {
-    if (!selectedMarker) return
-    setMarkers((current) => current.filter((marker) => marker.id !== selectedMarker.id))
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerIdRef.current)
+    if (!marker) return
+    record()
+    applyMarkers(
+      markersRef.current.filter((item) => item.id !== marker.id),
+      'Point supprime localement, sauvegarde requise',
+    )
     setSelectedMarkerId(null)
-    setSaveStatus('Point supprime localement, sauvegarde requise')
+  }
+
+  /** Duplique le POI selectionne, decale de 5 m pour qu'il ne se cache pas sous l'original. */
+  const duplicateSelectedMarker = () => {
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerIdRef.current)
+    if (!marker) return
+    const copy: MapMarker = {
+      ...cloneMarkers([marker])[0],
+      id: makeMarkerId(markersRef.current),
+      name: `${marker.name} copie`,
+      position: { x: Number((marker.position.x + 5).toFixed(2)), z: Number((marker.position.z + 5).toFixed(2)) },
+    }
+    record()
+    applyMarkers([...markersRef.current, copy], 'Point duplique, sauvegarde requise')
+    setSelectedMarkerId(copy.id)
+  }
+
+  /** Recentre la vue sur un point du monde sans changer le zoom. */
+  const centerOn = (point: MouseWorld) => {
+    cameraRef.current = { ...cameraRef.current, cx: point.x, cz: point.z }
+    setViewInfo({ ...cameraRef.current })
+  }
+
+  /**
+   * Recentre la vue sur ce qui est selectionne (touche F).
+   * Priorite au point d'interet ; a defaut, le centre du quartier selectionne.
+   */
+  const focusSelection = () => {
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerIdRef.current)
+    if (marker) {
+      centerOn({ x: marker.position.x, z: marker.position.z })
+      return
+    }
+    const zone = zonesRef.current.find((item) => item.id === selectedZoneIdRef.current)
+    if (!zone?.pts.length) return
+    const sum = zone.pts.reduce((acc, [x, z]) => ({ x: acc.x + x, z: acc.z + z }), { x: 0, z: 0 })
+    centerOn({ x: sum.x / zone.pts.length, z: sum.z / zone.pts.length })
   }
 
   const handleWorldClick = (point: MouseWorld) => {
@@ -444,9 +660,9 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
 
     if (toolRef.current === 'place') {
       const marker = makeMarkerAt(point, markersRef.current)
-      setMarkers((current) => [...current, marker])
+      record()
+      applyMarkers([...markersRef.current, marker], 'Nouveau point cree, sauvegarde requise')
       setSelectedMarkerId(marker.id)
-      setSaveStatus('Nouveau point cree, sauvegarde requise')
       return
     }
 
@@ -455,8 +671,11 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     setSelectedMarkerId(marker?.id ?? null)
   }
 
+  // Les gestionnaires souris du canvas ne sont attaches qu'une fois (effet a dependances
+  // vides) : ils passent par ces refs pour toujours appeler la version courante.
   useEffect(() => {
     worldClickRef.current = handleWorldClick
+    recordRef.current = record
   })
 
   // Fermer l'onglet ou recharger avec des modifications non sauvegardees les perdait en
@@ -470,6 +689,55 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [hasUnsavedChanges])
+
+  // Raccourcis clavier. Pas de tableau de dependances : l'effet se rebranche a chaque rendu
+  // pour toujours agir sur la selection courante.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Ne jamais voler les touches a un champ de saisie : on doit pouvoir taper "v" dans un nom.
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
+
+      if (event.ctrlKey || event.metaKey) {
+        if (event.code === 'KeyZ' && !event.shiftKey) {
+          event.preventDefault()
+          undo()
+        } else if ((event.code === 'KeyZ' && event.shiftKey) || event.code === 'KeyY') {
+          event.preventDefault()
+          redo()
+        } else if (event.code === 'KeyD') {
+          event.preventDefault()
+          duplicateSelectedMarker()
+        } else if (event.code === 'KeyS') {
+          event.preventDefault()
+          if (markersDirty) void saveMarkers()
+          if (zonesDirty) void saveZones()
+          if (!markersDirty && !zonesDirty) setSaveStatus('Rien a sauver, tout est deja sur le disque')
+        }
+        return
+      }
+
+      if (event.code === 'KeyV') setEditorTool('select')
+      if (event.code === 'KeyP') setEditorTool('place')
+      if (event.code === 'KeyQ') setEditorTool('zone')
+      if (event.code === 'KeyF') focusSelection()
+      if (event.code === 'Delete' || event.code === 'Backspace') {
+        event.preventDefault()
+        // Suppr agit sur ce qui est reellement en cours d'edition : un sommet de quartier
+        // quand on est dans l'outil Quartier, sinon le point d'interet selectionne.
+        if (editorTool === 'zone' && selectedZonePoint !== null) deleteSelectedZonePoint()
+        else deleteSelectedMarker()
+      }
+      if (event.code === 'Escape') {
+        setSelectedMarkerId(null)
+        setSelectedZonePoint(null)
+        setEditorTool('select')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -587,7 +855,36 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
         const pointIndex = findNearestZonePoint(zone, { x: wx, z: wz }, Math.max(5, 10 / pixelsPerMeter()))
         if (pointIndex !== null && selectedZoneIdRef.current) {
           setSelectedZonePoint(pointIndex)
-          dragRef.current = { mode: 'zonePoint', pointerId: event.pointerId, zoneId: selectedZoneIdRef.current, pointIndex, moved: false }
+          dragRef.current = {
+            mode: 'zonePoint',
+            pointerId: event.pointerId,
+            zoneId: selectedZoneIdRef.current,
+            pointIndex,
+            startX: event.clientX,
+            startY: event.clientY,
+            moved: false,
+          }
+          canvas.setPointerCapture(event.pointerId)
+          return
+        }
+      }
+
+      // Outil Selection : attraper un POI pour le deplacer directement a la souris.
+      if (toolRef.current === 'select' && layersRef.current.markers) {
+        const hitDistance = Math.max(4, 12 / pixelsPerMeter())
+        const marker = findNearestMarker(markersRef.current, { x: wx, z: wz }, hitDistance)
+        if (marker) {
+          setSelectedMarkerId(marker.id)
+          dragRef.current = {
+            mode: 'marker',
+            pointerId: event.pointerId,
+            markerId: marker.id,
+            // Ecart entre le clic et le centre du point : le POI ne saute pas sous le curseur.
+            grabOffset: { x: marker.position.x - wx, z: marker.position.z - wz },
+            startX: event.clientX,
+            startY: event.clientY,
+            moved: false,
+          }
           canvas.setPointerCapture(event.pointerId)
           return
         }
@@ -610,9 +907,16 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
 
       const drag = dragRef.current
       if (!drag || drag.pointerId !== event.pointerId) return
-      if (drag.mode === 'zonePoint') {
-        drag.moved = true
-        moveZonePoint(drag.zoneId, drag.pointIndex, { x: wx, z: wz })
+      if (drag.mode === 'zonePoint' || drag.mode === 'marker') {
+        // Un simple clic ne doit pas creer d'entree dans l'historique : on attend un vrai
+        // deplacement, puis on prend UNE photo pour tout le glisser.
+        if (!drag.moved) {
+          if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 3) return
+          drag.moved = true
+          recordRef.current()
+        }
+        if (drag.mode === 'zonePoint') moveZonePoint(drag.zoneId, drag.pointIndex, { x: wx, z: wz }, false)
+        else moveMarker(drag.markerId, { x: wx + drag.grabOffset.x, z: wz + drag.grabOffset.z }, false)
         return
       }
       if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) drag.moved = true
@@ -626,7 +930,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
       const drag = dragRef.current
       if (drag?.pointerId === event.pointerId) {
         dragRef.current = null
-        if (drag.mode === 'zonePoint') return
+        if (drag.mode === 'zonePoint' || drag.mode === 'marker') return
         if (!drag.moved) {
           const rect = canvas.getBoundingClientRect()
           const [x, z] = toWorld(event.clientX - rect.left, event.clientY - rect.top)
@@ -752,6 +1056,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
             type="button"
             className={editorTool === 'select' ? 'active' : ''}
             onClick={() => setEditorTool('select')}
+            title="Selection et deplacement (V)"
           >
             Selection
           </button>
@@ -759,6 +1064,7 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
             type="button"
             className={editorTool === 'place' ? 'active' : ''}
             onClick={() => setEditorTool('place')}
+            title="Placer un point d'interet (P)"
           >
             Placer
           </button>
@@ -766,21 +1072,28 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
             type="button"
             className={editorTool === 'zone' ? 'active' : ''}
             onClick={() => setEditorTool('zone')}
+            title="Dessiner les contours de quartier (Q)"
           >
             Quartier
           </button>
         </div>
         <div className="editor-actions">
+          <button type="button" onClick={undo} disabled={!history.canUndo} title="Annuler (Ctrl+Z)">
+            ↶
+          </button>
+          <button type="button" onClick={redo} disabled={!history.canRedo} title="Retablir (Ctrl+Y)">
+            ↷
+          </button>
           <button type="button" onClick={() => zoomBy(1.2)} title="Zoomer">
             +
           </button>
           <button type="button" onClick={() => zoomBy(1 / 1.2)} title="Dezoomer">
             -
           </button>
-          <button type="button" onClick={centerOnSpawn}>
+          <button type="button" onClick={centerOnSpawn} title="Centrer sur le point de depart du joueur">
             Spawn
           </button>
-          <button type="button" onClick={fitCity}>
+          <button type="button" onClick={fitCity} title="Voir toute la ville">
             Ville
           </button>
           <button
@@ -822,14 +1135,6 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
         </section>
 
         <section>
-          <h2>Navigation</h2>
-          <p className="editor-note">
-            Selection : cliquer un point. Placer : cliquer sur la carte pour creer un POI. Quartier : cliquer un
-            sommet pour le deplacer, cliquer ailleurs pour ajouter un point au quartier selectionne.
-          </p>
-        </section>
-
-        <section>
           <h2>Quartiers</h2>
           <div className="marker-list">
             {zones.map((zone) => (
@@ -842,6 +1147,8 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                   setSelectedZonePoint(null)
                   setEditorTool('zone')
                 }}
+                onDoubleClick={focusSelection}
+                title="Clic : selectionner. Double-clic : centrer la vue dessus."
               >
                 <span className="layer-swatch" style={{ background: zone.color }} />
                 <span>
@@ -851,26 +1158,95 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
               </button>
             ))}
           </div>
+          <div className="list-actions">
+            <button type="button" onClick={addZone}>
+              + Quartier
+            </button>
+            <button type="button" className="danger" onClick={deleteSelectedZone} disabled={!selectedZone}>
+              Supprimer
+            </button>
+          </div>
         </section>
 
         <section>
-          <h2>Points</h2>
+          <h2>Points ({visibleMarkers.length}/{markers.length})</h2>
+          <input
+            className="list-search"
+            type="search"
+            value={markerSearch}
+            placeholder="Chercher un nom, un type, un tag..."
+            onChange={(event) => setMarkerSearch(event.currentTarget.value)}
+          />
           <div className="marker-list">
-            {markers.map((marker) => (
+            {visibleMarkers.map((marker) => (
               <button
                 key={marker.id}
                 type="button"
                 className={`marker-row ${marker.id === selectedMarkerId ? 'active' : ''}`}
                 onClick={() => setSelectedMarkerId(marker.id)}
+                onDoubleClick={() => centerOn({ x: marker.position.x, z: marker.position.z })}
+                title="Clic : selectionner. Double-clic : centrer la vue dessus."
               >
                 <span className="layer-swatch" style={{ background: marker.color }} />
                 <span>
                   <strong>{marker.name}</strong>
-                  <small>{markerTypeLabels[marker.type]}</small>
+                  <small>{markerTypeLabels[marker.type] ?? marker.type}</small>
                 </span>
               </button>
             ))}
+            {markers.length > 0 && visibleMarkers.length === 0 && (
+              <p className="editor-note">Aucun point ne correspond a cette recherche.</p>
+            )}
+            {markers.length === 0 && (
+              <p className="editor-note">Aucun point. Outil Placer (P) puis clic sur la carte.</p>
+            )}
           </div>
+        </section>
+
+        <section>
+          <h2>Aide</h2>
+          <dl className="shortcut-list">
+            <div>
+              <dt>V / P / Q</dt>
+              <dd>Selection / Placer / Quartier</dd>
+            </div>
+            <div>
+              <dt>Glisser</dt>
+              <dd>Deplace le point ou le sommet attrape ; sinon deplace la vue</dd>
+            </div>
+            <div>
+              <dt>Molette</dt>
+              <dd>Zoomer / dezoomer</dd>
+            </div>
+            <div>
+              <dt>F</dt>
+              <dd>Centrer sur la selection</dd>
+            </div>
+            <div>
+              <dt>Suppr</dt>
+              <dd>Supprimer la selection</dd>
+            </div>
+            <div>
+              <dt>Ctrl+Z / Y</dt>
+              <dd>Annuler / retablir</dd>
+            </div>
+            <div>
+              <dt>Ctrl+D</dt>
+              <dd>Dupliquer le point</dd>
+            </div>
+            <div>
+              <dt>Ctrl+S</dt>
+              <dd>Sauvegarder ce qui a change</dd>
+            </div>
+            <div>
+              <dt>Echap</dt>
+              <dd>Tout deselectionner</dd>
+            </div>
+          </dl>
+          <p className="editor-note">
+            Outil Quartier : cliquer un sommet pour l&apos;attraper, cliquer ailleurs pour inserer un sommet dans
+            le contour, au plus pres du bord clique.
+          </p>
         </section>
       </aside>
 
@@ -887,6 +1263,8 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
             markers={markers}
             selectedMarkerId={selectedMarkerId}
             onWorldClick={handleWorldClick}
+            tool={editorTool}
+            onMarkerDrag={(markerId, point, first) => moveMarker(markerId, point, first)}
           />
         )}
         <canvas ref={canvasRef} className={`editor-map-canvas ${viewMode === 'plan' ? 'visible' : 'hidden'}`} />
@@ -1190,8 +1568,14 @@ export default function EditorApp({ moduleTabs }: EditorAppProps = {}) {
                 </label>
               </div>
               <div className="form-actions">
-                <button type="button" className="danger" onClick={deleteSelectedMarker}>
-                  Supprimer localement
+                <button type="button" className="secondary-action" onClick={focusSelection} title="Touche F">
+                  Centrer
+                </button>
+                <button type="button" className="secondary-action" onClick={duplicateSelectedMarker} title="Ctrl+D">
+                  Dupliquer
+                </button>
+                <button type="button" className="danger" onClick={deleteSelectedMarker} title="Suppr">
+                  Supprimer
                 </button>
               </div>
             </form>

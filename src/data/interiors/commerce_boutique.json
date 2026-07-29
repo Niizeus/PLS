@@ -1,0 +1,277 @@
+{
+  "id": "commerce_boutique",
+  "name": "Commerce / boutique",
+  "type": "shop",
+  "version": 2,
+  "defaultWallHeight": 3.2,
+  "defaultWallThickness": 0.18,
+  "floors": [
+    {
+      "id": "rdc",
+      "label": "Boutique",
+      "elevation": 0,
+      "height": 3.2,
+      "walls": [
+        {
+          "id": "commerce_boutique_rdc_mur_1",
+          "name": "Cloison 1",
+          "ax": -6.625,
+          "az": -3.125,
+          "bx": 6.625,
+          "bz": -3.125,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": [
+            {
+              "id": "commerce_boutique_rdc_porte_1",
+              "name": "Porte 1",
+              "kind": "door",
+              "offset": 6.625,
+              "width": 1,
+              "sillHeight": 0,
+              "topHeight": 2.1
+            }
+          ]
+        },
+        {
+          "id": "commerce_boutique_rdc_mur_2",
+          "name": "Mur exterieur 2",
+          "ax": -6.625,
+          "az": 7.625,
+          "bx": 6.625,
+          "bz": 7.625,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": [
+            {
+              "id": "commerce_boutique_rdc_porte_entree",
+              "name": "Entree",
+              "kind": "door",
+              "offset": 6.625,
+              "width": 1,
+              "sillHeight": 0,
+              "topHeight": 2.1
+            },
+            {
+              "id": "commerce_boutique_rdc_fenetre_1",
+              "name": "Fenetre 1",
+              "kind": "window",
+              "offset": 4.417,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            },
+            {
+              "id": "commerce_boutique_rdc_fenetre_2",
+              "name": "Fenetre 2",
+              "kind": "window",
+              "offset": 8.833,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            }
+          ]
+        },
+        {
+          "id": "commerce_boutique_rdc_mur_3",
+          "name": "Mur exterieur 3",
+          "ax": -6.625,
+          "az": -7.625,
+          "bx": -6.625,
+          "bz": 7.625,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": [
+            {
+              "id": "commerce_boutique_rdc_fenetre_3",
+              "name": "Fenetre 3",
+              "kind": "window",
+              "offset": 8.083,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            },
+            {
+              "id": "commerce_boutique_rdc_fenetre_4",
+              "name": "Fenetre 4",
+              "kind": "window",
+              "offset": 11.667,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            }
+          ]
+        },
+        {
+          "id": "commerce_boutique_rdc_mur_4",
+          "name": "Mur exterieur 4",
+          "ax": 6.625,
+          "az": -7.625,
+          "bx": 6.625,
+          "bz": 7.625,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": [
+            {
+              "id": "commerce_boutique_rdc_fenetre_5",
+              "name": "Fenetre 5",
+              "kind": "window",
+              "offset": 8.083,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            },
+            {
+              "id": "commerce_boutique_rdc_fenetre_6",
+              "name": "Fenetre 6",
+              "kind": "window",
+              "offset": 11.667,
+              "width": 1.4,
+              "sillHeight": 0.9,
+              "topHeight": 2.1
+            }
+          ]
+        },
+        {
+          "id": "commerce_boutique_rdc_mur_5",
+          "name": "Mur exterieur 5",
+          "ax": -6.625,
+          "az": -7.625,
+          "bx": 6.625,
+          "bz": -7.625,
+          "thickness": 0.18,
+          "material": "proto_wall",
+          "openings": []
+        }
+      ],
+      "surfaces": [
+        {
+          "id": "commerce_boutique_rdc_vente_sol",
+          "name": "Espace de vente — sol",
+          "pts": [
+            [
+              -6.625,
+              -3.125
+            ],
+            [
+              6.625,
+              -3.125
+            ],
+            [
+              6.625,
+              7.625
+            ],
+            [
+              -6.625,
+              7.625
+            ]
+          ],
+          "material": "proto_floor"
+        },
+        {
+          "id": "commerce_boutique_rdc_reserve_sol",
+          "name": "Reserve — sol",
+          "pts": [
+            [
+              -6.625,
+              -7.625
+            ],
+            [
+              6.625,
+              -7.625
+            ],
+            [
+              6.625,
+              -3.125
+            ],
+            [
+              -6.625,
+              -3.125
+            ]
+          ],
+          "material": "proto_floor"
+        }
+      ],
+      "props": [
+        {
+          "id": "commerce_boutique_rdc_vente_prop_1",
+          "assetId": "proto_counter",
+          "name": "Comptoir",
+          "x": 5.03,
+          "z": -1.93,
+          "rotation": 1.5708
+        },
+        {
+          "id": "commerce_boutique_rdc_vente_prop_2",
+          "assetId": "proto_cube",
+          "name": "Etal",
+          "x": -1.2,
+          "z": 2.25,
+          "rotation": 0
+        },
+        {
+          "id": "commerce_boutique_rdc_vente_prop_3",
+          "assetId": "proto_cube",
+          "name": "Etal",
+          "x": 1.2,
+          "z": 2.25,
+          "rotation": 0
+        },
+        {
+          "id": "commerce_boutique_rdc_vente_prop_4",
+          "assetId": "proto_light",
+          "name": "Lumiere",
+          "x": 0,
+          "z": 2.25,
+          "rotation": 0
+        },
+        {
+          "id": "commerce_boutique_rdc_reserve_prop_1",
+          "assetId": "proto_cube",
+          "name": "Caisse",
+          "x": -5.83,
+          "z": -6.83,
+          "rotation": 0
+        },
+        {
+          "id": "commerce_boutique_rdc_reserve_prop_2",
+          "assetId": "proto_cube",
+          "name": "Caisse",
+          "x": 5.83,
+          "z": -6.83,
+          "rotation": 0
+        },
+        {
+          "id": "commerce_boutique_rdc_reserve_prop_3",
+          "assetId": "proto_light",
+          "name": "Lumiere",
+          "x": 0,
+          "z": -5.38,
+          "rotation": 0
+        }
+      ],
+      "spawnPoints": [
+        {
+          "id": "spawn_commerce_boutique",
+          "name": "Arrivee",
+          "x": 0,
+          "z": 6.42,
+          "rotation": 0
+        }
+      ],
+      "exits": [
+        {
+          "id": "exit_commerce_boutique",
+          "name": "Sortie",
+          "x": 0,
+          "z": 7.13,
+          "rotation": 0,
+          "target": {
+            "kind": "exterior"
+          }
+        }
+      ],
+      "stairs": []
+    }
+  ]
+}

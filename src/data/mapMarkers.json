@@ -4,8 +4,8 @@
     "name": "kebab",
     "type": "shop",
     "position": {
-      "x": -27.36,
-      "z": 42.35
+      "x": -43.6,
+      "z": 34.58
     },
     "color": "#e6493f",
     "icon": "test",
@@ -16,6 +16,7 @@
     "devOnly": true,
     "tags": [
       "test"
-    ]
+    ],
+    "interiorId": "commerce_boutique"
   }
 ]

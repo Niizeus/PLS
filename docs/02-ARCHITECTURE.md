@@ -204,12 +204,12 @@ Le jeu principal monte un panneau de reglages dev-only dans `src/devtools/`. Il 
 Vite DEV (`import.meta.env.DEV`) et sert a tester vite les valeurs de feeling sans recompiler :
 
 - `DevToolsControls.tsx` ecoute `F2` pour ouvrir/fermer le panneau, et `Escape` pour fermer.
-- `DevToolsPanel.tsx` affiche les onglets Joueur, Voiture, Scooter, Camera, Inventaire, Stats,
-  Temps et JSON.
+- `DevToolsPanel.tsx` affiche les onglets Joueur, Voiture, Scooter, Camera, Inventaire, Ciel,
+  Stats, Temps et JSON.
 - `devTuningSchema.ts` est le registre des reglages exposes : label, chemin JSON, bornes, pas.
 - `devTuningStore.ts` charge d'abord `public/dev/dev-tuning.json`, ajoute les overrides locaux
   sauvegardes en `localStorage`, puis expose les fonctions de lecture (`getPlayerTuning()`,
-  `getVehicleTuning(...)`, `getCameraTuning()`, etc.) pour les boucles de jeu.
+  `getVehicleTuning(...)`, `getCameraTuning()`, `getSkyTuning()`, etc.) pour les boucles de jeu.
 - `public/dev/dev-tuning.json` est le fichier officiel de reglages DEV du projet. Il peut rester
   vide (`{}`) tant qu'aucun reglage n'est valide.
 - `public/dev/dev-tuning.example.json` donne un exemple de fichier d'overrides partageable.
@@ -226,6 +226,14 @@ juste interne, derivee, ou dangereuse sans contexte, elle reste dans son module 
 un parametre deja lu par le gameplay, ajoute une entree dans `DEV_TUNING_FIELDS`. Pour un nouveau
 systeme, cree d'abord son type/default clair, puis ajoute une fonction de lecture equivalent a
 `getPlayerTuning()`.
+
+Le ciel procedural peint expose ses reglages DEV sous `sky.paint.*` : activation, opacite, echelles
+de formes, deformation, douceur, etirement, vitesse, intensites horizon/zenith, halos, teinte globale
+des lumieres, densite de fog, teinte des nuages et particules atmospheriques rares. Les palettes et
+profils d'ambiance restent dans `src/core/sky/skyAtmosphere.ts` pour garder une direction artistique
+coherente plutot que des couleurs isolees dans le JSON. `Lights.tsx`, `TimeFog.tsx`, `DynamicSky.tsx`
+et `PaintSkyDome.tsx` lisent cette meme source afin que ciel, brouillard, lumiere et nuages changent
+ensemble selon l'heure.
 
 > 💡 **Une refonte ergonomique du panneau est souhaitee** (noms clairs au lieu des noms de variables,
 > descriptions, categories, prereglages, mode simple / mode avance, schema de voiture cliquable,

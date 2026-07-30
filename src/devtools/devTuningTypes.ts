@@ -1,6 +1,7 @@
 import type { CAR } from '../entities/vehicles/carConfig'
 import type { SCOOTER } from '../entities/vehicles/scooterConfig'
 import type { PLAYER } from '../entities/player/playerConfig'
+import type { SkyTuning } from '../core/sky/skyAtmosphere'
 
 export type PlayerTuning = typeof PLAYER
 export type VehicleTuning = typeof CAR | typeof SCOOTER
@@ -30,6 +31,7 @@ export interface DevTuningOverrides {
   vehicles?: Partial<Record<VehicleKind, DeepPartial<VehicleTuning>>>
   camera?: DeepPartial<CameraTuning>
   inventory?: DeepPartial<InventoryTuning>
+  sky?: DeepPartial<SkyTuning>
 }
 
 export type DevTuningPath = string
@@ -38,7 +40,7 @@ export type DevFieldKind = 'number'
 
 export interface DevTuningField {
   id: DevTuningPath
-  section: 'player' | 'car' | 'scooter' | 'camera' | 'inventory'
+  section: 'player' | 'car' | 'scooter' | 'camera' | 'inventory' | 'sky'
   label: string
   help: string
   kind: DevFieldKind

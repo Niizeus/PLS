@@ -13,13 +13,14 @@ import {
   getCameraTuning,
   getInventoryTuning,
   getPlayerTuning,
+  getSkyTuning,
   getVehicleTuning,
   useDevTuningStore,
 } from './devTuningStore'
 import type { DevTuningField } from './devTuningTypes'
 import { getPathValue } from './devTuningUtils'
 
-type TabId = 'player' | 'car' | 'scooter' | 'camera' | 'inventory' | 'stats' | 'time' | 'json'
+type TabId = 'player' | 'car' | 'scooter' | 'camera' | 'inventory' | 'sky' | 'stats' | 'time' | 'json'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'player', label: 'Joueur' },
@@ -27,6 +28,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'scooter', label: 'Scooter' },
   { id: 'camera', label: 'Camera' },
   { id: 'inventory', label: 'Inventaire' },
+  { id: 'sky', label: 'Ciel' },
   { id: 'stats', label: 'Stats' },
   { id: 'time', label: 'Temps' },
   { id: 'json', label: 'JSON' },
@@ -64,6 +66,7 @@ export default function DevToolsPanel() {
   const scooter = getVehicleTuning('scooter')
   const camera = getCameraTuning()
   const inventory = getInventoryTuning()
+  const sky = getSkyTuning()
   const totalMinutes = useGameTimeStore((s) => s.totalMinutes)
   const timeScale = useGameTimeStore((s) => s.timeScale)
   const isPaused = useGameTimeStore((s) => s.isPaused)
@@ -75,6 +78,7 @@ export default function DevToolsPanel() {
       vehicles: { car, scooter },
       camera,
       inventory,
+      sky,
     }),
     [overrides],
   )
@@ -163,7 +167,7 @@ export default function DevToolsPanel() {
         </nav>
 
         <main style={bodyStyle}>
-          {['player', 'car', 'scooter', 'camera', 'inventory'].includes(tab) && (
+          {['player', 'car', 'scooter', 'camera', 'inventory', 'sky'].includes(tab) && (
             <FieldList fields={fields} values={values} onChange={setNumber} />
           )}
           {tab === 'stats' && <StatsTools stats={stats} />}

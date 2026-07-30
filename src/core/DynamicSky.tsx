@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useLoader, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { getSkyTuning, useDevTuningStore } from '../devtools/devTuningStore'
 import { FRAME } from './framePriority'
 import { CLOUD_SOFT_SPRITE_PATHS, CLOUD_SPRITE_PATHS, CLOUD_SPRITE_SIZES } from './cloudSpriteManifest'
 import {
@@ -9,6 +10,9 @@ import {
   writeSunSkyPosition,
 } from '../gameplay/time/celestialCycle'
 import { getSkyColors, useGameTimeStore } from '../gameplay/time/gameTimeStore'
+import AtmosphereParticles from './sky/AtmosphereParticles'
+import PaintSkyDome from './sky/PaintSkyDome'
+import { applySkyTuning, getSkyAtmosphere, type SkyAtmosphere } from './sky/skyAtmosphere'
 
 const SKY_DISTANCE = 180
 const STAR_COUNT = 1600
@@ -322,6 +326,8 @@ export default function DynamicSky() {
   const displayCycle = useMemo(() => getCelestialCycle(displayMinute), [displayMinute])
   const moonPhaseStep = displayCycle.moonPhase
   const colors = useMemo(() => getSkyColors(displayMinute), [displayMinute])
+  const skyOverrides = useDevTuningStore((state) => state.overrides.sky)
+  const skyTuning = useMemo(() => getSkyTuning(), [skyOverrides])
   const background = useMemo(() => makeGradient(colors.top, colors.horizon), [colors.horizon, colors.top])
   const starGeometry = useMemo(() => createStarGeometry(), [])
   const cloudTextures = useLoader(THREE.TextureLoader, [...CLOUD_SPRITE_PATHS])
@@ -347,7 +353,10 @@ export default function DynamicSky() {
       cloudHorizon: new THREE.Color(),
       cloudSkyTint: new THREE.Color(),
       cloudSoftTint: new THREE.Color(),
-      cloudNight: new THREE.Color('#7e91b0'),
+      cloudLight: new THREE.Color(),
+      cloudSoft: new THREE.Color(),
+      cloudShadow: new THREE.Color(),
+      cloudGlow: new THREE.Color(),
     }),
     [],
   )
@@ -387,8 +396,9 @@ export default function DynamicSky() {
   useFrame((_, delta) => {
     const totalMinutes = useGameTimeStore.getState().totalMinutes
     const cycle = getCelestialCycle(totalMinutes)
-    const cloudOpacity = 0.96 + cycle.daylight * 0.04
-    writeCloudTint(getSkyColors(totalMinutes), cycle, scratch)
+    const atmosphere = applySkyTuning(getSkyAtmosphere(totalMinutes), skyTuning)
+    const cloudOpacity = 0.9 + cycle.daylight * 0.06 + atmosphere.cloudTintStrength * 0.04
+    writeCloudTint(atmosphere, cycle, scratch)
 
     if (root.current) {
       camera.getWorldPosition(scratch.cameraPosition)
@@ -475,70 +485,72 @@ export default function DynamicSky() {
   return (
     <>
       <group ref={root} renderOrder={-1000}>
-      <group ref={starLayer}>
-        <points geometry={starGeometry} renderOrder={-980}>
-          <pointsMaterial
-            ref={stars}
-            vertexColors
+        <PaintSkyDome />
+        <AtmosphereParticles />
+        <group ref={starLayer}>
+          <points geometry={starGeometry} renderOrder={-980}>
+            <pointsMaterial
+              ref={stars}
+              vertexColors
+              transparent
+              opacity={0}
+              size={0.8}
+              sizeAttenuation
+              depthWrite={false}
+              depthTest
+              fog={false}
+            />
+          </points>
+        </group>
+        <sprite position={sunPosition} scale={[68, 68, 1]} renderOrder={-970}>
+          <spriteMaterial
+            ref={sunGlare}
+            map={sunGlareTexture}
             transparent
             opacity={0}
-            size={0.8}
-            sizeAttenuation
+            depthWrite={false}
+            depthTest={false}
+            fog={false}
+            toneMapped={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </sprite>
+        <sprite position={sunPosition} scale={[24, 24, 1]} renderOrder={-969}>
+          <spriteMaterial
+            ref={sun}
+            map={sunTexture}
+            transparent
+            opacity={1}
             depthWrite={false}
             depthTest
             fog={false}
+            toneMapped={false}
           />
-        </points>
-      </group>
-      <sprite position={sunPosition} scale={[68, 68, 1]} renderOrder={-970}>
-        <spriteMaterial
-          ref={sunGlare}
-          map={sunGlareTexture}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest={false}
-          fog={false}
-          toneMapped={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </sprite>
-      <sprite position={sunPosition} scale={[24, 24, 1]} renderOrder={-969}>
-        <spriteMaterial
-          ref={sun}
-          map={sunTexture}
-          transparent
-          opacity={1}
-          depthWrite={false}
-          depthTest
-          fog={false}
-          toneMapped={false}
-        />
-      </sprite>
-      <sprite position={moonPosition} scale={[21, 21, 1]} renderOrder={-965}>
-        <spriteMaterial
-          ref={moonGlow}
-          map={moonGlowTexture}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest
-          fog={false}
-          toneMapped={false}
-        />
-      </sprite>
-      <sprite position={moonPosition} scale={[13, 13, 1]} renderOrder={-960}>
-        <spriteMaterial
-          ref={moon}
-          map={moonTexture}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest
-          fog={false}
-          toneMapped={false}
-        />
-      </sprite>
+        </sprite>
+        <sprite position={moonPosition} scale={[21, 21, 1]} renderOrder={-965}>
+          <spriteMaterial
+            ref={moonGlow}
+            map={moonGlowTexture}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            depthTest
+            fog={false}
+            toneMapped={false}
+          />
+        </sprite>
+        <sprite position={moonPosition} scale={[13, 13, 1]} renderOrder={-960}>
+          <spriteMaterial
+            ref={moon}
+            map={moonTexture}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            depthTest
+            fog={false}
+            toneMapped={false}
+          />
+        </sprite>
       </group>
       <group ref={cloudLayer} renderOrder={-976}>
         {cloudPacks.map((pack, packIndex) => (
@@ -599,7 +611,7 @@ function wrapOffset(value: number, span: number): number {
 }
 
 function writeCloudTint(
-  colors: { top: string; horizon: string },
+  atmosphere: SkyAtmosphere,
   cycle: { daylight: number; hour: number },
   scratch: {
     cloudTint: THREE.Color
@@ -608,23 +620,33 @@ function writeCloudTint(
     cloudHorizon: THREE.Color
     cloudSkyTint: THREE.Color
     cloudSoftTint: THREE.Color
-    cloudNight: THREE.Color
+    cloudLight: THREE.Color
+    cloudSoft: THREE.Color
+    cloudShadow: THREE.Color
+    cloudGlow: THREE.Color
   },
 ) {
-  scratch.cloudTop.set(colors.top)
-  scratch.cloudHorizon.set(colors.horizon)
-  scratch.cloudSkyTint.copy(scratch.cloudTop).lerp(scratch.cloudHorizon, 0.28)
+  scratch.cloudTop.set(atmosphere.zenith)
+  scratch.cloudHorizon.set(atmosphere.horizon)
+  scratch.cloudLight.set(atmosphere.cloudLight)
+  scratch.cloudSoft.set(atmosphere.cloudSoft)
+  scratch.cloudShadow.set(atmosphere.cloudShadow)
+  scratch.cloudGlow.set(atmosphere.glow)
+  scratch.cloudSkyTint.copy(scratch.cloudTop).lerp(scratch.cloudHorizon, 0.32)
 
   const sunrise = pulse(cycle.hour, 6.65, 1.6)
   const sunset = pulse(cycle.hour, 18.65, 2.1)
   const warmSky = Math.max(sunrise, sunset) * smoothstep(0.08, 0.85, cycle.daylight)
   const night = 1 - cycle.daylight
+  const tintStrength = Math.min(1.35, Math.max(0, atmosphere.cloudTintStrength))
 
   scratch.cloudTint.copy(scratch.cloudBase)
+  scratch.cloudTint.lerp(scratch.cloudLight, 0.34 * tintStrength)
   scratch.cloudTint.lerp(scratch.cloudSkyTint, 0.08)
-  scratch.cloudTint.lerp(scratch.cloudHorizon, warmSky * 0.2)
-  scratch.cloudTint.lerp(scratch.cloudNight, smoothstep(0.28, 0.92, night) * 0.54)
-  scratch.cloudSoftTint.copy(scratch.cloudTint).lerp(scratch.cloudSkyTint, 0.46)
+  scratch.cloudTint.lerp(scratch.cloudGlow, warmSky * 0.32 * tintStrength)
+  scratch.cloudTint.lerp(scratch.cloudShadow, smoothstep(0.28, 0.92, night) * 0.54 * tintStrength)
+  scratch.cloudSoftTint.copy(scratch.cloudTint).lerp(scratch.cloudSoft, 0.5 * tintStrength)
+  scratch.cloudSoftTint.lerp(scratch.cloudSkyTint, 0.16)
 }
 
 function pulse(value: number, center: number, radius: number): number {

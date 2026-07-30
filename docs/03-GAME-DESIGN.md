@@ -663,6 +663,15 @@ Le ciel et le cycle jour/nuit sont **déjà en place** (`src/gameplay/time/` + `
 soleil, lune avec phases, étoiles et nuages en sprites. Les raccourcis DEV `F7` (midi), `F8` (nuit),
 `F10` (aube) et `F11` (nuit suivante) servent à juger les ambiances.
 
+Un prototype de **skydome procédural stylisé** est maintenant monté dans `DynamicSky.tsx` via
+`src/core/sky/PaintSkyDome.tsx`. Il rend de grandes masses de peinture douce en `ShaderMaterial`
+WebGL, pilotées par `getSkyAtmosphere(totalMinutes)` (`src/core/sky/skyAtmosphere.ts`) : palettes
+aurore/jour/coucher/nuit, formes organiques lentes, halo d'horizon stylisé, teinte horaire globale
+des lumières, fog coloré plus expressif, nuages mieux intégrés et petites particules atmosphériques
+rares. Les paramètres F2 `sky.paint.*` permettent de doser ces effets sans toucher aux palettes.
+Le ciel historique reste le fallback : régler `Ciel peinture actif` à `0` dans `F2` désactive le
+skydome et les particules rares sans retirer soleil, lune, étoiles, nuages ou brouillard.
+
 > 💡 **Une grosse passe visuelle est souhaitée** — pas pour du réalisme, mais pour créer plusieurs
 > ambiances fortes : aurore chaude californienne, journée non générique, coucher de soleil dramatique,
 > **nuit cosy / lo-fi / synthwave** (mood Kavinsky), nuages teintés par l'heure, halos autour des

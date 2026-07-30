@@ -24,6 +24,24 @@ export const DEV_TUNING_FIELDS: DevTuningField[] = [
 
   field('inventory.MAX_CARRY_WEIGHT', 'inventory', 'Poids max inventaire', 'Charge maximale avant blocage/penalite.', 1, 80, 0.5),
 
+  field('sky.paint.enabled', 'sky', 'Ciel peinture actif', '0 = ciel actuel seul, 1 = skydome procedural actif.', 0, 1, 1),
+  field('sky.paint.opacity', 'sky', 'Opacite des masses', 'Intensite globale des formes peintes dans le ciel.', 0, 1.4, 0.01),
+  field('sky.paint.primaryShapeScale', 'sky', 'Taille formes principales', 'Taille des grandes masses organiques.', 0.35, 2.5, 0.01),
+  field('sky.paint.secondaryShapeScale', 'sky', 'Taille details doux', 'Taille de la couche secondaire qui casse legerement les bords.', 0.35, 2.5, 0.01),
+  field('sky.paint.warpStrength', 'sky', 'Fluidite des formes', 'Force de deformation des masses peintes.', 0, 2, 0.01),
+  field('sky.paint.shapeSoftness', 'sky', 'Douceur contours', 'Plus haut = transitions plus diffuses entre ciel et peinture.', 0.2, 2.2, 0.01),
+  field('sky.paint.horizontalStretch', 'sky', 'Etirement horizontal', 'Allonge les masses vers l horizon.', 0.5, 2.2, 0.01),
+  field('sky.paint.animationSpeed', 'sky', 'Vitesse du ciel', 'Vitesse d evolution lente des masses peintes.', 0, 2, 0.01),
+  field('sky.paint.horizonIntensity', 'sky', 'Intensite horizon', 'Force des couleurs proches de l horizon.', 0.25, 1.8, 0.01),
+  field('sky.paint.zenithIntensity', 'sky', 'Intensite zenith', 'Force des couleurs en haut du ciel.', 0.25, 1.8, 0.01),
+  field('sky.paint.sunHaloIntensity', 'sky', 'Halo soleil', 'Intensite du halo solaire stylise dans le skydome.', 0, 2, 0.01),
+  field('sky.paint.moonHaloIntensity', 'sky', 'Halo lune', 'Intensite du halo lunaire stylise dans le skydome.', 0, 2, 0.01),
+  field('sky.paint.materialTint', 'sky', 'Teinte ambiance', 'Force de la teinte horaire sur les lumieres globales.', 0, 2, 0.01),
+  field('sky.paint.fogIntensity', 'sky', 'Densite fog', 'Densite du fog colore selon l heure.', 0.2, 2, 0.01),
+  field('sky.paint.cloudTint', 'sky', 'Teinte nuages', 'Integration colorimetrique des nuages au ciel.', 0, 2, 0.01),
+  field('sky.paint.particleIntensity', 'sky', 'Poussieres air', 'Intensite des particules atmospheriques rares.', 0, 2, 0.01),
+  field('sky.paint.horizonGlowIntensity', 'sky', 'Halo horizon', 'Force du halo horizontal quand le soleil est bas.', 0, 2, 0.01),
+
   ...vehicleFields('car', 'Voiture', 1),
   ...vehicleFields('scooter', 'Scooter', 0.5),
 ]

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { CAR } from '../entities/vehicles/carConfig'
 import { SCOOTER } from '../entities/vehicles/scooterConfig'
 import { PLAYER } from '../entities/player/playerConfig'
+import { SKY_TUNING_DEFAULTS, type SkyTuning } from '../core/sky/skyAtmosphere'
 import type {
   CameraTuning,
   DeepPartial,
@@ -122,6 +123,10 @@ export function getInventoryTuning(): InventoryTuning {
   return mergeDeep(INVENTORY_DEFAULTS, useDevTuningStore.getState().overrides.inventory)
 }
 
+export function getSkyTuning(): SkyTuning {
+  return mergeDeep(SKY_TUNING_DEFAULTS, useDevTuningStore.getState().overrides.sky)
+}
+
 function sanitizeOverrides(value: unknown): DevTuningOverrides {
   if (!isObject(value)) return {}
   const vehicles = isObject(value.vehicles) ? value.vehicles : {}
@@ -133,6 +138,7 @@ function sanitizeOverrides(value: unknown): DevTuningOverrides {
     },
     camera: sanitizeCamera(value.camera),
     inventory: sanitizeInventory(value.inventory),
+    sky: sanitizeSky(value.sky),
   }) ?? {}) as DevTuningOverrides
 }
 
@@ -188,6 +194,13 @@ function sanitizeInventory(value: unknown): DeepPartial<InventoryTuning> | undef
   return pruneEmpty(out)
 }
 
+function sanitizeSky(value: unknown): DeepPartial<SkyTuning> | undefined {
+  if (!isObject(value) || !isObject(value.paint)) return undefined
+  const out: DeepPartial<SkyTuning> = { paint: {} }
+  for (const key of SKY_PAINT_NUMBER_KEYS) copyNumber(value.paint, out.paint as Record<string, unknown>, key)
+  return pruneEmpty(out)
+}
+
 const VEHICLE_NUMBER_KEYS = [
   'MASS',
   'WHEEL_RADIUS',
@@ -238,6 +251,26 @@ const ENGINE_NUMBER_KEYS = [
   'CVT_TARGET_RPM',
   'CVT_RATIO_MIN',
   'CVT_RATIO_MAX',
+] as const
+
+const SKY_PAINT_NUMBER_KEYS = [
+  'enabled',
+  'opacity',
+  'primaryShapeScale',
+  'secondaryShapeScale',
+  'warpStrength',
+  'shapeSoftness',
+  'horizontalStretch',
+  'animationSpeed',
+  'horizonIntensity',
+  'zenithIntensity',
+  'sunHaloIntensity',
+  'moonHaloIntensity',
+  'materialTint',
+  'fogIntensity',
+  'cloudTint',
+  'particleIntensity',
+  'horizonGlowIntensity',
 ] as const
 
 function copyNumber<T extends Record<string, unknown>>(source: Record<string, unknown>, target: T, key: string) {

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { getSkyTuning, useDevTuningStore } from '../devtools/devTuningStore'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { getCelestialCycle, writeSunLightOffset } from '../gameplay/time/celestialCycle'
 import { useGameTimeStore } from '../gameplay/time/gameTimeStore'
+import { applySkyTuning, getSkyAtmosphere } from './sky/skyAtmosphere'
 
 /**
  * Éclairage de la scène, pensé "cartoon" : lumière franche + remplissage doux.
@@ -35,13 +37,6 @@ const SHADOW_TEXEL = (SHADOW_HALF * 2) / SHADOW_MAP
 const WORLD_UP = new THREE.Vector3(0, 1, 0)
 
 // Direction du soleil, en décalage par rapport au joueur.
-const DAY_LIGHT_COLOR = new THREE.Color('#fff3e0')
-const NIGHT_LIGHT_COLOR = new THREE.Color('#8fb4ff')
-const DAWN_LIGHT_COLOR = new THREE.Color('#ffd0a0')
-const HEMISPHERE_DAY_SKY = new THREE.Color('#cfe8ff')
-const HEMISPHERE_NIGHT_SKY = new THREE.Color('#273a67')
-const HEMISPHERE_GROUND = new THREE.Color('#5a4a3a')
-
 /**
  * Arrondit le centre de la zone d'ombre au texel le plus proche, et écrit le
  * résultat dans `out`. C'est CE calcul qui supprime le clignotement.
@@ -93,6 +88,8 @@ export default function Lights() {
   const light = useRef<THREE.DirectionalLight>(null)
   const hemisphere = useRef<THREE.HemisphereLight>(null)
   const ambient = useRef<THREE.AmbientLight>(null)
+  const skyOverrides = useDevTuningStore((state) => state.overrides.sky)
+  const skyTuning = useMemo(() => getSkyTuning(), [skyOverrides])
   // Cible du soleil, ajoutée à la scène pour que le soleil "regarde" le joueur.
   const target = useMemo(() => new THREE.Object3D(), [])
 
@@ -102,6 +99,10 @@ export default function Lights() {
       sunOffset: new THREE.Vector3(),
       center: new THREE.Vector3(),
       axes: { x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3() },
+      sunLight: new THREE.Color(),
+      ambientLight: new THREE.Color(),
+      hemisphereSky: new THREE.Color(),
+      hemisphereGround: new THREE.Color(),
     }),
     [],
   )
@@ -115,13 +116,8 @@ export default function Lights() {
     if (!p || !light.current) return
     const totalMinutes = useGameTimeStore.getState().totalMinutes
     const cycle = getCelestialCycle(totalMinutes)
-    const lightColor = DAY_LIGHT_COLOR.clone().lerp(NIGHT_LIGHT_COLOR, 1 - cycle.daylight)
-
-    if (cycle.hour >= 5 && cycle.hour < 8) {
-      lightColor.lerp(DAWN_LIGHT_COLOR, 0.35)
-    } else if (cycle.hour >= 17 && cycle.hour < 20) {
-      lightColor.lerp(DAWN_LIGHT_COLOR, 0.45)
-    }
+    const atmosphere = applySkyTuning(getSkyAtmosphere(totalMinutes), skyTuning)
+    const tint = Math.min(1.25, Math.max(0, atmosphere.materialTintStrength))
 
     // Position du soleil PAR RAPPORT au joueur (il tourne au fil des heures).
     writeSunLightOffset(totalMinutes, scratch.sunOffset)
@@ -140,17 +136,18 @@ export default function Lights() {
     // Le soleil garde exactement le même décalage : sa DIRECTION ne change pas,
     // seul le cadrage de la zone d'ombre est arrondi.
     light.current.position.addVectors(scratch.center, scratch.sunOffset)
-    light.current.intensity = 0.22 + cycle.daylight * (0.9 + cycle.solarElevation * 1.15)
-    light.current.color.copy(lightColor)
+    light.current.intensity = 0.18 + cycle.daylight * (0.82 + cycle.solarElevation * 1.08) + tint * 0.08
+    light.current.color.copy(scratch.sunLight.set(atmosphere.sunLight))
 
     if (hemisphere.current) {
-      hemisphere.current.intensity = 0.16 + cycle.daylight * 0.46
-      hemisphere.current.color.copy(HEMISPHERE_NIGHT_SKY).lerp(HEMISPHERE_DAY_SKY, cycle.daylight)
-      hemisphere.current.groundColor.copy(HEMISPHERE_GROUND)
+      hemisphere.current.intensity = 0.17 + cycle.daylight * 0.38 + tint * 0.1
+      hemisphere.current.color.copy(scratch.hemisphereSky.set(atmosphere.hemisphereSky))
+      hemisphere.current.groundColor.copy(scratch.hemisphereGround.set(atmosphere.hemisphereGround))
     }
 
     if (ambient.current) {
-      ambient.current.intensity = 0.09 + cycle.daylight * 0.19
+      ambient.current.intensity = 0.08 + cycle.daylight * 0.16 + tint * 0.05
+      ambient.current.color.copy(scratch.ambientLight.set(atmosphere.ambientLight))
     }
 
     // La cible reprend le MÊME centre arrondi que le soleil (sinon la direction

@@ -281,8 +281,9 @@ lumière ambiante, exposition, brouillard, réflexions, couleurs des nuages, int
 À éviter : les changements soudains, et surtout la **simple baisse globale de luminosité** qui tient
 lieu de nuit.
 
-- **Note** : ciel, horizon et brouillard sont déjà interpolés ensemble. Ce qui n'est pas encore
-  piloté par l'heure de la même manière : exposition, réflexions, teinte des nuages.
+- **Note** : ciel, horizon, brouillard, teinte globale des lumières et teinte des nuages sont
+  désormais synchronisés via `getSkyAtmosphere(totalMinutes)`. Ce qui n'est pas encore piloté par
+  l'heure de la même manière : exposition, réflexions et lumières artificielles.
 - **Étiquettes** : Priorité importante · Horizon moyen terme · Nature visuel · État à étudier
 
 ### 3.2 Aurore chaude californienne
@@ -369,13 +370,17 @@ Doivent finir **synchronisés** : ciel, soleil, lune, étoiles, nuages, éclaira
   qui décident chacun de leur propre courbe = incohérences garanties.
 - **Étiquettes** : Priorité importante · Horizon moyen terme · Nature architecture + visuel · État à étudier
 
-### 3.9 Étude : ciel procédural stylisé en masses de peinture
+### 3.9 Prototype : ciel procédural stylisé en masses de peinture
 
 **Intention** — créer un ciel signature, non réaliste, qui donne l'impression de grandes masses de
 peinture douce déposées dans le ciel : formes rondes et organiques, contours flous, dégradés
 progressifs, mouvement très lent, légère évolution de forme, sans effet bulle de savon, sans
 irisation arc-en-ciel, et avec des couleurs qui suivent naturellement l'aurore, la journée, le
 coucher de soleil et la nuit.
+
+**Prototype en place** — la solution recommandée ci-dessous a été implémentée dans
+`src/core/sky/PaintSkyDome.tsx` et `src/core/sky/skyAtmosphere.ts`, puis montée depuis
+`src/core/DynamicSky.tsx`. Elle reste désactivable via `F2` > Ciel > `Ciel peinture actif`.
 
 #### Résumé du rendu actuel
 
@@ -391,9 +396,10 @@ coucher de soleil et la nuit.
 - Le cycle temps vient de `src/gameplay/time/` : `gameTimeStore.ts` avance un jour en 1 h réelle,
   `getSkyColors()` interpole 4 palettes, `celestialCycle.ts` calcule soleil, lune, étoiles et
   visibilité des nuages.
-- Le brouillard (`TimeFog.tsx`) reprend la couleur de fog issue de `getSkyColors()`.
-- La lumière (`Lights.tsx`) suit aussi l'heure, mais avec ses propres courbes/couleurs. Il n'existe
-  pas encore une source unique qui renvoie toute l'ambiance.
+- Le brouillard (`TimeFog.tsx`) reprend maintenant la couleur/distance de fog issue de
+  `getSkyAtmosphere(totalMinutes)`, avec dosage `F2`.
+- La lumière (`Lights.tsx`) et les nuages (`DynamicSky.tsx`) lisent aussi `getSkyAtmosphere(...)` :
+  la source unique d'ambiance pilote skydome, fog, lumières globales, nuages et particules rares.
 - Les shaders personnalisés sont très limités aujourd'hui : principalement `toonGradient.ts` pour
   `MeshToonMaterial`. Il n'y a pas de `ShaderMaterial` de ciel ni de chaîne de post-traitement active.
 
@@ -418,7 +424,8 @@ La solution doit rester modulaire et désactivable. Forme recommandée :
 3. déplacer les données artistiques vers un module dédié, par exemple `src/core/sky/skyPalettes.ts`
    ou `src/gameplay/time/skyAtmosphere.ts`, pour séparer palettes, paramètres horaires et rendu ;
 4. exposer une fonction pure du type `getSkyAtmosphere(totalMinutes)` qui renvoie palette, opacité,
-   échelle de formes, douceur, vitesse, intensité horizon/zenith, halos ;
+   échelle de formes, douceur, vitesse, intensité horizon/zenith, halos, fog, lumières globales,
+   teinte des nuages et particules rares ;
 5. laisser le shader ou le générateur visuel consommer uniquement ces paramètres et le temps ;
 6. prévoir un flag DEV/prototype `enabled` pour revenir instantanément au ciel actuel.
 
@@ -441,10 +448,10 @@ les formes ne sont pas assez rondes.
 | Ajouter des couches de sprites/metaballs sur le ciel actuel | Très contrôlable artistiquement, proche du système de nuages existant | Plus de draw calls/transparence, risque d'effet collage, transitions de forme moins élégantes |
 | Ajouter un post-process ou fullscreen pass | Puissant pour halos/exposition/bloom plus tard | Pas de chaîne postprocess aujourd'hui, risque de chantier trop large, peut contrarier le rendu cell-shading |
 
-#### Solution recommandée
+#### Solution retenue
 
-Pour un prototype minimal, la meilleure piste est un **skydome WebGL optionnel avec ShaderMaterial**,
-alimenté par `getSkyAtmosphere(totalMinutes)` et monté sans supprimer `DynamicSky`.
+Le prototype utilise un **skydome WebGL optionnel avec ShaderMaterial**, alimenté par
+`getSkyAtmosphere(totalMinutes)` et monté sans supprimer `DynamicSky`.
 
 Pourquoi : c'est l'approche la plus proche de l'intention `SkyColor = F(ViewDirection, DayProgress)`,
 elle permet des formes fluides et continues, elle évite de multiplier les sprites transparents, et
@@ -512,6 +519,11 @@ Noms proposés pour le menu DEV, avec descriptions à écrire dans le schéma :
 | `sky.paint.zenithIntensity` | Intensité zénith | Force des couleurs en haut du ciel. |
 | `sky.paint.sunHaloIntensity` | Halo soleil | Intensité du halo solaire stylisé. |
 | `sky.paint.moonHaloIntensity` | Halo lune | Intensité du halo lunaire stylisé. |
+| `sky.paint.materialTint` | Teinte ambiance | Force de la teinte horaire sur les lumières globales. |
+| `sky.paint.fogIntensity` | Densité fog | Densité du fog coloré selon l'heure. |
+| `sky.paint.cloudTint` | Teinte nuages | Intégration colorimétrique des sprites de nuages. |
+| `sky.paint.particleIntensity` | Poussières air | Intensité des particules atmosphériques rares. |
+| `sky.paint.horizonGlowIntensity` | Halo horizon | Force du halo horizontal quand le soleil est bas. |
 
 Les palettes `DawnPalette`, `DayPalette`, `SunsetPalette`, `NightPalette` doivent rester dans une
 structure artistique dédiée plutôt que comme simples nombres dans `F2`, sauf si le panneau évolue
@@ -522,7 +534,7 @@ plus tard pour éditer proprement des couleurs.
 - **Risques** : coût shader plein écran, incohérence avec les sprites de nuages existants, besoin de
   QA visuelle en jeu par l'humain, et tentation de transformer le prototype en refonte complète.
 - **Étiquettes** : Priorité importante · Horizon moyen terme · Nature visuel + architecture +
-  outil de dev · État prototype nécessaire
+  outil de dev · État prototype en place
 
 ---
 

@@ -6,15 +6,17 @@ import { SKY_TUNING_DEFAULTS, type SkyTuning } from '../core/sky/skyAtmosphere'
 import type {
   CameraTuning,
   DeepPartial,
+  DevSavedPreset,
   DevTuningOverrides,
   InventoryTuning,
   PlayerTuning,
   VehicleKind,
   VehicleTuning,
 } from './devTuningTypes'
-import { mergeDeep, pruneEmpty, setPathValue } from './devTuningUtils'
+import { deletePathValue, getPathValue, mergeDeep, pruneEmpty, setPathValue } from './devTuningUtils'
 
 const STORAGE_KEY = 'pls.dev-tuning.overrides.v1'
+const SAVED_PRESETS_KEY = 'pls.dev-tuning.saved-presets.v1'
 const PROJECT_TUNING_URL = '/dev/dev-tuning.json'
 
 const CAMERA_DEFAULTS: CameraTuning = {
@@ -28,19 +30,50 @@ const INVENTORY_DEFAULTS: InventoryTuning = {
   MAX_CARRY_WEIGHT: 18,
 }
 
+/**
+ * Valeurs d'origine ecrites dans le code (`carConfig.ts`, `playerConfig.ts`...).
+ * C'est la reference « valeur par defaut » affichee dans le panneau, et la cible
+ * du bouton « revenir a la valeur d'origine ».
+ */
+const BASE_VALUES = {
+  player: PLAYER,
+  vehicles: { car: CAR, scooter: SCOOTER },
+  camera: CAMERA_DEFAULTS,
+  inventory: INVENTORY_DEFAULTS,
+  sky: SKY_TUNING_DEFAULTS,
+} as const
+
 interface DevTuningState {
   isOpen: boolean
   projectOverrides: DevTuningOverrides
   localOverrides: DevTuningOverrides
   overrides: DevTuningOverrides
   projectStatus: 'idle' | 'loaded' | 'missing' | 'error'
+  /** Photo des overrides locaux prise a l'ouverture du panneau : sert au avant / apres. */
+  sessionBaseline: DevTuningOverrides
+  /** Mode « avant / apres » : le jeu tourne temporairement avec les valeurs d'avant. */
+  compareMode: boolean
+  savedPresets: DevSavedPreset[]
   toggleOpen: () => void
   setOpen: (isOpen: boolean) => void
   setNumber: (path: string, value: number) => void
+  /** Pose plusieurs valeurs d'un coup (prereglages). */
+  setNumbers: (values: Record<string, number>) => void
+  /** Remet un reglage a sa valeur d'origine. */
+  resetPath: (path: string) => void
+  /** Remet a l'origine tous les reglages d'une liste (une categorie, un onglet). */
+  resetPaths: (paths: string[]) => void
   resetLocal: () => void
+  /** Annule tout ce qui a ete change depuis l'ouverture du panneau. */
+  revertSession: () => void
+  /** Bascule entre les valeurs d'avant l'ouverture et les valeurs en cours. */
+  toggleCompare: () => void
   importJson: (json: string) => void
   exportJson: () => string
   loadProjectTuning: () => Promise<void>
+  saveUserPreset: (name: string) => void
+  applyUserPreset: (name: string) => void
+  deleteUserPreset: (name: string) => void
 }
 
 export const useDevTuningStore = create<DevTuningState>((set, get) => ({
@@ -49,16 +82,27 @@ export const useDevTuningStore = create<DevTuningState>((set, get) => ({
   localOverrides: loadLocalOverrides(),
   overrides: loadLocalOverrides(),
   projectStatus: 'idle',
-  toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
-  setOpen: (isOpen) => set({ isOpen }),
-  setNumber: (path, value) =>
+  sessionBaseline: loadLocalOverrides(),
+  compareMode: false,
+  savedPresets: loadSavedPresets(),
+  toggleOpen: () => get().setOpen(!get().isOpen),
+  setOpen: (isOpen) => {
+    if (get().compareMode) get().toggleCompare()
+    set((state) => ({ isOpen, sessionBaseline: isOpen ? state.localOverrides : state.sessionBaseline }))
+  },
+  setNumber: (path, value) => set((state) => applyLocal(state, setPathValue(state.localOverrides as Record<string, unknown>, path, value))),
+  setNumbers: (values) =>
     set((state) => {
-      const localOverrides = sanitizeOverrides(setPathValue(state.localOverrides as Record<string, unknown>, path, value))
-      saveLocalOverrides(localOverrides)
-      return {
-        localOverrides,
-        overrides: mergeDeep(state.projectOverrides, localOverrides),
-      }
+      let next = state.localOverrides as Record<string, unknown>
+      for (const [path, value] of Object.entries(values)) next = setPathValue(next, path, value)
+      return applyLocal(state, next)
+    }),
+  resetPath: (path) => set((state) => applyLocal(state, clearOne(state.localOverrides as Record<string, unknown>, path))),
+  resetPaths: (paths) =>
+    set((state) => {
+      let next = state.localOverrides as Record<string, unknown>
+      for (const path of paths) next = clearOne(next, path)
+      return applyLocal(state, next)
     }),
   resetLocal: () => {
     saveLocalOverrides({})
@@ -67,14 +111,24 @@ export const useDevTuningStore = create<DevTuningState>((set, get) => ({
       overrides: state.projectOverrides,
     }))
   },
+  revertSession: () => {
+    pendingCompare = null
+    set((state) => ({ ...applyLocal(state, state.sessionBaseline as Record<string, unknown>), compareMode: false }))
+  },
+  toggleCompare: () => {
+    const state = get()
+    if (state.compareMode) {
+      const restored = pendingCompare ?? state.localOverrides
+      pendingCompare = null
+      set({ ...applyLocal(state, restored as Record<string, unknown>), compareMode: false })
+      return
+    }
+    pendingCompare = state.localOverrides
+    set({ ...applyLocal(state, state.sessionBaseline as Record<string, unknown>, false), compareMode: true })
+  },
   importJson: (json) => {
     const parsed = JSON.parse(json) as DevTuningOverrides
-    const localOverrides = sanitizeOverrides(parsed)
-    saveLocalOverrides(localOverrides)
-    set((state) => ({
-      localOverrides,
-      overrides: mergeDeep(state.projectOverrides, localOverrides),
-    }))
+    set((state) => applyLocal(state, sanitizeOverrides(parsed) as Record<string, unknown>))
   },
   exportJson: () => JSON.stringify(get().overrides, null, 2),
   loadProjectTuning: async () => {
@@ -104,6 +158,26 @@ export const useDevTuningStore = create<DevTuningState>((set, get) => ({
       }))
     }
   },
+  saveUserPreset: (name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const entry: DevSavedPreset = { name: trimmed, createdAt: Date.now(), overrides: get().overrides }
+    const savedPresets = [...get().savedPresets.filter((item) => item.name !== trimmed), entry].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+    saveSavedPresets(savedPresets)
+    set({ savedPresets })
+  },
+  applyUserPreset: (name) => {
+    const entry = get().savedPresets.find((item) => item.name === name)
+    if (!entry) return
+    set((state) => applyLocal(state, sanitizeOverrides(entry.overrides) as Record<string, unknown>))
+  },
+  deleteUserPreset: (name) => {
+    const savedPresets = get().savedPresets.filter((item) => item.name !== name)
+    saveSavedPresets(savedPresets)
+    set({ savedPresets })
+  },
 }))
 
 export function getPlayerTuning(): PlayerTuning {
@@ -125,6 +199,50 @@ export function getInventoryTuning(): InventoryTuning {
 
 export function getSkyTuning(): SkyTuning {
   return mergeDeep(SKY_TUNING_DEFAULTS, useDevTuningStore.getState().overrides.sky)
+}
+
+/** Valeur d'origine (celle du code) pour un chemin de reglage. */
+export function getBaseValue(path: string): number | undefined {
+  const value = getPathValue(BASE_VALUES, path)
+  return typeof value === 'number' ? value : undefined
+}
+
+/** Valeur active, overrides projet + locaux appliques. */
+export function getCurrentValue(path: string, overrides: DevTuningOverrides): number | undefined {
+  const override = getPathValue(overrides, path)
+  if (typeof override === 'number') return override
+  return getBaseValue(path)
+}
+
+/**
+ * Sauvegarde temporaire des reglages en cours pendant un « avant / apres ».
+ * Hors module d'etat : c'est un detail d'implementation du bouton comparer.
+ */
+let pendingCompare: DevTuningOverrides | null = null
+
+/**
+ * Etat commun a tous les `set` qui modifient les overrides locaux.
+ * `persist` a `false` pendant le mode comparaison : on ne veut pas ecraser le
+ * localStorage avec les valeurs d'avant.
+ */
+function applyLocal(state: DevTuningState, nextLocal: Record<string, unknown>, persist = true) {
+  const localOverrides = sanitizeOverrides(nextLocal)
+  if (persist) saveLocalOverrides(localOverrides)
+  return {
+    localOverrides,
+    overrides: mergeDeep(state.projectOverrides, localOverrides),
+  }
+}
+
+/**
+ * Efface un override. Cas particulier des tableaux (`COMBO_DURATIONS.0`) : on ne
+ * peut pas y laisser un trou, donc on y REECRIT la valeur d'origine.
+ */
+function clearOne(source: Record<string, unknown>, path: string): Record<string, unknown> {
+  const isArrayIndex = /\.\d+$/.test(path)
+  if (!isArrayIndex) return deletePathValue(source, path)
+  const base = getBaseValue(path)
+  return base === undefined ? source : setPathValue(source, path, base)
 }
 
 function sanitizeOverrides(value: unknown): DevTuningOverrides {
@@ -236,6 +354,18 @@ const VEHICLE_NUMBER_KEYS = [
   'COLLISION_HALF_LENGTH',
   'COLLISION_HALF_WIDTH',
   'MOUNT_RANGE',
+  'LIMITER_MIN_SPEED',
+  'LIMITER_FADE_SPEED',
+  'HANDBRAKE_FORCE',
+  'HANDBRAKE_REAR_GRIP',
+  'DRIFT_STEER_AUTHORITY',
+  'SURFACE_GRIP_ROAD',
+  'SURFACE_GRIP_OFFROAD',
+  'AIR_PITCH_TORQUE',
+  'AIR_ROLL_TORQUE',
+  'AIR_MAX_RATE',
+  'AIR_LEVEL_ASSIST',
+  'FLIP_RECOVERY_HOLD',
 ] as const
 
 const ENGINE_NUMBER_KEYS = [
@@ -291,6 +421,30 @@ function loadLocalOverrides(): DevTuningOverrides {
 function saveLocalOverrides(overrides: DevTuningOverrides) {
   if (typeof localStorage === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides))
+}
+
+function loadSavedPresets(): DevSavedPreset[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(SAVED_PRESETS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((entry): entry is DevSavedPreset => isObject(entry) && typeof entry.name === 'string')
+      .map((entry) => ({
+        name: entry.name,
+        createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : 0,
+        overrides: sanitizeOverrides(entry.overrides),
+      }))
+  } catch {
+    return []
+  }
+}
+
+function saveSavedPresets(presets: DevSavedPreset[]) {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(presets))
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

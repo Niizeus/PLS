@@ -190,7 +190,7 @@ changer le feeling véhicule, profiler en priorité le nombre de colliders actif
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
 | Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. |
-| Un paramètre de gameplay à régler en live | `src/devtools/devTuningSchema.ts`, puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/import un JSON d'overrides. |
+| Un paramètre de gameplay à régler en live | `src/devtools/schema/` (le fichier de la famille concernée : `vehicleFields.ts`, `playerFields.ts`, `worldFields.ts`), puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/importe un JSON d'overrides. ⚠️ Chaque entrée doit porter un **nom clair en français**, une description, l'effet d'une valeur plus basse/plus haute, et son niveau (`simple` / `advanced`). |
 | Un probleme de performance a diagnostiquer | `F9` en DEV lance/arrete une capture perf. Le rapport JSON est ecrit dans `public/dev/perf-reports/` via `vite/perfReportPlugin.ts`. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
@@ -213,12 +213,33 @@ Le jeu principal monte un panneau de reglages dev-only dans `src/devtools/`. Il 
 Vite DEV (`import.meta.env.DEV`) et sert a tester vite les valeurs de feeling sans recompiler :
 
 - `DevToolsControls.tsx` ecoute `F2` pour ouvrir/fermer le panneau, et `Escape` pour fermer.
-- `DevToolsPanel.tsx` affiche les onglets Joueur, Voiture, Scooter, Camera, Inventaire, Ciel,
-  Stats, Temps et JSON.
-- `devTuningSchema.ts` est le registre des reglages exposes : label, chemin JSON, bornes, pas.
+- `DevToolsPanel.tsx` est la coquille : onglets Voiture, Scooter, Joueur, Camera, Inventaire, Ciel,
+  Stats, Temps, Mes reglages et JSON, plus le selecteur **Simple / Avance**, la recherche, l'aide
+  contextuelle et les boutons avant/apres.
+- `panel/` contient les briques d'interface : `TuningSection.tsx` (un onglet de reglages),
+  `TuningGroupSection.tsx` (une categorie pliable), `TuningFieldRow.tsx` (un reglage),
+  `VehicleSchematic.tsx` (le plan de vehicule cliquable), `PresetSelect.tsx`, `HelpPanel.tsx`,
+  `SavedPresetsTools.tsx`, `StatsTools.tsx`, `TimeTools.tsx`, `JsonTools.tsx` et
+  `devPanelStyles.ts`.
+- `devTuningSchema.ts` agrege le registre des reglages ; le contenu vit dans `schema/`
+  (`vehicleFields.ts`, `playerFields.ts`, `worldFields.ts`). Chaque entree porte : nom clair,
+  description, effet d'une valeur plus basse / plus haute, cas d'usage, avertissement eventuel,
+  unite, lecture secondaire (m/s -> km/h, rad -> deg), bornes, pas, categorie et niveau
+  (`simple` / `advanced`).
+- `devTuningGroups.ts` definit les categories (comportement general, moteur, vitesse maximale,
+  freinage, direction, adherence, drift, suspension, controle aerien, chocs...) et la **zone du
+  schema de vehicule** qui les ouvre.
+- `devTuningPresets.ts` definit les prereglages (style de conduite, adherence, suspension, drift,
+  controle aerien). Ils sont **calcules a partir des valeurs d'origine du vehicule**, donc « arcade »
+  veut dire la meme chose pour la voiture et pour le scooter. Des qu'une valeur est retouchee a la
+  main, le menu deroulant repasse sur « Personnalise ».
 - `devTuningStore.ts` charge d'abord `public/dev/dev-tuning.json`, ajoute les overrides locaux
   sauvegardes en `localStorage`, puis expose les fonctions de lecture (`getPlayerTuning()`,
   `getVehicleTuning(...)`, `getCameraTuning()`, `getSkyTuning()`, etc.) pour les boucles de jeu.
+  Il gere aussi le retour a la valeur d'origine (`resetPath` / `resetPaths`, la reference etant la
+  valeur ecrite dans le code), l'annulation des changements de la session (`revertSession`), le mode
+  avant / apres (`toggleCompare`) et les prereglages nommes de l'utilisateur (`savedPresets`,
+  stockes dans le navigateur uniquement).
 - `public/dev/dev-tuning.json` est le fichier officiel de reglages DEV du projet. Il peut rester
   vide (`{}`) tant qu'aucun reglage n'est valide.
 - `public/dev/dev-tuning.example.json` donne un exemple de fichier d'overrides partageable.
@@ -232,9 +253,12 @@ projet. `Recharger projet` relit `public/dev/dev-tuning.json` sans relancer Vite
 
 Regle d'ajout : on expose seulement un parametre utile a regler pendant le dev. Si une valeur est
 juste interne, derivee, ou dangereuse sans contexte, elle reste dans son module d'origine. Pour ajouter
-un parametre deja lu par le gameplay, ajoute une entree dans `DEV_TUNING_FIELDS`. Pour un nouveau
-systeme, cree d'abord son type/default clair, puis ajoute une fonction de lecture equivalent a
-`getPlayerTuning()`.
+un parametre deja lu par le gameplay, ajoute une entree dans le fichier `schema/` correspondant, avec
+**un nom en francais comprehensible sans lire le code** (jamais le nom de la variable), une
+description, l'effet d'une valeur plus basse et plus haute, sa categorie et son niveau. Si la valeur
+est un nouveau champ de vehicule, ajoute aussi sa cle dans `VEHICLE_NUMBER_KEYS` (`devTuningStore.ts`),
+sinon le sanitizer la jettera. Pour un nouveau systeme, cree d'abord son type/default clair, puis
+ajoute une fonction de lecture equivalent a `getPlayerTuning()`.
 
 Le ciel procedural peint expose ses reglages DEV sous `sky.paint.*` : activation, opacite, echelles
 de formes, deformation, douceur, etirement, vitesse, intensites horizon/zenith, halos, teinte globale
@@ -244,12 +268,12 @@ coherente plutot que des couleurs isolees dans le JSON. `Lights.tsx`, `TimeFog.t
 et `PaintSkyDome.tsx` lisent cette meme source afin que ciel, brouillard, lumiere et nuages changent
 ensemble selon l'heure.
 
-> 💡 **Une refonte ergonomique du panneau est souhaitee** (noms clairs au lieu des noms de variables,
-> descriptions, categories, prereglages, mode simple / mode avance, schema de voiture cliquable,
-> avant/apres). Le point d'entree serait `devTuningSchema.ts`, qui devrait porter descriptions, unites
-> et categories. Idee non specifiee, a ne pas implementer sans demande :
-> [07 - Backlog d'idees § Menu F2](07-BACKLOG-IDEES.md#-4-refonte-ergonomique-du-menu-f2), et la passe
-> ergonomique globale des outils au [§ 5](07-BACKLOG-IDEES.md#-5-passe-ergonomique-globale-des-outils).
+> ✅ **La refonte ergonomique du panneau est faite** (noms clairs, descriptions, categories,
+> prereglages, mode simple / avance, schema de vehicule cliquable, avant/apres, prereglages
+> enregistrables). Ce qui reste ouvert : aucun reglage d'**eclairage** ni d'**audio** de vehicule
+> n'existe encore, donc les deux zones correspondantes du schema sont affichees mais inactives.
+> La passe ergonomique globale des autres outils reste au
+> [07 - Backlog d'idees § 5](07-BACKLOG-IDEES.md#-5-passe-ergonomique-globale-des-outils).
 
 `F2` est reserve a cet outil. Les raccourcis temps restent dans `TimeDevControls.tsx` : `F6` cycle la
 vitesse, `F7` met midi, `F8` met nuit, `Shift+F9` pause/play, `F10` met l'aube, `F11` saute a la prochaine

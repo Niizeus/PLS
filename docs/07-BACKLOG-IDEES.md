@@ -545,111 +545,35 @@ plus tard pour éditer proprement des couleurs.
 
 ---
 
-## 🎛️ 4. Refonte ergonomique du menu `F2`
+## ✅ 4. Refonte ergonomique du menu `F2` — **réalisée**
 
-**Intention** — transformer un menu **technique** en outil compréhensible, visuel et agréable.
-L'objectif est qu'on puisse régler le feeling du jeu sans lire le code.
+**Intention (rappel)** — transformer un menu **technique** en outil compréhensible, visuel et
+agréable, pour régler le feeling du jeu sans lire le code.
 
-**Ce qui existe** : `src/devtools/` — `DevToolsPanel.tsx` (onglets Joueur, Voiture, Scooter, Camera,
-Inventaire, Stats, Temps, JSON), `devTuningSchema.ts` (registre : label, chemin JSON, bornes, pas),
-`devTuningStore.ts`, export/import JSON vers `public/dev/dev-tuning.json`. Détail dans
-[02 Architecture § Outil dev in-game (`F2`)](02-ARCHITECTURE.md#outil-dev-in-game-f2).
+**C'est fait.** Le détail vit maintenant dans
+[02 Architecture § Outil dev in-game (`F2`)](02-ARCHITECTURE.md#outil-dev-in-game-f2) :
 
-> 📌 Toute cette section est une refonte de **présentation**. Le point d'entrée technique est
-> `devTuningSchema.ts` : c'est lui qui devra porter les descriptions, unités, catégories et
-> préréglages. Refaire l'UI sans enrichir le schéma ne mènerait nulle part.
-
-### 4.1 Principes généraux
-
-Chaque paramètre doit avoir : un nom clair, une formulation compréhensible sans connaissance
-technique, une courte description, une indication de son effet réel en jeu, une unité quand c'est
-utile, une valeur par défaut identifiable, et un retour simple à la valeur initiale.
-
-À éviter : les noms internes de variables et les termes techniques non expliqués. Par exemple,
-plutôt que `RearGripMultiplier`, préférer **« Adhérence des roues arrière »**, avec une description
-qui dit clairement que baisser cette valeur facilite les glissades et les drifts.
-
-- **Étiquettes** : Priorité importante · Horizon après stabilisation des outils · Nature outil de dev + confort · État spec à rédiger
-
-### 4.2 Organisation visuelle de l'onglet véhicule
-
-Piste : construire l'onglet autour d'un **schéma / plan simplifié de voiture**, et organiser les
-catégories selon leur emplacement ou leur fonction :
-
-- moteur à l'avant ; roues et adhérence autour des pneus ; freinage près des roues ; suspension sur
-  les essieux ; poids au centre ; aérodynamisme autour de la carrosserie ; éclairage près des
-  phares ; audio près du klaxon ou du moteur.
-
-Le schéma ne doit **pas être décoratif** : il doit aider à comprendre quelle partie du véhicule est
-affectée. Un clic sur une zone pourrait ouvrir la catégorie associée.
-
-- **Dépend de** : un visuel (SVG de voiture vue de dessus) → **nécessite du contenu graphique**.
-- **Étiquettes** : Priorité souhaitable · Horizon après stabilisation des outils · Nature interface · État idée brute
-
-### 4.3 Regrouper les paramètres
-
-Catégories compréhensibles plutôt qu'une longue liste plate : comportement général, moteur et
-accélération, vitesse maximale, freinage, direction, adhérence, drift, suspension, contrôle aérien,
-effets visuels, sons, éclairage.
-
-- **Étiquettes** : Priorité importante · Horizon moyen terme · Nature outil de dev · État spec à rédiger
-
-### 4.4 Préréglages et menus déroulants
-
-Tous les paramètres n'ont pas besoin d'un réglage numérique précis. Pour les comportements complexes
-ou les options secondaires : des menus déroulants avec des préréglages compréhensibles.
-
-| Réglage | Préréglages possibles |
+| Point de la spec | Ce qui a été livré |
 |---|---|
-| Style de conduite | réaliste · équilibré · arcade · très arcade |
-| Adhérence | faible · normale · élevée · tout-terrain |
-| Suspension | souple · standard · sportive · rigide |
-| Drift | désactivé · léger · arcade · prononcé |
-| Contrôle aérien | faible · normal · fort |
+| 4.1 Principes généraux | Chaque réglage porte un nom clair en français, une description, l'effet d'une valeur plus basse / plus haute, un cas d'usage, une unité, sa valeur d'origine affichée et un bouton `↺` de retour. Le nom interne n'apparaît que dans le panneau d'aide, en bas. |
+| 4.2 Onglet véhicule visuel | Schéma de véhicule vu de dessus (`panel/VehicleSchematic.tsx`) : moteur à l'avant, pneus, freins, essieux, poids au centre, aéro sur les flancs, drift à l'arrière, vol au-dessus. Cliquer une zone ouvre et fait défiler jusqu'à la catégorie. |
+| 4.3 Regroupement | 10 catégories par véhicule (comportement général, moteur, vitesse max, freinage, direction, adhérence, drift, suspension, contrôle aérien, chocs), 4 pour le joueur, 2 pour le ciel. |
+| 4.4 Préréglages | Menus déroulants : style de conduite, adhérence, suspension, drift, contrôle aérien. Ils sont calculés à partir des valeurs d'origine du véhicule. Dès qu'une valeur est retouchée à la main, le menu affiche « Personnalisé » — l'interface ne ment pas. |
+| 4.5 Simple / avancé | Sélecteur en haut à droite, **mode simple par défaut**. Chaque réglage porte un niveau dans `schema/`. |
+| 4.6 Aide contextuelle | Panneau d'aide à droite, mis à jour au survol : ce que ça change, valeur plus basse, valeur plus haute, quand s'en servir, avertissement quand plusieurs réglages sont liés (`⚠`). |
+| 4.7 Prévisualisation et comparaison | Tout s'applique en direct. Bouton **« Comparer avant / après »** (rejoue les valeurs d'avant l'ouverture, réglages bloqués le temps de comparer), **« Annuler mes changements »**, `↺` par réglage et par catégorie, **« Tout remettre par défaut »**, et onglet **⭐ Mes réglages** pour enregistrer des configurations nommées. |
 
-Un préréglage peut modifier **plusieurs valeurs techniques d'un coup**. Le réglage fin reste
-disponible sur les paramètres réellement importants, ou dans un mode avancé.
+### Ce qui reste ouvert
 
-- **À étudier** : que devient un préréglage quand on modifie ensuite une valeur à la main ?
-  (état « personnalisé » à afficher, sinon l'UI mentira).
-- **Étiquettes** : Priorité importante · Horizon moyen terme · Nature outil de dev · État à étudier
-
-### 4.5 Mode simple et mode avancé
-
-- **Mode simple** (par défaut) : paramètres principaux, préréglages, descriptions courtes, interface
-  peu chargée, valeurs faciles à comprendre.
-- **Mode avancé** : réglages numériques précis, paramètres secondaires, valeurs techniques, contrôle
-  détaillé pour le développement et les tests.
-
-- **Dépend de** : un champ « niveau » dans `devTuningSchema.ts`.
-- **Étiquettes** : Priorité souhaitable · Horizon moyen terme · Nature outil de dev · État spec à rédiger
-
-### 4.6 Descriptions et aide contextuelle
-
-Ajouter du contexte **sans surcharger l'écran** : infobulle au survol, petite icône d'aide, panneau
-de description qui suit la sélection, exemples concrets, aperçu de l'effet, avertissement quand
-plusieurs paramètres sont liés, mise en évidence des conséquences importantes.
-
-Une description utile explique quatre choses :
-
-1. ce que le paramètre modifie ;
-2. ce que produit une valeur **plus faible** ;
-3. ce que produit une valeur **plus élevée** ;
-4. dans quels cas il est utile.
-
-- **Étiquettes** : Priorité importante · Horizon moyen terme · Nature documentation + interface · État spec à rédiger
-
-### 4.7 Prévisualisation et comparaison
-
-Quand c'est possible : prévisualisation directe, application immédiate temporaire, comparaison
-avant/après, bouton pour annuler les changements, bouton pour restaurer les valeurs par défaut,
-préréglages enregistrables.
-
-Particulièrement pertinent pour les véhicules, l'éclairage, les effets et les outils de construction.
-
-- **Note** : « Reset local » et « Recharger projet » existent déjà et couvrent une partie du besoin ;
-  ce qui manque est le **avant/après** et les préréglages nommés.
-- **Étiquettes** : Priorité souhaitable · Horizon après stabilisation des outils · Nature outil de dev · État idée brute
+- **Éclairage et audio des véhicules** : aucun réglage n'existe encore côté gameplay (phares, klaxon,
+  son moteur). Les deux zones du schéma sont dessinées mais inactives, et le disent au survol. À
+  brancher le jour où ces systèmes existent.
+- **Partage des préréglages nommés** : ils vivent dans le `localStorage` du navigateur. Pour passer
+  un réglage à l'autre dev, il faut toujours l'onglet JSON puis `public/dev/dev-tuning.json`.
+- **Prévisualisation « avant / après » côte à côte** (deux valeurs affichées en même temps) : non
+  faite, on bascule de l'une à l'autre.
+- **Étiquettes** : Priorité importante · État livré · Reste : éclairage/audio véhicule, partage des
+  préréglages
 
 ---
 

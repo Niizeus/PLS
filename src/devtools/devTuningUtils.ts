@@ -42,6 +42,28 @@ export function setPathValue<T extends Record<string, unknown>>(source: T, path:
   return next
 }
 
+/**
+ * Retire une valeur d'un arbre d'overrides (retour a la valeur d'origine).
+ * Les objets devenus vides sont nettoyes au passage par `pruneEmpty`.
+ */
+export function deletePathValue<T extends Record<string, unknown>>(source: T, path: string): T {
+  const next = cloneValue(source)
+  const segments = path.split('.')
+  let cursor: Record<string, unknown> = next
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]
+    const existing = cursor[segment]
+    if (Array.isArray(existing)) cursor[segment] = [...existing]
+    else if (isPlainObject(existing)) cursor[segment] = { ...existing }
+    else return next // rien a supprimer sur ce chemin
+    cursor = cursor[segment] as Record<string, unknown>
+  }
+
+  delete cursor[segments[segments.length - 1]]
+  return next
+}
+
 export function pruneEmpty<T>(value: T): T | undefined {
   if (Array.isArray(value)) return value.length > 0 ? value : undefined
   if (!isPlainObject(value)) return value

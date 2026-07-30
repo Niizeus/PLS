@@ -235,6 +235,8 @@ Un **premier prototype jouable** est en place. Il applique la règle « le tél�
 systèmes existants, il ne duplique jamais les données ».
 
 - **Touche `P`** : sortir / ranger le téléphone. **`Échap`** : revenir à l'accueil, puis le ranger.
+- **Le curseur revient** dès qu'on le sort (et il ne se fait pas reprendre par un clic à côté),
+  comme pour le panneau dev `F2`. Voir `src/gameplay/input/pointerLock.ts`.
 - **Le jeu ne se met PAS en pause** : c'est un objet du monde, pas un menu. La ville continue de
   tourner, et le téléphone reste utilisable en voiture (il se décale à gauche du tableau de bord).
 - Il s'affiche **en bas à droite**, sans masquer les stats (à gauche) ni la minimap (en haut à

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useVehicleTelemetryStore } from '../../entities/vehicles/vehicleTelemetryStore'
 import { KEY } from '../../gameplay/input/keyMap'
+import { setCursorUiOpen } from '../../gameplay/input/pointerLock'
 import { usePhoneStore } from '../../gameplay/phone/phoneStore'
 import {
   formatGameTime,
@@ -53,6 +54,12 @@ export default function PhoneOverlay() {
   // d'un coup au lieu de redescendre dans la poche.
   const [mounted, setMounted] = useState(isOpen)
   const [shown, setShown] = useState(false)
+
+  // Téléphone sorti = curseur rendu au joueur (et pas repris au premier clic).
+  useEffect(() => {
+    setCursorUiOpen('phone', isOpen)
+    return () => setCursorUiOpen('phone', false)
+  }, [isOpen])
 
   useEffect(() => {
     if (isOpen) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { MOUSE } from './keyMap'
+import { isCursorUiOpen } from './pointerLock'
 import { useCameraStore } from '../../core/cameraStore'
 import { FRAME } from '../../core/framePriority'
 
@@ -35,9 +36,12 @@ export function useMouse() {
       // On ne réagit QUE si le clic vise le canvas du jeu (le 1er). Sinon (carte
       // ouverte, HUD...) on laisse le curseur tranquille — il ne doit pas disparaître.
       if (e.target !== canvas()) return
-      // Pas encore capturé : ce clic sert juste à capturer le curseur.
+      // Pas encore capturé : ce clic sert juste à capturer le curseur... sauf si
+      // une interface cliquable est ouverte (téléphone, panneau dev). Sinon un
+      // clic à côté du téléphone ferait disparaître le curseur alors qu'on est
+      // en train de s'en servir.
       if (!isLocked()) {
-        canvas()?.requestPointerLock?.()
+        if (!isCursorUiOpen()) canvas()?.requestPointerLock?.()
         return
       }
       if (e.button === MOUSE.ATTACK) mouse.current.attackQueued = true

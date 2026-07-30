@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { setCursorUiOpen } from '../gameplay/input/pointerLock'
 import { useDevTuningStore } from './devTuningStore'
 
 export default function DevToolsControls() {
@@ -19,8 +20,19 @@ export default function DevToolsControls() {
       }
     }
 
+    // Panneau ouvert = curseur rendu au joueur. On s'abonne au store plutôt que
+    // de le faire dans le raccourci F2 : le panneau se ferme aussi par son propre
+    // bouton, et le curseur doit suivre dans tous les cas.
+    const unsubscribe = useDevTuningStore.subscribe((state) =>
+      setCursorUiOpen('devtools', state.isOpen),
+    )
+
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      unsubscribe()
+      setCursorUiOpen('devtools', false)
+    }
   }, [])
 
   return null

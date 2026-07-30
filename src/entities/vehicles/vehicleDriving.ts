@@ -127,6 +127,45 @@ export interface VehicleDriveConfig {
   COLLISION_HALF_LENGTH: number
   /** Demi-largeur de la caisse de collision (m). */
   COLLISION_HALF_WIDTH: number
+
+  // --- Limiteur de vitesse (touche A) ---
+  /** En dessous de cette vitesse (m/s), l'enclenchement du limiteur est refusé. */
+  LIMITER_MIN_SPEED: number
+  /**
+   * Largeur de la bande d'approche (m/s) sur laquelle les gaz se referment.
+   * C'est ELLE qui rend le limiteur doux : plus elle est large, plus la coupure
+   * est progressive. Une valeur nulle donnerait un mur, exactement ce qu'on ne
+   * veut pas.
+   */
+  LIMITER_FADE_SPEED: number
+
+  // --- Frein à main / drift (Espace) ---
+  /** Force de freinage du frein à main, sur l'essieu ARRIÈRE uniquement (N). */
+  HANDBRAKE_FORCE: number
+  /** Part d'adhérence latérale qui reste à l'arrière, frein à main tiré (0-1). */
+  HANDBRAKE_REAR_GRIP: number
+  /**
+   * Part d'autorité que garde l'asservissement de lacet pendant un drift (0-1).
+   * À 1, la voiture se remet droite toute seule et le drift est impossible ;
+   * à 0, elle part en toupie. Entre les deux : une glisse rattrapable.
+   */
+  DRIFT_STEER_AUTHORITY: number
+  /** Multiplicateur d'adhérence sur bitume (référence : 1). */
+  SURFACE_GRIP_ROAD: number
+  /** Multiplicateur d'adhérence hors bitume (terre, herbe) : ça glisse plus. */
+  SURFACE_GRIP_OFFROAD: number
+
+  // --- Contrôle en l'air / remise sur les roues ---
+  /** Couple de tangage disponible en l'air (N·m par kg de masse). */
+  AIR_PITCH_TORQUE: number
+  /** Couple de roulis disponible en l'air (N·m par kg de masse). */
+  AIR_ROLL_TORQUE: number
+  /** Vitesse de rotation maxi que le joueur peut atteindre en l'air (rad/s). */
+  AIR_MAX_RATE: number
+  /** Aide au rétablissement : ramène l'assiette à plat quand on ne pilote pas. */
+  AIR_LEVEL_ASSIST: number
+  /** Durée d'appui sur le frein à main pour se remettre sur les roues (s). */
+  FLIP_RECOVERY_HOLD: number
 }
 
 export interface VehicleDriveState {

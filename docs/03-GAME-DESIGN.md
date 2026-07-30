@@ -398,10 +398,71 @@ Le joueur peut utiliser ou voler :
 Même si les sorties routières sont bloquées par les travaux, les véhicules restent essentiels pour
 circuler, fuir la police, faire des missions ou provoquer le chaos.
 
-> 💡 **Pistes de conduite pas encore tranchées** (limitateur de vitesse, frein à main et drift,
-> effets de pneus, contrôle du véhicule dans les airs, klaxon, phares, radio éteinte) :
-> [07 - Backlog d'idées § Véhicules](07-BACKLOG-IDEES.md#-1-véhicules-et-qualité-de-conduite).
-> Ce sont des **idées**, pas des décisions : rien n'est à coder tant que ce n'est pas spécifié ici.
+### Commandes de conduite
+
+⚠️ `src/gameplay/input/keyMap.ts` travaille en **`event.code`** (position physique de la touche),
+pas en lettre imprimée. Sur AZERTY, le **A** est `KeyQ` — `KeyA` étant déjà le « Q » du ZQSD. Toute
+nouvelle touche se déclare dans `keyMap.ts` **et** dans le rappel `src/ui/ControlsHint.tsx`.
+
+| Touche | `event.code` | Effet |
+|--------|--------------|-------|
+| ZQSD | `KeyW/A/S/D` | Conduire ; **en l'air** : Z pique du nez, S cabre, Q/D font tourner la caisse |
+| Espace | `Space` | Frein à main ; **maintenu sur le toit** : remet la voiture sur ses roues |
+| A | `KeyQ` | Limiteur de vitesse (bascule) |
+| F | `KeyF` | Klaxon (maintien) |
+| L | `KeyL` | Phares (bascule) |
+| R | `KeyR` | Station de radio suivante — le dernier cran est **poste éteint** |
+
+**Limiteur de vitesse (A).** Premier appui : la vitesse **actuelle** devient le plafond. Deuxième
+appui : coupé. En dessous de `LIMITER_MIN_SPEED` (25 km/h) l'enclenchement est refusé. Le limiteur
+ne coupe pas les gaz d'un coup : la poussée moteur se referme progressivement sur la bande
+`LIMITER_FADE_SPEED` (~11 km/h) qui précède le plafond, ce qui donne une arrivée sans à-coup.
+⚠️ Il n'agit **que sur la poussée moteur** : freins, marche arrière et frein moteur restent entiers,
+sinon on ne pourrait plus ralentir. Témoin discret « LIM xxx » sous le compteur.
+
+**Frein à main et drift (Espace).** Le frein à main freine l'essieu **arrière uniquement**
+(`HANDBRAKE_FORCE`) et lui retire l'essentiel de son adhérence latérale (`HANDBRAKE_REAR_GRIP`).
+Le survirage n'est pas scripté : il **émerge** du déséquilibre avant/arrière (voir « Adhérence par
+essieu » ci-dessous). Pendant la glisse, l'asservissement de trajectoire ne garde que
+`DRIFT_STEER_AUTHORITY` de son autorité — sans ça il remettrait la voiture droite instantanément et
+le frein à main ne serait qu'un frein. Le résultat dépend donc bien de la vitesse, de l'angle de
+braquage **et** du sol (`SURFACE_GRIP_ROAD` / `SURFACE_GRIP_OFFROAD`).
+
+**Adhérence par essieu.** L'adhérence latérale n'est plus une force unique au centre de gravité :
+elle est répartie **moitié avant / moitié arrière** et appliquée aux essieux. Hors frein à main les
+deux moitiés sont égales, leurs couples s'annulent et le comportement est identique à avant. Dès que
+l'arrière décroche, le déséquilibre crée un couple de lacet — c'est tout le mécanisme du drift.
+⚠️ Ne pas revenir à une force unique au centre : une force au centre de gravité ne fait jamais
+tourner un corps, donc le drift deviendrait impossible.
+
+**Effets de pneus.** Fumée grise sur bitume, poussière beige hors bitume, traces de gomme au sol.
+Tout est piloté par les **vraies informations de contact** des suspensions Rapier — point de
+contact, normale, glissement latéral mesuré sur le corps, nature du sol — publiées dans
+`tireContactStore.ts`. Rien n'est deviné depuis la vitesse ou l'angle du volant.
+
+**Contrôle en l'air.** Roues décollées, ZQSD pilote l'assiette en **vitesse de rotation cible**
+(plafonnée par `AIR_MAX_RATE`) : réactif, mais pas de vrille instantanée ni de rotation absurde.
+Sans consigne, `AIR_LEVEL_ASSIST` ramène doucement la caisse à plat pour rattraper un saut mal
+négocié. ⚠️ Sur le toit, **aucun rayon de suspension ne touche** (ils partent vers le ciel) : la
+voiture est « en l'air » au sens du code alors qu'elle est posée. La remise sur les roues est donc
+testée **avant** le contrôle aérien, sinon on resterait bloqué à l'envers.
+
+**Klaxon (F).** Synthétisé en WebAudio (deux oscillateurs à la tierce), donc aucun fichier à charger
+et un timbre différent par véhicule. Source positionnelle (`PannerNode`) suivant le véhicule,
+oreille calée sur la caméra. Maintenir la touche **prolonge** le son au lieu d'en empiler un
+nouveau, avec un plafond de 4 s.
+
+**Phares (L).** Deux optiques `MeshBasicMaterial` (lumineuses par nature, coût nul) + deux
+`SpotLight` en `castShadow={false}`. ⚠️ Éteints, les `SpotLight` sont **démontées**, pas mises à
+`intensity={0}` : une lumière présente compte dans les uniformes de chaque matériau et force des
+recompilations de shaders. C'est le point à ne pas « simplifier ».
+
+**Radio éteinte.** Le poste coupé est un **cran du bouton R**, après la dernière station :
+R01 → … → R05 → éteinte → R01. Ce n'est pas une sixième station muette — une station a un programme,
+des jingles, une grille. Éteint, il n'y a rien à diffuser : ni musique, ni jingle, ni souffle. En
+interne c'est `currentStationId === null` **avec** une `activeSource` toujours présente (à ne pas
+confondre avec `activeSource === null`, qui veut dire « pas de poste ici », donc à pied). Le choix
+est mémorisé par véhicule : une caisse laissée éteinte le reste.
 
 **Deja en place :** un **scooter** et une **voiture Chevrolet FBX** conduisibles
 (`src/entities/vehicles/`). On s'en approche et on monte/descend avec **E** ; conduite a ZQSD

@@ -9,16 +9,38 @@ export interface ActiveRadioSource {
   id: string
 }
 
+/**
+ * 🔇 Le poste ÉTEINT est un cran du bouton comme un autre.
+ *
+ * On ne l'a pas modélisé comme une sixième « station muette » : une station a un
+ * programme, des jingles, une grille horaire. Éteint, il n'y a rien à diffuser —
+ * ni musique, ni jingle, ni souffle, ni transition. C'est donc simplement
+ * `currentStationId === null` **alors qu'une source est toujours active**, ce
+ * que `RadioAudioSystem` sait déjà traiter (il coupe le lecteur et le souffle).
+ *
+ * ⚠️ À ne pas confondre avec `activeSource === null`, qui veut dire « il n'y a
+ * pas de poste ici » (on est à pied). Le poste éteint, lui, est bien là : R le
+ * rallume sur la première station.
+ */
+export const RADIO_OFF = 'OFF' as const
+
+/** Ce qu'un véhicule a mémorisé : une station, ou le poste coupé. */
+export type RadioTuning = RadioStationId | typeof RADIO_OFF
+
 interface RadioState {
   activeSource: ActiveRadioSource | null
+  /** `null` = poste éteint (voir `RADIO_OFF`), tant qu'`activeSource` existe. */
   currentStationId: RadioStationId | null
   currentContentLabel: string | null
-  vehicleStations: Record<string, RadioStationId>
+  vehicleStations: Record<string, RadioTuning>
   volume: number
   radioFilterEnabled: boolean
-  assignStationToVehicle: (vehicleId: string) => RadioStationId
-  startVehicleRadio: (vehicleId: string) => RadioStationId
-  /** Passe à la station suivante. Ne fait rien si aucune radio ne joue. */
+  assignStationToVehicle: (vehicleId: string) => RadioTuning
+  startVehicleRadio: (vehicleId: string) => RadioStationId | null
+  /**
+   * Cran suivant du bouton. L'ordre est : R01 → … → R05 → **éteint** → R01.
+   * Ne fait rien s'il n'y a pas de poste (à pied).
+   */
   nextStation: () => RadioStationId | null
   stopRadio: (sourceId: string) => void
   setCurrentContentLabel: (label: string | null) => void
@@ -63,7 +85,11 @@ export const useRadioStore = create<RadioState>()(
         return stationId
       },
       startVehicleRadio: (vehicleId) => {
-        const stationId = get().assignStationToVehicle(vehicleId)
+        const tuning = get().assignStationToVehicle(vehicleId)
+        // Le véhicule avait été laissé poste coupé : il le reste. C'est ce qui
+        // rend l'option réellement utilisable — sinon la radio se rallumerait
+        // à chaque fois qu'on remonte dans la caisse.
+        const stationId = tuning === RADIO_OFF ? null : tuning
         set({
           activeSource: { kind: 'vehicle', id: vehicleId },
           currentStationId: stationId,
@@ -80,17 +106,22 @@ export const useRadioStore = create<RadioState>()(
        */
       nextStation: () => {
         const { activeSource, currentStationId } = get()
-        if (!activeSource || !currentStationId) return null
+        // Pas de poste du tout (à pied) : R ne doit rien allumer.
+        if (!activeSource) return null
 
-        const index = RADIO_STATION_IDS.indexOf(currentStationId)
-        const stationId = RADIO_STATION_IDS[(index + 1) % RADIO_STATION_IDS.length]
+        // Le cran « éteint » vient APRÈS la dernière station, d'où un tour de
+        // roue de longueur `stations + 1`. Poste coupé → on repart sur la 1re.
+        const wheelLength = RADIO_STATION_IDS.length + 1
+        const index = currentStationId ? RADIO_STATION_IDS.indexOf(currentStationId) : RADIO_STATION_IDS.length
+        const next = (index + 1) % wheelLength
+        const stationId = next < RADIO_STATION_IDS.length ? RADIO_STATION_IDS[next] : null
 
         set((state) => ({
           currentStationId: stationId,
           currentContentLabel: null,
           vehicleStations:
             activeSource.kind === 'vehicle'
-              ? { ...state.vehicleStations, [activeSource.id]: stationId }
+              ? { ...state.vehicleStations, [activeSource.id]: stationId ?? RADIO_OFF }
               : state.vehicleStations,
         }))
         return stationId

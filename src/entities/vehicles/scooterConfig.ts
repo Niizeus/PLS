@@ -88,6 +88,26 @@ export const SCOOTER: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   COLLISION_HALF_WIDTH: 0.3,
   /** Distance a laquelle on peut monter sur le scooter (metres). */
   MOUNT_RANGE: 3,
+
+  /**
+   * Reglages de conduite avancee (limiteur, frein a main, controle aerien).
+   * ⚠️ Le scooter roule encore sur l'ancien modele `vehicleDriving.ts` et n'en
+   * utilise AUCUN pour l'instant : ils sont la parce que `VehicleDriveConfig`
+   * est commun aux deux vehicules. Ils serviront le jour ou le scooter passera
+   * lui aussi sur le chassis Rapier — d'ou des valeurs deja plausibles.
+   */
+  LIMITER_MIN_SPEED: 5,
+  LIMITER_FADE_SPEED: 2,
+  HANDBRAKE_FORCE: 900,
+  HANDBRAKE_REAR_GRIP: 0.35,
+  DRIFT_STEER_AUTHORITY: 0.5,
+  SURFACE_GRIP_ROAD: 1,
+  SURFACE_GRIP_OFFROAD: 0.6,
+  AIR_PITCH_TORQUE: 2.6,
+  AIR_ROLL_TORQUE: 2.2,
+  AIR_MAX_RATE: 2.2,
+  AIR_LEVEL_ASSIST: 1.8,
+  FLIP_RECOVERY_HOLD: 0.8,
 }
 
 /** Couleurs du scooter (cartoon). */

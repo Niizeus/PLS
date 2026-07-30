@@ -42,6 +42,13 @@ intention et une expérience visée, pas un contrat technique.
 
 ## 🚗 1. Véhicules et qualité de conduite
 
+> ✅ **SECTION LIVRÉE — ne plus spécifier ici.** Les sept points 1.1 à 1.7 (limiteur, frein à main
+> et drift, effets de pneus, contrôle en l'air, klaxon, phares, radio éteinte) ont été tranchés et
+> codés. La spécification qui fait foi est désormais
+> [03 Game Design § Commandes de conduite](03-GAME-DESIGN.md#commandes-de-conduite).
+> Ce qui suit n'est conservé que comme **trace de l'intention d'origine** : en cas de désaccord avec
+> le GDD, c'est le GDD qui gagne. Toute évolution de ces systèmes se documente là-bas, pas ici.
+
 **Contexte existant** — à lire avant de spécifier quoi que ce soit dans cette section :
 [03 Game Design § Véhicules](03-GAME-DESIGN.md#-véhicules). Ce qui est déjà en place :
 

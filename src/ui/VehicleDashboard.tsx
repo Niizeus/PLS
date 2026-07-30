@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useVehicleTelemetryStore } from '../entities/vehicles/vehicleTelemetryStore'
+import { useCarStore } from '../entities/vehicles/carStore'
 import { getRadioStation } from '../audio/radioCatalog'
 import { useRadioStore } from '../audio/radioStore'
 import { HUD, kbd, panel } from './hudStyle'
@@ -19,6 +20,9 @@ export default function VehicleDashboard() {
   const fuelPercent = useVehicleTelemetryStore((s) => s.fuelPercent)
   const stationId = useRadioStore((s) => s.currentStationId)
   const contentLabel = useRadioStore((s) => s.currentContentLabel)
+  const limiterActive = useCarStore((s) => s.limiterActive)
+  const limiterSpeed = useCarStore((s) => s.limiterSpeed)
+  const headlightsOn = useCarStore((s) => s.headlightsOn)
 
   if (!riding) return null
 
@@ -29,6 +33,9 @@ export default function VehicleDashboard() {
   const station = stationId ? getRadioStation(stationId) : null
   // Le scooter a un variateur : il n'y a pas de rapport a afficher.
   const gearText = gear > 0 ? String(gear) : 'CVT'
+  // Limiteur et phares n'existent que sur la voiture pour l'instant.
+  const isCar = kind === 'car'
+  const limiterKmh = Math.round(limiterSpeed * 3.6)
 
   return (
     <div style={panelStyle}>
@@ -64,10 +71,17 @@ export default function VehicleDashboard() {
         <div style={digitalStyle}>{speedText}</div>
         <div style={unitStyle}>km/h</div>
         <div style={gearStyle}>{gearText}</div>
+        {/* 🚦 Témoin du limiteur : discret, sous le cadran, et il affiche la
+            vitesse mémorisée — sans ça on ne saurait pas sur quoi on a calé. */}
+        {isCar && limiterActive && <div style={limiterStyle}>LIM {limiterKmh}</div>}
       </div>
 
       <div style={sideStyle}>
-        <div style={vehicleStyle}>{kind === 'car' ? 'VOITURE' : 'SCOOTER'}</div>
+        <div style={vehicleHeaderStyle}>
+          <span style={vehicleStyle}>{kind === 'car' ? 'VOITURE' : 'SCOOTER'}</span>
+          {/* 💡 Témoin de phares : le vert-bleu des tableaux de bord réels. */}
+          {isCar && headlightsOn && <span style={lightsStyle} title="Phares allumés">💡</span>}
+        </div>
         <div style={fuelLabelStyle}>ESSENCE</div>
         <div style={fuelTrackStyle}>
           <div style={{ ...fuelFillStyle, width: `${fuel}%`, background: fuel < 18 ? '#ef4444' : fuel < 35 ? '#f59e0b' : '#22c55e' }} />
@@ -79,8 +93,10 @@ export default function VehicleDashboard() {
           <span style={radioLabelStyle}>RADIO</span>
           <kbd style={{ ...kbd, padding: '0 5px', font: `600 10px ${HUD.mono}` }}>R</kbd>
         </div>
-        <div style={radioTextStyle}>{station ? station.shortName : 'OFF'}</div>
-        <div style={radioContentStyle}>{contentLabel ?? 'Silence'}</div>
+        {/* Poste éteint : on le dit clairement. « OFF » sans rien d'autre
+            laissait croire à une radio en panne. */}
+        <div style={radioTextStyle}>{station ? station.shortName : 'ÉTEINTE'}</div>
+        <div style={radioContentStyle}>{station ? (contentLabel ?? 'Silence') : '—'}</div>
       </div>
     </div>
   )
@@ -142,7 +158,21 @@ const gearStyle: CSSProperties = {
   letterSpacing: 1,
 }
 
+/** Témoin de limiteur, calé sous le compteur numérique. */
+const limiterStyle: CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  bottom: -18,
+  textAlign: 'center',
+  font: '800 10px ui-monospace, monospace',
+  color: '#34d399',
+  letterSpacing: 1,
+}
+
 const sideStyle: CSSProperties = { display: 'grid', gap: 7, alignContent: 'center' }
+const vehicleHeaderStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 }
+const lightsStyle: CSSProperties = { font: '10px system-ui, sans-serif', lineHeight: 1 }
 const vehicleStyle: CSSProperties = { font: '900 12px system-ui, sans-serif', color: '#bfdbfe', letterSpacing: 0.8 }
 const fuelLabelStyle: CSSProperties = { font: '800 10px system-ui, sans-serif', color: '#cbd5e1', letterSpacing: 0.8 }
 const fuelTrackStyle: CSSProperties = { height: 12, borderRadius: 4, background: 'rgba(30,41,59,0.92)', overflow: 'hidden', border: '1px solid rgba(148,163,184,0.28)' }

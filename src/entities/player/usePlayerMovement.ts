@@ -203,6 +203,20 @@ export function usePlayerMovement(
     const activeCar = useCarStore.getState().riding
     riding = activeScooter || activeCar
 
+    if (riding) {
+      // Au volant, Espace est le FREIN À MAIN. Sans ce nettoyage, le saut resterait
+      // en file d'attente et se déclencherait au moment où on descend du véhicule.
+      k.jumpQueued = false
+    }
+
+    // Bascules véhicule : on les consomme TOUJOURS, même à pied. Sinon un appui
+    // sur A ou L hors véhicule resterait en file et se déclencherait tout seul
+    // en montant dans la voiture.
+    const limiterPressed = k.limiterQueued
+    const lightsPressed = k.lightsQueued
+    k.limiterQueued = false
+    k.lightsQueued = false
+
     if (activeScooter) {
       const scooterState = useScooterStore.getState()
       driveVehicle(
@@ -220,6 +234,11 @@ export function usePlayerMovement(
       publishTelemetry('scooter', scooterDrive.current, scooterTuning, scooterState)
     } else if (activeCar) {
       const carState = useCarStore.getState()
+      // 🚦 Limiteur (A) et 💡 phares (L) : des BASCULES, donc consommées ici et
+      // uniquement au volant. Le klaxon (F), lui, est un maintien : il passe par
+      // `controls.horn` comme les autres commandes de conduite.
+      if (limiterPressed) carState.toggleLimiter(carTuning.LIMITER_MIN_SPEED)
+      if (lightsPressed) carState.toggleHeadlights()
       carState.setControlsFromKeyboard(carState.fuelLiters > 0 ? k : withoutThrottle(k))
       group.position.set(carState.driverX, carState.driverY, carState.driverZ)
       group.rotation.y = carState.physicsRot

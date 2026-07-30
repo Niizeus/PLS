@@ -1,4 +1,5 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Outlines, useFBX } from '@react-three/drei'
 import { CuboidCollider, RigidBody, useAfterPhysicsStep, useBeforePhysicsStep, useRapier, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
@@ -8,7 +9,12 @@ import { getVehicleTuning } from '../../devtools/devTuningStore'
 import { driveSurfaceHeightAt } from '../../gameplay/physics/physicsSurface'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { CAR, CAR_COLORS } from './carConfig'
-import { useCarStore } from './carStore'
+import { useCarStore, type VehicleControlInput } from './carStore'
+import CarHeadlights from './CarHeadlights'
+import TireEffects from './TireEffects'
+import { resetTireContacts } from './tireContactStore'
+import { moveHorn, playHorn, setHornListener, stopHorn, updateHorn } from './vehicleHorn'
+import { FRAME } from '../../core/framePriority'
 import {
   applyRapierCarForces,
   CAR_CHASSIS_CENTER_HEIGHT,
@@ -38,6 +44,17 @@ interface ModelPart {
   center: THREE.Vector3
 }
 
+/** Voiture garée : personne au volant, aucune commande. */
+const PARKED_CONTROLS: VehicleControlInput = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false,
+  handbrake: false,
+  horn: false,
+}
+const INACTIVE_LIMITER = { active: false, speed: 0 } as const
+
 /** Voiture FBX jouable : caisse + essieux separes pour braquage, rotation et suspension visuelle. */
 export default function Car() {
   const group = useRef<THREE.Group>(null)
@@ -48,7 +65,9 @@ export default function Car() {
   const frontWheel = useRef<THREE.Mesh>(null)
   const rearWheel = useRef<THREE.Mesh>(null)
   const rapierContext = useRapier()
+  const camera = useThree((state) => state.camera)
   const runtime = useRef(createRapierCarRuntime())
+  const hornPosition = useMemo(() => new THREE.Vector3(), [])
   const fbx = useFBX(CAR_MODEL_URL) as THREE.Group
   const model = useMemo(() => prepareCarModel(fbx), [fbx])
   const initialPose = useMemo(() => {
@@ -75,18 +94,36 @@ export default function Car() {
         driveSurfaceHeightAt(state.parkedX, state.parkedZ),
         runtime.current,
       )
+      resetTireContacts()
       return
     }
     applyRapierCarForces(
       body,
       world,
       rapierContext.rapier,
-      state.riding ? state.controls : { forward: false, backward: false, left: false, right: false },
+      state.riding ? state.controls : PARKED_CONTROLS,
       tuning,
       runtime.current,
       world.timestep || 1 / 60,
+      // Le limiteur ne s'applique évidemment que quand quelqu'un conduit.
+      state.riding && state.limiterActive
+        ? { active: true, speed: state.limiterSpeed }
+        : INACTIVE_LIMITER,
     )
   })
+
+  // 📯 Klaxon : l'oreille suit la caméra, la source suit la caisse.
+  useFrame(() => {
+    const state = useCarStore.getState()
+    setHornListener(camera)
+    hornPosition.set(state.physicsX, state.physicsY, state.physicsZ)
+    if (state.riding && state.controls.horn) playHorn('car', hornPosition, true)
+    else moveHorn(hornPosition)
+    updateHorn()
+  }, FRAME.ATTACHED)
+
+  // Onglet quitté ou voiture démontée : on ne laisse pas un klaxon coincé.
+  useEffect(() => stopHorn, [])
 
   useAfterPhysicsStep(() => {
     const g = group.current
@@ -129,7 +166,12 @@ export default function Car() {
           solverGroups={PHYSICS_GROUPS.vehicle}
         />
       </RigidBody>
+      {/* Fumée et traces vivent dans le repère MONDE (elles restent au sol
+          quand la voiture s'en va) : surtout pas dans le groupe visuel. */}
+      <TireEffects />
       <group ref={group}>
+        {/* Les phares, eux, sont solidaires de la caisse. */}
+        <CarHeadlights />
         <group scale={CAR_MODEL_SCALE} position={[0, CAR_MODEL_GROUND_LIFT, 0]}>
           <mesh
             position={model.body.center}

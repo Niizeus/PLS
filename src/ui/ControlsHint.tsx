@@ -29,9 +29,13 @@ const MOVE: Control[] = [
 ]
 
 const DRIVE: Control[] = [
-  { keys: 'ZQSD', label: 'Conduire' },
+  { keys: 'ZQSD', label: 'Conduire / piloter en l’air' },
   { keys: 'Souris', label: 'Tourner la caméra' },
-  { keys: 'R', label: 'Station de radio' },
+  { keys: 'Espace', label: 'Frein à main (maintenir : se remettre sur les roues)' },
+  { keys: 'A', label: 'Limiteur de vitesse' },
+  { keys: 'F', label: 'Klaxon' },
+  { keys: 'L', label: 'Phares' },
+  { keys: 'R', label: 'Station de radio (dernier cran : éteinte)' },
 ]
 
 const ACTIONS: Control[] = [

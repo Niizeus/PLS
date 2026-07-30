@@ -25,6 +25,21 @@ export const KEY = {
   QUICK_4: 'Digit4', // 4 = raccourci inventaire
   JUMP: 'Space', // Espace = sauter
   CROUCH: 'ControlLeft', // Ctrl = s'accroupir
+
+  // --- Commandes véhicule (ignorées à pied) ---
+  /**
+   * Limiteur de vitesse = la touche **A** d'un clavier AZERTY.
+   *
+   * ⚠️ Piège : `event.code` décrit la POSITION physique de la touche sur un
+   * clavier QWERTY. Le "A" imprimé sur un AZERTY se trouve à la place du "Q"
+   * QWERTY → son code est donc `KeyQ`, et surtout PAS `KeyA` (qui est le "Q"
+   * de l'AZERTY, déjà pris par `LEFT`). Même logique que ZQSD ci-dessus.
+   */
+  VEHICLE_LIMITER: 'KeyQ', // A sur AZERTY
+  /** Frein à main. Espace ne sert pas à sauter quand on conduit. */
+  VEHICLE_HANDBRAKE: 'Space',
+  VEHICLE_HORN: 'KeyF', // F (même position en AZERTY et QWERTY)
+  VEHICLE_LIGHTS: 'KeyL', // L (même position en AZERTY et QWERTY)
 } as const
 
 // Boutons de la souris (event.button) : 0 = gauche, 2 = droit.

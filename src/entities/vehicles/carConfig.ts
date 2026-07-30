@@ -97,6 +97,34 @@ export const CAR: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   COLLISION_HALF_WIDTH: 0.9,
   /** Distance a laquelle on peut monter dans la voiture. */
   MOUNT_RANGE: 3.8,
+
+  // --- Limiteur de vitesse (A) ---
+  /** En dessous de 25 km/h, enclencher un limiteur n'a aucun sens. */
+  LIMITER_MIN_SPEED: 7,
+  /** Les gaz se referment sur les 3 derniers m/s (~11 km/h) : aucune secousse. */
+  LIMITER_FADE_SPEED: 3,
+
+  // --- Frein a main / drift (Espace) ---
+  /** Un frein a main n'agit que sur l'arriere : bien plus faible que le frein principal. */
+  HANDBRAKE_FORCE: 6400,
+  /** L'arriere ne garde que 26 % de son adherence laterale : c'est ca qui decroche. */
+  HANDBRAKE_REAR_GRIP: 0.26,
+  /** On garde 38 % du rappel de trajectoire : la glisse est longue mais rattrapable. */
+  DRIFT_STEER_AUTHORITY: 0.38,
+  SURFACE_GRIP_ROAD: 1,
+  /** Hors bitume on perd un tiers du grip : la terre part en glisse bien plus tot. */
+  SURFACE_GRIP_OFFROAD: 0.66,
+
+  // --- Controle en l'air ---
+  /** Tangage : assez pour piquer du nez avant l'atterrissage, pas pour faire un salto instantane. */
+  AIR_PITCH_TORQUE: 3.4,
+  AIR_ROLL_TORQUE: 4.2,
+  /** Plafond de rotation : ~1 tour toutes les 2,5 s. Utile, jamais absurde. */
+  AIR_MAX_RATE: 2.6,
+  /** Sans consigne, la caisse revient doucement a plat : atterrissages moins punitifs. */
+  AIR_LEVEL_ASSIST: 1.5,
+  /** Frein a main maintenu ~0,9 s sur le toit = la voiture se remet sur ses roues. */
+  FLIP_RECOVERY_HOLD: 0.9,
 }
 
 /** Palette BD de la voiture prototype. */

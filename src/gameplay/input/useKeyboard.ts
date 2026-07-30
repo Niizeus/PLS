@@ -16,6 +16,13 @@ export interface KeyboardState {
   interactQueued: boolean
   jumpQueued: boolean
   crouch: boolean
+  /** Frein à main MAINTENU (Espace en véhicule). */
+  handbrake: boolean
+  /** Klaxon MAINTENU (F en véhicule). */
+  horn: boolean
+  /** Déclencheurs véhicule : à remettre à false par celui qui les consomme. */
+  limiterQueued: boolean
+  lightsQueued: boolean
 }
 
 const createEmptyState = (): KeyboardState => ({
@@ -27,6 +34,10 @@ const createEmptyState = (): KeyboardState => ({
   interactQueued: false,
   jumpQueued: false,
   crouch: false,
+  handbrake: false,
+  horn: false,
+  limiterQueued: false,
+  lightsQueued: false,
 })
 
 /**
@@ -63,9 +74,22 @@ export function useKeyboard() {
         case KEY.JUMP:
           // Déclencheur : au moment de l'appui sur Espace.
           if (pressed) k.jumpQueued = true
+          // La MÊME touche sert de frein à main en véhicule, mais en maintien.
+          // Les deux cohabitent : à pied on ignore `handbrake`, au volant on
+          // ignore `jumpQueued` (voir usePlayerMovement).
+          k.handbrake = pressed
           break
         case KEY.CROUCH:
           k.crouch = pressed
+          break
+        case KEY.VEHICLE_HORN:
+          k.horn = pressed
+          break
+        case KEY.VEHICLE_LIMITER:
+          if (pressed) k.limiterQueued = true
+          break
+        case KEY.VEHICLE_LIGHTS:
+          if (pressed) k.lightsQueued = true
           break
       }
     }

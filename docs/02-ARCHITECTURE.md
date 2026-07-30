@@ -45,6 +45,15 @@ compte jusqu'à 770, et les créer d'un coup coûtait 40 à 80 ms de commit Reac
 props/colliders de test attendent le chargement du relief avant de se créer, sinon
 Rapier les figerait à une hauteur provisoire avant que le sol visible existe.
 
+Autour de la voiture gravitent quatre fichiers dédiés aux sensations de conduite :
+`tireContactStore.ts` (état de contact des 4 roues, **objet mutable partagé et non un store
+Zustand** : il change 60 fois par seconde et déclencherait autant de rendus React),
+`TireEffects.tsx` (fumée, poussière et traces, en tampons circulaires à taille fixe pour ne rien
+allouer par image), `CarHeadlights.tsx` (optiques + faisceaux, démontés quand ils sont éteints) et
+`vehicleHorn.ts` (klaxon synthétisé en WebAudio, positionnel). Le détail des comportements et les
+pièges à ne pas « simplifier » sont dans
+[03 Game Design § Commandes de conduite](03-GAME-DESIGN.md#commandes-de-conduite).
+
 La voiture principale charge le FBX `public/models/Vehicule/Voiture/Chevrolet.fbx`
 dans `entities/vehicles/Car.tsx`. Le modèle est préparé en trois parties (caisse,
 essieu avant, essieu arrière) pour exposer les pivots nécessaires au braquage, à la

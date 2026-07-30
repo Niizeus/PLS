@@ -196,6 +196,11 @@ sélectionnable aussi simplement qu'une station classique.
 
 ## 📱 2. Prototype du téléphone
 
+> ✅ **Le prototype est FAIT** (touche `P`, accueil, apps `Santé` et `Notes`, catalogue extensible).
+> Ce qui est en place est décrit dans [03 Game Design § Smartphone](03-GAME-DESIGN.md#-smartphone).
+> Cette entrée ne garde que **ce qui reste à faire** : le système de paramètres (§ 2.2) et les
+> données de jeu qui n'existent pas encore (§ 2.1).
+
 **Intention** — démarrer un prototype **basique** du téléphone du joueur, dont la vraie valeur est
 de **valider la structure** et la connexion aux données du jeu, pas d'être joli.
 
@@ -230,6 +235,9 @@ existantes.
 - **Note** : certaines de ces données n'existent pas encore comme systèmes (besoins, réputation,
   missions, argent). Le prototype doit pouvoir afficher « pas encore branché » proprement plutôt que
   d'inventer des valeurs.
+- **✅ Fait** : l'app `Santé` lit déjà vitaux, caractéristiques, effets en cours et zone dans les
+  stores existants ; l'argent, la réputation et les missions sont affichés comme « pas encore
+  branché ». Il reste à brancher ces systèmes le jour où ils existeront.
 - **Étiquettes** : Priorité souhaitable · Horizon moyen terme · Nature interface · État à étudier
 
 ### 2.2 Paramètres accessibles depuis le téléphone
@@ -243,20 +251,20 @@ touches, sensibilité, options d'affichage.
   un chantier à part entière (voir aussi le rappel des touches `ControlsHint.tsx`).
 - **Étiquettes** : Priorité importante (comme préalable) · Horizon moyen terme · Nature architecture + interface · État spec à rédiger
 
-### 2.3 Structure du prototype
+### 2.3 Structure du prototype — ✅ fait
 
-Contenu possible du premier jet : ouverture/fermeture du téléphone, écran d'accueil, navigation
-simple, icônes temporaires, application de statistiques, application de paramètres, compatibilité
-clavier **et manette**, architecture permettant d'ajouter de nouvelles applications.
+Livré : ouverture/fermeture (`P`), écran d'accueil, navigation clavier et souris, icônes
+temporaires (emojis), application de statistiques, catalogue d'applications extensible.
+Code : `src/gameplay/phone/phoneStore.ts` (état) + `src/ui/phone/` (coque, accueil, apps).
 
-- **Dépend de** : emplacement de code prévu `src/gameplay/phone/` + `src/ui/phone/` (déjà réservé
-  dans le tableau de correspondance de [03](03-GAME-DESIGN.md)).
-- **Risques** : la **manette** n'est gérée nulle part aujourd'hui (`gameplay/input/` ne connaît que
-  clavier et souris). « Compatible manette » implique une couche d'entrées abstraite — à ne pas
-  découvrir en cours de route.
-- **Questions ouvertes** : quelle touche ouvre le téléphone ? Le jeu se met-il en pause pendant
-  qu'il est ouvert (et que se passe-t-il en voiture) ?
-- **Étiquettes** : Priorité souhaitable · Horizon moyen terme · Nature interface · État prototype nécessaire
+- **Questions tranchées** : le téléphone s'ouvre avec **`P`** ; le jeu **ne se met pas en pause**
+  (c'est un objet du monde, pas un menu) ; en voiture il reste utilisable et se décale à gauche du
+  tableau de bord.
+- **Reste à faire** : la **manette**. Elle n'est gérée nulle part (`gameplay/input/` ne connaît que
+  clavier et souris) : « compatible manette » implique une couche d'entrées abstraite, c'est un
+  chantier à part entière et il n'a pas été entamé.
+- **Reste à faire** : l'**app Réglages**, bloquée par § 2.2 (pas de système de paramètres joueur).
+- **Étiquettes** : Priorité souhaitable · Horizon moyen terme · Nature interface · État prototype livré
 
 ---
 

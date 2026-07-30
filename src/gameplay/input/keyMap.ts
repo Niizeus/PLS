@@ -18,6 +18,7 @@ export const KEY = {
   INVENTORY: 'KeyI', // I = inventaire
   INVENTORY_ALT: 'Tab', // Tab = inventaire aussi (le réflexe de tout le monde)
   RADIO_NEXT: 'KeyR', // R = station de radio suivante (en véhicule)
+  PHONE: 'KeyP', // P = sortir / ranger le téléphone (P comme Phone, même touche en AZERTY)
   CONTROLS: 'F1', // F1 = déplier/replier le rappel des touches
   QUICK_1: 'Digit1', // 1 = raccourci inventaire
   QUICK_2: 'Digit2', // 2 = raccourci inventaire

@@ -10,6 +10,7 @@ import QuickBar from './QuickBar'
 import StatsPanel from './StatsPanel'
 import VehicleDashboard from './VehicleDashboard'
 import WorldMap from './WorldMap'
+import PhoneOverlay from './phone/PhoneOverlay'
 import { HUD, column, panel } from './hudStyle'
 
 // Libellés lisibles pour l'état affiché en haut à gauche.
@@ -84,6 +85,9 @@ export default function Hud() {
 
       {/* Grande carte (touche M) : gère elle-même son ouverture/fermeture. */}
       <WorldMap />
+
+      {/* Téléphone (touche P) : gère lui aussi son ouverture/fermeture. */}
+      <PhoneOverlay />
     </div>
   )
 }

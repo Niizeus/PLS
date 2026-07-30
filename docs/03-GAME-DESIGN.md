@@ -229,11 +229,30 @@ Le téléphone peut être cassé, sans batterie ou sans réseau dans certains ca
 doivent rester ponctuelles. Elles doivent créer des situations drôles ou tendues, pas empêcher le
 joueur de jouer confortablement.
 
-> 💡 **Un premier prototype est envisagé** (écran d'accueil, app stats, app paramètres, structure
-> extensible), avec la règle « le téléphone consulte les systèmes existants, il ne duplique pas les
-> données » : [07 - Backlog d'idées § Prototype du téléphone](07-BACKLOG-IDEES.md#-2-prototype-du-téléphone).
-> ⚠️ Préalable identifié : il n'existe pas encore de **système de paramètres joueur** (le panneau
-> `F2` est dev-only).
+### Ce qui existe déjà en jeu
+
+Un **premier prototype jouable** est en place. Il applique la règle « le téléphone **consulte** les
+systèmes existants, il ne duplique jamais les données ».
+
+- **Touche `P`** : sortir / ranger le téléphone. **`Échap`** : revenir à l'accueil, puis le ranger.
+- **Le jeu ne se met PAS en pause** : c'est un objet du monde, pas un menu. La ville continue de
+  tourner, et le téléphone reste utilisable en voiture (il se décale à gauche du tableau de bord).
+- Il s'affiche **en bas à droite**, sans masquer les stats (à gauche) ni la minimap (en haut à
+  droite) — contrairement à l'inventaire et à la carte, qui sont plein écran.
+- **Accueil** : grille de 9 icônes, navigable à la **souris** ou aux **flèches + Entrée**. Le fond
+  d'écran suit l'heure du jeu (il réutilise les couleurs du cycle jour/nuit).
+- **Applications qui marchent** : `Santé` (vitaux, caractéristiques, effets en cours, zone — tout
+  est lu dans les stores du jeu) et `Notes` (les pistes pour quitter Beauvais, contenu dans
+  `src/data/phoneNotes.ts`).
+- **Applications prévues mais pas encore développées** (Contacts, Photo, Banque, GPS, Boutiques,
+  Réseaux, Réglages) : icônes grisées qui ouvrent un écran **« pas encore branché »** expliquant ce
+  qui manque. Le téléphone ne fait jamais semblant et n'invente aucun chiffre.
+- **Ajouter une application** = créer un fichier dans `src/ui/phone/apps/` + une entrée dans
+  `src/ui/phone/apps.tsx`. Rien d'autre à toucher.
+
+Restent à faire (voir [07 - Backlog d'idées § Prototype du téléphone](07-BACKLOG-IDEES.md#-2-prototype-du-téléphone)) :
+un vrai **système de paramètres joueur** (le panneau `F2` est dev-only et doit le rester), la
+**manette** (aucune couche d'entrées manette n'existe), et une **batterie** (l'icône est décorative).
 
 ---
 

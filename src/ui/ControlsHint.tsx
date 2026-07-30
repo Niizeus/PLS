@@ -48,6 +48,7 @@ const INTERFACE: Control[] = [
   { keys: 'Tab', label: 'Inventaire' },
   { keys: '1-4', label: 'Raccourcis' },
   { keys: 'M', label: 'Carte' },
+  { keys: 'P', label: 'Téléphone' },
   { keys: 'Échap', label: 'Libérer la souris' },
 ]
 

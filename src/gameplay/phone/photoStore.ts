@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useNotificationStore } from './notificationStore'
 
 /**
  * 📷 La pellicule du téléphone.
@@ -40,10 +41,19 @@ export const usePhotoStore = create<PhotoState>((set) => ({
   photos: [],
   shotQueued: false,
   requestShot: () => set({ shotQueued: true }),
-  addPhoto: (photo) =>
+  addPhoto: (photo) => {
     set((state) => ({
       shotQueued: false,
       photos: [{ ...photo, id: Date.now() }, ...state.photos].slice(0, MAX_PHOTOS),
-    })),
+    }))
+    // La photo est prise pendant le rendu 3D, donc loin de l'interface : la
+    // notification est le seul retour visible si le tel n'est pas sur l'app Photo.
+    useNotificationStore.getState().notify({
+      appId: 'camera',
+      title: 'Photo enregistrée',
+      body: `${photo.place} — ${photo.timeLabel}`,
+      at: photo.timeLabel.split(' ').pop() ?? '',
+    })
+  },
   removePhoto: (id) => set((state) => ({ photos: state.photos.filter((photo) => photo.id !== id) })),
 }))

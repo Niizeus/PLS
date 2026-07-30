@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { usePhoneStore } from '../../../gameplay/phone/phoneStore'
+import { playPhoneSound } from '../../../gameplay/phone/phoneSounds'
 import { usePhotoStore } from '../../../gameplay/phone/photoStore'
 import { PHONE, appScroll, appSectionLabel, card } from '../phoneStyle'
 
@@ -35,6 +37,7 @@ export default function PhotoApp() {
     const before = usePhotoStore.getState().photos.length
     setFailed(false)
     setFlash(true)
+    playPhoneSound('shutter')
     requestShot()
     setTimeout(() => {
       const store = usePhotoStore.getState()
@@ -46,6 +49,9 @@ export default function PhotoApp() {
   }
 
   const opened = photos.find((photo) => photo.id === openedId)
+  const wallpaperPhotoId = usePhoneStore((s) => s.wallpaperPhotoId)
+  const setWallpaper = usePhoneStore((s) => s.setWallpaper)
+  const isWallpaper = opened ? opened.id === wallpaperPhotoId : false
 
   // Une photo ouverte en grand : elle remplit l'écran de l'app.
   if (opened) {
@@ -58,13 +64,34 @@ export default function PhotoApp() {
             {opened.timeLabel}
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            playPhoneSound('tap')
+            setWallpaper(isWallpaper ? null : opened.id)
+          }}
+          style={{ ...buttonStyle, borderColor: isWallpaper ? 'rgba(125, 211, 252, 0.5)' : undefined }}
+        >
+          {isWallpaper ? '✓ Fond d’écran actuel — retirer' : 'Mettre en fond d’écran'}
+        </button>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <button type="button" onClick={() => setOpenedId(null)} style={buttonStyle}>
+          <button
+            type="button"
+            onClick={() => {
+              playPhoneSound('back')
+              setOpenedId(null)
+            }}
+            style={buttonStyle}
+          >
             Retour
           </button>
           <button
             type="button"
             onClick={() => {
+              playPhoneSound('back')
+              // Une photo supprimée ne doit pas rester en fond d'écran.
+              if (isWallpaper) setWallpaper(null)
               removePhoto(opened.id)
               setOpenedId(null)
             }}
@@ -134,7 +161,10 @@ export default function PhotoApp() {
             <button
               key={photo.id}
               type="button"
-              onClick={() => setOpenedId(photo.id)}
+              onClick={() => {
+                playPhoneSound('tap')
+                setOpenedId(photo.id)
+              }}
               title={`${photo.place} — ${photo.timeLabel}`}
               style={{
                 padding: 0,

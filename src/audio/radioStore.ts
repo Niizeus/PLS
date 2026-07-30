@@ -2,7 +2,17 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { getRadioStation, RADIO_STATION_IDS, type RadioStationId } from './radioCatalog'
 
-export type RadioSourceKind = 'vehicle' | 'world-speaker'
+export type RadioSourceKind = 'vehicle' | 'world-speaker' | 'phone'
+
+/**
+ * Identifiant de la source « casque du téléphone ».
+ *
+ * Le téléphone est une source comme une autre pour `RadioAudioSystem` : il ne
+ * connaît que `activeSource` + `currentStationId`, et se fiche de savoir si le
+ * son sort d'un autoradio ou d'écouteurs. C'est ce qui permet d'écouter la radio
+ * À PIED sans dupliquer une ligne du système audio.
+ */
+export const PHONE_RADIO_ID = 'phone'
 
 export interface ActiveRadioSource {
   kind: RadioSourceKind
@@ -33,6 +43,8 @@ interface RadioState {
   currentStationId: RadioStationId | null
   currentContentLabel: string | null
   vehicleStations: Record<string, RadioTuning>
+  /** Dernière station écoutée au casque : le téléphone la repropose. */
+  phoneStationId: RadioStationId | null
   volume: number
   radioFilterEnabled: boolean
   assignStationToVehicle: (vehicleId: string) => RadioTuning
@@ -42,6 +54,15 @@ interface RadioState {
    * Ne fait rien s'il n'y a pas de poste (à pied).
    */
   nextStation: () => RadioStationId | null
+  /**
+   * Choix DIRECT d'une station (depuis l'app Radio du téléphone), sans passer
+   * par le tour de roue de la touche R. `null` = poste éteint.
+   */
+  setStation: (stationId: RadioStationId | null) => void
+  /** Allume les écouteurs du téléphone (utilisable à pied). */
+  startPhoneRadio: (stationId: RadioStationId) => void
+  /** Coupe les écouteurs. Sans effet si la source active n'est pas le téléphone. */
+  stopPhoneRadio: () => void
   stopRadio: (sourceId: string) => void
   setCurrentContentLabel: (label: string | null) => void
   setVolume: (volume: number) => void
@@ -55,6 +76,7 @@ export const useRadioStore = create<RadioState>()(
       currentStationId: null,
       currentContentLabel: null,
       vehicleStations: {},
+      phoneStationId: null,
       volume: 0.48,
       radioFilterEnabled: false,
       /**
@@ -126,6 +148,39 @@ export const useRadioStore = create<RadioState>()(
         }))
         return stationId
       },
+      setStation: (stationId) => {
+        const { activeSource } = get()
+        // Pas de poste allumé : choisir une station n'a aucun sens. L'app Radio
+        // du téléphone allume d'abord les écouteurs (`startPhoneRadio`).
+        if (!activeSource) return
+
+        set((state) => ({
+          currentStationId: stationId,
+          currentContentLabel: null,
+          // On mémorise le choix pour ce véhicule, exactement comme la touche R.
+          vehicleStations:
+            activeSource.kind === 'vehicle'
+              ? { ...state.vehicleStations, [activeSource.id]: stationId ?? RADIO_OFF }
+              : state.vehicleStations,
+        }))
+      },
+
+      startPhoneRadio: (stationId) => {
+        set({
+          activeSource: { kind: 'phone', id: PHONE_RADIO_ID },
+          currentStationId: stationId,
+          currentContentLabel: null,
+          phoneStationId: stationId,
+        })
+      },
+
+      stopPhoneRadio: () => {
+        // ⚠️ Si on est monté en voiture entre-temps, la source active est
+        // l'autoradio : couper les écouteurs ne doit surtout pas l'éteindre.
+        if (get().activeSource?.kind !== 'phone') return
+        set({ activeSource: null, currentStationId: null, currentContentLabel: null })
+      },
+
       stopRadio: (sourceId) => {
         const active = get().activeSource
         if (!active || active.id !== sourceId) return
@@ -139,6 +194,7 @@ export const useRadioStore = create<RadioState>()(
       name: 'pls-radio-state',
       partialize: (state) => ({
         vehicleStations: state.vehicleStations,
+        phoneStationId: state.phoneStationId,
         volume: state.volume,
         radioFilterEnabled: state.radioFilterEnabled,
       }),

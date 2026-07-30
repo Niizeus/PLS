@@ -1,8 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVehicleTelemetryStore } from '../../entities/vehicles/vehicleTelemetryStore'
 import { KEY } from '../../gameplay/input/keyMap'
 import { setCursorUiOpen } from '../../gameplay/input/pointerLock'
+import {
+  countUnread,
+  useNotificationStore,
+  type PhoneNotification,
+} from '../../gameplay/phone/notificationStore'
 import { usePhoneStore } from '../../gameplay/phone/phoneStore'
+import { playPhoneSound } from '../../gameplay/phone/phoneSounds'
+import { usePhotoStore } from '../../gameplay/phone/photoStore'
 import {
   formatGameTime,
   getDayPhase,
@@ -11,6 +18,7 @@ import {
   useGameTimeStore,
 } from '../../gameplay/time/gameTimeStore'
 import PhoneHome from './PhoneHome'
+import PhoneLockScreen from './PhoneLockScreen'
 import ComingSoonApp from './apps/ComingSoonApp'
 import { PHONE_APPS, findPhoneApp } from './apps'
 import { PHONE, screen, shell } from './phoneStyle'
@@ -28,7 +36,9 @@ import { PHONE, screen, shell } from './phoneStyle'
  *   carte qui, eux, sont plein écran.
  * • Le fond d'écran suit l'**heure du jeu** (`getSkyColors`) : à minuit le tel
  *   est bleu nuit, au couchant il est orange. Rien à maintenir, ça réutilise le
- *   cycle jour/nuit existant.
+ *   cycle jour/nuit existant. Le joueur peut le remplacer par une de ses photos.
+ * • Il sort **verrouillé** : heure + notifications d'un coup d'œil, un clic (ou
+ *   Entrée) pour entrer. Voir `PhoneLockScreen.tsx`.
  */
 
 /** Nombre d'icônes par ligne sur l'accueil — sert aussi aux flèches haut/bas. */
@@ -45,6 +55,7 @@ const EDGE_DRIVING = EDGE + 238 + 12
 
 export default function PhoneOverlay() {
   const isOpen = usePhoneStore((s) => s.isOpen)
+  const locked = usePhoneStore((s) => s.locked)
   const appId = usePhoneStore((s) => s.appId)
   const riding = useVehicleTelemetryStore((s) => s.riding)
   const scale = usePhoneScale()
@@ -90,6 +101,14 @@ export default function PhoneOverlay() {
         phone.back()
         return
       }
+      // Verrouillé : la seule chose à faire, c'est déverrouiller.
+      if (phone.locked) {
+        if (event.code === 'Enter' || event.code === 'NumpadEnter' || event.code === 'Space') {
+          event.preventDefault() // Espace ferait sauter le joueur
+          phone.unlock()
+        }
+        return
+      }
       // Les flèches ne servent qu'à l'accueil : dans une app, on laisse le
       // défilement natif faire son travail.
       if (phone.appId) return
@@ -114,7 +133,20 @@ export default function PhoneOverlay() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [selected])
 
-  if (!mounted) return null
+  // Ouvrir une application marque ses notifications comme lues. C'est la règle
+  // la plus simple : pas d'état de lecture message par message à maintenir.
+  useEffect(() => {
+    if (appId) useNotificationStore.getState().markAppRead(appId)
+  }, [appId])
+
+  const notifications = useNotificationStore((s) => s.notifications)
+  const unreadCount = countUnread(notifications)
+  const banner = useNotificationBanner(notifications[0])
+
+  if (!mounted) {
+    // Téléphone rangé : une simple pastille discrète si quelque chose attend.
+    return unreadCount > 0 ? <PocketBadge count={unreadCount} riding={riding} /> : null
+  }
 
   const app = findPhoneApp(appId)
 
@@ -137,9 +169,11 @@ export default function PhoneOverlay() {
           <Wallpaper />
           <StatusBar />
 
-          {/* Contenu : soit l'accueil, soit l'application ouverte. */}
+          {/* Contenu : verrouillé, l'accueil, ou l'application ouverte. */}
           <div style={{ position: 'relative', minHeight: 0, display: 'grid' }}>
-            {app ? (
+            {locked ? (
+              <PhoneLockScreen />
+            ) : app ? (
               <div style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minHeight: 0 }}>
                 <AppHeader label={app.label} icon={app.icon} />
                 {app.Screen ? <app.Screen /> : <ComingSoonApp app={app} />}
@@ -149,17 +183,46 @@ export default function PhoneOverlay() {
             )}
           </div>
 
-          <HomeBar inApp={Boolean(app)} />
+          {banner && <NotificationBanner title={banner.title} body={banner.body} />}
+
+          <HomeBar inApp={Boolean(app)} locked={locked} />
         </div>
       </div>
     </div>
   )
 }
 
-/** Fond d'écran : le ciel de Beauvais à l'heure qu'il est, en plus sombre. */
+/**
+ * Fond d'écran : par défaut le ciel de Beauvais à l'heure qu'il est ; sinon la
+ * photo que le joueur a choisie dans l'app Photo.
+ */
 function Wallpaper() {
   const minute = useGameTimeStore((s) => Math.floor(s.totalMinutes))
+  const wallpaperPhotoId = usePhoneStore((s) => s.wallpaperPhotoId)
+  const photo = usePhotoStore((s) => s.photos.find((item) => item.id === wallpaperPhotoId))
   const sky = getSkyColors(minute)
+
+  if (photo) {
+    return (
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        <img
+          src={photo.dataUrl}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        {/* Voile sombre : sans lui, le texte blanc devient illisible sur une
+            photo prise en plein jour. */}
+        <span
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(180deg, rgba(8,12,22,0.55), rgba(8,12,22,0.75))',
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -230,6 +293,113 @@ function StatusBar() {
   )
 }
 
+/**
+ * Bannière de notification, en haut de l'écran du téléphone.
+ *
+ * Elle ne s'affiche que téléphone SORTI : rangé, on se contente de la pastille
+ * (`PocketBadge`) et du petit son. Une bannière plein écran pendant qu'on
+ * conduit serait exactement le genre de chose qu'on finit par détester.
+ */
+function NotificationBanner({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 30,
+        left: 10,
+        right: 10,
+        padding: '8px 10px',
+        borderRadius: 12,
+        background: 'rgba(15, 23, 42, 0.92)',
+        border: '1px solid rgba(125, 211, 252, 0.45)',
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.45)',
+        pointerEvents: 'none',
+      }}
+    >
+      <strong style={{ display: 'block', font: `800 11px ${PHONE.font}` }}>{title}</strong>
+      <span
+        style={{
+          display: 'block',
+          font: `10px ${PHONE.font}`,
+          color: PHONE.textDim,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {body}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Téléphone rangé : une pastille à l'endroit où il se trouverait, indiquant le
+ * nombre de notifications non lues. C'est ce qui donne envie de le sortir.
+ */
+function PocketBadge({ count, riding }: { count: number; riding: boolean }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        right: riding ? EDGE_DRIVING : EDGE,
+        bottom: EDGE,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 10px',
+        borderRadius: 999,
+        background: 'rgba(12, 17, 30, 0.72)',
+        border: '1px solid rgba(148, 163, 184, 0.18)',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.28)',
+        backdropFilter: 'blur(6px)',
+        color: PHONE.text,
+        font: `800 11px ${PHONE.font}`,
+        pointerEvents: 'none',
+      }}
+    >
+      📱
+      <span
+        style={{
+          minWidth: 16,
+          height: 16,
+          padding: '0 4px',
+          borderRadius: 999,
+          background: '#ef4444',
+          display: 'grid',
+          placeItems: 'center',
+          font: `900 10px ${PHONE.font}`,
+        }}
+      >
+        {count}
+      </span>
+      <span style={{ font: `700 9px ${PHONE.font}`, color: PHONE.textDim }}>P</span>
+    </div>
+  )
+}
+
+/**
+ * Suit la notification la plus récente et renvoie celle à afficher en bannière
+ * (pendant quelques secondes), en jouant le petit son au passage.
+ */
+function useNotificationBanner(latest: PhoneNotification | undefined) {
+  const [banner, setBanner] = useState<PhoneNotification | null>(null)
+  // Les notifications de départ (messages déjà en attente) ne doivent PAS
+  // déclencher de bannière au lancement : on démarre en les considérant vues.
+  const lastSeenId = useRef(latest?.id)
+
+  useEffect(() => {
+    if (!latest || latest.id === lastSeenId.current) return
+    lastSeenId.current = latest.id
+    playPhoneSound('notify')
+    setBanner(latest)
+    const timer = setTimeout(() => setBanner(null), 3400)
+    return () => clearTimeout(timer)
+  }, [latest])
+
+  return banner
+}
+
 /** En-tête d'une application : flèche retour + titre. */
 function AppHeader({ label, icon }: { label: string; icon: string }) {
   const goHome = usePhoneStore((s) => s.goHome)
@@ -271,12 +441,12 @@ function AppHeader({ label, icon }: { label: string; icon: string }) {
 }
 
 /** Barre du bas : le trait « accueil » d'un smartphone + le rappel des touches. */
-function HomeBar({ inApp }: { inApp: boolean }) {
+function HomeBar({ inApp, locked }: { inApp: boolean; locked: boolean }) {
   const back = usePhoneStore((s) => s.back)
   return (
     <div style={{ position: 'relative', display: 'grid', justifyItems: 'center', gap: 5, padding: '6px 0 9px' }}>
       <span style={{ font: `700 9px ${PHONE.font}`, color: PHONE.muted }}>
-        {inApp ? 'Échap · retour' : 'P · ranger le téléphone'}
+        {locked ? 'Clic ou Entrée · déverrouiller' : inApp ? 'Échap · retour' : 'P · ranger le téléphone'}
       </span>
       <button
         type="button"

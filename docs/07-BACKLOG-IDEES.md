@@ -196,8 +196,9 @@ sélectionnable aussi simplement qu'une station classique.
 
 ## 📱 2. Prototype du téléphone
 
-> ✅ **Le prototype est FAIT** (touche `P`, accueil, catalogue extensible, et six applications :
-> `Santé`, `Notes`, `GPS`, `Photo`, `Contacts`, `Réglages`).
+> ✅ **Le prototype est FAIT** (touche `P`, écran de verrouillage, notifications, sons, accueil,
+> catalogue extensible, et sept applications : `Santé`, `Notes`, `Radio`, `GPS`, `Photo`,
+> `Contacts`, `Réglages`).
 > Ce qui est en place est décrit dans [03 Game Design § Smartphone](03-GAME-DESIGN.md#-smartphone).
 > Cette entrée ne garde que **ce qui reste à faire** : le système de paramètres (§ 2.2) et les
 > données de jeu qui n'existent pas encore (§ 2.1).

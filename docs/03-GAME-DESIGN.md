@@ -241,14 +241,28 @@ systèmes existants, il ne duplique jamais les données ».
   tourner, et le téléphone reste utilisable en voiture (il se décale à gauche du tableau de bord).
 - Il s'affiche **en bas à droite**, sans masquer les stats (à gauche) ni la minimap (en haut à
   droite) — contrairement à l'inventaire et à la carte, qui sont plein écran.
-- **Accueil** : grille de 9 icônes, navigable à la **souris** ou aux **flèches + Entrée**. Le fond
-  d'écran suit l'heure du jeu (il réutilise les couleurs du cycle jour/nuit).
+- **Il sort verrouillé** : heure en grand, jour, et les notifications non lues d'un coup d'œil.
+  Un clic (ou `Entrée`) déverrouille. C'est le geste le plus fréquent — savoir l'heure et si on a
+  raté quelque chose — donc il ne demande aucune navigation.
+- **Accueil** : grille de 10 icônes, navigable à la **souris** ou aux **flèches + Entrée**, avec
+  une **pastille rouge** par app qui a des notifications non lues.
+- **Notifications** : au démarrage, les messages en attente des contacts sont non lus. Ouvrir une
+  app marque les siennes comme lues. Téléphone **rangé**, une pastille discrète en bas à droite
+  indique combien attendent ; **sorti**, une bannière glisse en haut quand il en arrive une.
+- **Sons** : sortie de poche, verrouillage, clics, retour, déclencheur photo et notification sont
+  **synthétisés** (`gameplay/phone/phoneSounds.ts`) — aucun fichier à charger, comme le klaxon.
+- **Fond d'écran** : par défaut le ciel de Beauvais à l'heure qu'il est (il réutilise les couleurs
+  du cycle jour/nuit) ; le joueur peut mettre **une de ses photos** à la place.
 - **Applications qui marchent** :
   - `Santé` — vitaux, caractéristiques, effets en cours, zone. Tout est lu dans les stores du jeu.
   - `Notes` — les pistes pour quitter Beauvais (contenu : `src/data/phoneNotes.ts`).
   - `GPS` — carte vivante centrée sur le joueur (3 crans de zoom), lieux les plus proches avec
     leur distance et leurs **horaires d'ouverture**, plus les points de passage posés sur la
     grande carte. Réutilise `ui/mapDraw.ts`, `data/mapMarkers.json` et `gameplay/map/waypoints.ts`.
+    Toucher un lieu en fait une **destination** : une flèche dorée apparaît alors sur la minimap,
+    avec la distance restante (`gameplay/map/destinationStore.ts` — le tel pose, la minimap montre).
+  - `Radio` — écouter les cinq stations **à pied**, au casque, ou piloter l'autoradio quand on
+    conduit. Le téléphone est une source audio comme une autre : rien n'a été dupliqué.
   - `Photo` — prend de **vraies captures de la vue du jeu**, avec pellicule (12 photos max, en
     mémoire), agrandissement et suppression. Le HUD n'apparaît pas sur la photo.
   - `Contacts` — répertoire et conversations. Les messages sont **figés**
@@ -511,8 +525,13 @@ recompilations de shaders. C'est le point à ne pas « simplifier ».
 R01 → … → R05 → éteinte → R01. Ce n'est pas une sixième station muette — une station a un programme,
 des jingles, une grille. Éteint, il n'y a rien à diffuser : ni musique, ni jingle, ni souffle. En
 interne c'est `currentStationId === null` **avec** une `activeSource` toujours présente (à ne pas
-confondre avec `activeSource === null`, qui veut dire « pas de poste ici », donc à pied). Le choix
+confondre avec `activeSource === null`, qui veut dire « pas de poste ici »). Le choix
 est mémorisé par véhicule : une caisse laissée éteinte le reste.
+
+**Écouter la radio à pied.** Le **téléphone** (app `Radio`) est une **source comme une autre** pour
+le système audio : casque sur les oreilles, on entend la même antenne, au même instant, que
+n'importe quel autoradio. Une seule source à la fois — **au volant, l'autoradio a la main**, et
+l'app devient alors une télécommande pour choisir la station sans marteler `R`.
 
 **Deja en place :** un **scooter** et une **voiture Chevrolet FBX** conduisibles
 (`src/entities/vehicles/`). On s'en approche et on monte/descend avec **E** ; conduite a ZQSD

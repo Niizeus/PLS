@@ -3,6 +3,7 @@ import ContactsApp from './apps/ContactsApp'
 import GpsApp from './apps/GpsApp'
 import NotesApp from './apps/NotesApp'
 import PhotoApp from './apps/PhotoApp'
+import RadioApp from './apps/RadioApp'
 import SettingsApp from './apps/SettingsApp'
 import StatsApp from './apps/StatsApp'
 
@@ -50,6 +51,13 @@ export const PHONE_APPS: PhoneApp[] = [
     icon: '📝',
     color: 'linear-gradient(150deg, #fcd34d, #d97706)',
     Screen: NotesApp,
+  },
+  {
+    id: 'radio',
+    label: 'Radio',
+    icon: '🎧',
+    color: 'linear-gradient(150deg, #22d3ee, #0e7490)',
+    Screen: RadioApp,
   },
   {
     id: 'contacts',

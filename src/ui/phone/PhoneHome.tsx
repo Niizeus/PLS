@@ -1,3 +1,4 @@
+import { countUnread, useNotificationStore } from '../../gameplay/phone/notificationStore'
 import { usePhoneStore } from '../../gameplay/phone/phoneStore'
 import { PHONE_APPS } from './apps'
 import { PHONE } from './phoneStyle'
@@ -14,6 +15,7 @@ import { PHONE } from './phoneStyle'
  */
 export default function PhoneHome({ selected, onHover }: { selected: number; onHover: (index: number) => void }) {
   const openApp = usePhoneStore((s) => s.openApp)
+  const notifications = useNotificationStore((s) => s.notifications)
 
   return (
     <div style={{ display: 'grid', alignContent: 'start', gap: 14, padding: '14px 14px 4px' }}>
@@ -21,6 +23,7 @@ export default function PhoneHome({ selected, onHover }: { selected: number; onH
         {PHONE_APPS.map((app, index) => {
           const isSelected = index === selected
           const isReady = Boolean(app.Screen)
+          const unread = countUnread(notifications, app.id)
           return (
             <button
               key={app.id}
@@ -38,27 +41,51 @@ export default function PhoneHome({ selected, onHover }: { selected: number; onH
                 color: 'inherit',
               }}
             >
-              <span
-                style={{
-                  width: 50,
-                  height: 50,
-                  borderRadius: 15,
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 24,
-                  background: app.color,
-                  // Les apps pas encore développées sont désaturées : on voit
-                  // d'un coup d'œil ce qui marche vraiment.
-                  filter: isReady ? 'none' : 'saturate(0.25)',
-                  opacity: isReady ? 1 : 0.62,
-                  boxShadow: isSelected
-                    ? `0 0 0 2px ${PHONE.accent}, 0 6px 16px rgba(0, 0, 0, 0.45)`
-                    : '0 4px 12px rgba(0, 0, 0, 0.4)',
-                  transform: isSelected ? 'translateY(-2px)' : 'none',
-                  transition: 'transform 140ms ease, box-shadow 140ms ease',
-                }}
-              >
-                {app.icon}
+              <span style={{ position: 'relative' }}>
+                <span
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 15,
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: 24,
+                    background: app.color,
+                    // Les apps pas encore développées sont désaturées : on voit
+                    // d'un coup d'œil ce qui marche vraiment.
+                    filter: isReady ? 'none' : 'saturate(0.25)',
+                    opacity: isReady ? 1 : 0.62,
+                    boxShadow: isSelected
+                      ? `0 0 0 2px ${PHONE.accent}, 0 6px 16px rgba(0, 0, 0, 0.45)`
+                      : '0 4px 12px rgba(0, 0, 0, 0.4)',
+                    transform: isSelected ? 'translateY(-2px)' : 'none',
+                    transition: 'transform 140ms ease, box-shadow 140ms ease',
+                  }}
+                >
+                  {app.icon}
+                </span>
+                {/* Pastille rouge : le nombre de notifications non lues de l'app. */}
+                {unread > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -4,
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 5px',
+                      borderRadius: 999,
+                      background: '#ef4444',
+                      border: '2px solid rgba(14, 20, 36, 0.9)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      font: `900 10px ${PHONE.font}`,
+                      color: '#fff',
+                    }}
+                  >
+                    {unread}
+                  </span>
+                )}
               </span>
               <span
                 style={{

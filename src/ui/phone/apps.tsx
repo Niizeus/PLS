@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react'
+import ContactsApp from './apps/ContactsApp'
+import GpsApp from './apps/GpsApp'
 import NotesApp from './apps/NotesApp'
+import PhotoApp from './apps/PhotoApp'
+import SettingsApp from './apps/SettingsApp'
 import StatsApp from './apps/StatsApp'
 
 /**
@@ -52,14 +56,14 @@ export const PHONE_APPS: PhoneApp[] = [
     label: 'Contacts',
     icon: '💬',
     color: 'linear-gradient(150deg, #4ade80, #15803d)',
-    soon: "Appels, messages, embrouilles et plans foireux. Il faudra d'abord des PNJ et des dialogues.",
+    Screen: ContactsApp,
   },
   {
     id: 'camera',
     label: 'Photo',
     icon: '📷',
     color: 'linear-gradient(150deg, #a78bfa, #6d28d9)',
-    soon: 'Photos de preuves, d’indices et de conneries. Demande une capture de la vue 3D.',
+    Screen: PhotoApp,
   },
   {
     id: 'bank',
@@ -73,7 +77,7 @@ export const PHONE_APPS: PhoneApp[] = [
     label: 'GPS',
     icon: '🗺️',
     color: 'linear-gradient(150deg, #34d399, #047857)',
-    soon: 'Lieux connus et points d’intérêt. La carte du jeu (touche M) existe déjà : elle sera branchée ici.',
+    Screen: GpsApp,
   },
   {
     id: 'shop',
@@ -94,9 +98,7 @@ export const PHONE_APPS: PhoneApp[] = [
     label: 'Réglages',
     icon: '⚙️',
     color: 'linear-gradient(150deg, #94a3b8, #475569)',
-    soon:
-      "Volumes, luminosité, touches. Le jeu n'a PAS encore de système de paramètres joueur " +
-      '(le panneau F2 est un outil de dev, pas un menu options) : c’est un chantier à part.',
+    Screen: SettingsApp,
   },
 ]
 

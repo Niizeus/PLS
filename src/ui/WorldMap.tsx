@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { MAP_MARKERS } from '../data/mapMarkers'
 import { isRuntimeMapMarkerOnMap } from '../gameplay/map/mapMarkerRuntime'
+// Type + sauvegarde des points de passage : partagés avec l'app GPS du téléphone.
+import { loadWaypoints, saveWaypoints, type Waypoint } from '../gameplay/map/waypoints'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { BOUNDS, SPAWN } from '../world/beauvais/cityData'
 import { drawBuildings, drawMapMarkers, drawPlayer, drawRoads, drawWater, drawZones, type MapView } from './mapDraw'
@@ -16,7 +18,6 @@ import { drawBuildings, drawMapMarkers, drawPlayer, drawRoads, drawWater, drawZo
 const CITY_RES = 3000 // résolution du rendu hors-écran de la ville
 const PAD = 30
 const ICONS = ['🏠', '⭐', '⚠️', '🛒', '🚩'] // 5 icônes simples
-const WP_KEY = 'pls.waypoints.v1'
 
 const boundsCenter = { x: (BOUNDS.minX + BOUNDS.maxX) / 2, z: (BOUNDS.minZ + BOUNDS.maxZ) / 2 }
 const citySpan = Math.max(BOUNDS.maxX - BOUNDS.minX, BOUNDS.maxZ - BOUNDS.minZ)
@@ -42,21 +43,6 @@ function getCity(): HTMLCanvasElement {
   return c
 }
 
-interface Waypoint {
-  id: number
-  x: number
-  z: number
-  text: string
-  icon: string
-}
-const loadWps = (): Waypoint[] => {
-  try {
-    return JSON.parse(localStorage.getItem(WP_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
-
 interface FormState {
   sx: number
   sy: number
@@ -69,7 +55,7 @@ interface FormState {
 
 export default function WorldMap() {
   const [open, setOpen] = useState(false)
-  const [wps, setWps] = useState<Waypoint[]>(loadWps)
+  const [wps, setWps] = useState<Waypoint[]>(loadWaypoints)
   const [form, setForm] = useState<FormState | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wpsRef = useRef(wps)
@@ -78,7 +64,7 @@ export default function WorldMap() {
 
   useEffect(() => {
     wpsRef.current = wps
-    localStorage.setItem(WP_KEY, JSON.stringify(wps))
+    saveWaypoints(wps)
   }, [wps])
 
   // Ouverture / fermeture au clavier.

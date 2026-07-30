@@ -28,6 +28,12 @@ export const FRAME = {
   ATTACHED: 2,
   /** Caméra : elle vise une position déjà à jour. */
   CAMERA: 3,
-  /** Rendu de l'image. Toujours en dernier. */
+  /** Rendu de l'image. Toujours en dernier... */
   RENDER: 10,
+  /**
+   * ...sauf la capture photo du téléphone, qui doit lire le canvas WebGL juste
+   * APRÈS le rendu et avant que le navigateur n'efface le tampon de dessin.
+   * Voir `gameplay/phone/PhoneCameraCapture.tsx`.
+   */
+  CAPTURE: 11,
 } as const

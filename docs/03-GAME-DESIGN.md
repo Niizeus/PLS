@@ -241,18 +241,35 @@ systèmes existants, il ne duplique jamais les données ».
   droite) — contrairement à l'inventaire et à la carte, qui sont plein écran.
 - **Accueil** : grille de 9 icônes, navigable à la **souris** ou aux **flèches + Entrée**. Le fond
   d'écran suit l'heure du jeu (il réutilise les couleurs du cycle jour/nuit).
-- **Applications qui marchent** : `Santé` (vitaux, caractéristiques, effets en cours, zone — tout
-  est lu dans les stores du jeu) et `Notes` (les pistes pour quitter Beauvais, contenu dans
-  `src/data/phoneNotes.ts`).
-- **Applications prévues mais pas encore développées** (Contacts, Photo, Banque, GPS, Boutiques,
-  Réseaux, Réglages) : icônes grisées qui ouvrent un écran **« pas encore branché »** expliquant ce
-  qui manque. Le téléphone ne fait jamais semblant et n'invente aucun chiffre.
+- **Applications qui marchent** :
+  - `Santé` — vitaux, caractéristiques, effets en cours, zone. Tout est lu dans les stores du jeu.
+  - `Notes` — les pistes pour quitter Beauvais (contenu : `src/data/phoneNotes.ts`).
+  - `GPS` — carte vivante centrée sur le joueur (3 crans de zoom), lieux les plus proches avec
+    leur distance et leurs **horaires d'ouverture**, plus les points de passage posés sur la
+    grande carte. Réutilise `ui/mapDraw.ts`, `data/mapMarkers.json` et `gameplay/map/waypoints.ts`.
+  - `Photo` — prend de **vraies captures de la vue du jeu**, avec pellicule (12 photos max, en
+    mémoire), agrandissement et suppression. Le HUD n'apparaît pas sur la photo.
+  - `Contacts` — répertoire et conversations. Les messages sont **figés**
+    (`src/data/phoneContacts.ts`) : répondre et appeler attendent les PNJ et les dialogues.
+  - `Réglages` — uniquement ce qui existe vraiment : volume de la radio et filtre « vieux poste »
+    (`audio/radioStore.ts`). Le reste est listé comme « pas encore branché ».
+- **Applications prévues mais pas encore développées** (Banque, Boutiques, Réseaux) : icônes
+  grisées qui ouvrent un écran **« pas encore branché »** expliquant ce qui manque. Le téléphone ne
+  fait jamais semblant et n'invente aucun chiffre.
 - **Ajouter une application** = créer un fichier dans `src/ui/phone/apps/` + une entrée dans
   `src/ui/phone/apps.tsx`. Rien d'autre à toucher.
 
 Restent à faire (voir [07 - Backlog d'idées § Prototype du téléphone](07-BACKLOG-IDEES.md#-2-prototype-du-téléphone)) :
 un vrai **système de paramètres joueur** (le panneau `F2` est dev-only et doit le rester), la
-**manette** (aucune couche d'entrées manette n'existe), et une **batterie** (l'icône est décorative).
+**manette** (aucune couche d'entrées manette n'existe), l'**argent / la réputation / les missions**
+(les apps Banque, Boutiques et Réseaux les attendent), la **sauvegarde des photos** (elles vivent
+en mémoire) et une **batterie** (l'icône est décorative).
+
+> 🔍 Détail technique à connaître pour l'app Photo : on ne peut lire le canvas WebGL que **juste
+> après le rendu de l'image**, sinon le navigateur a déjà effacé le tampon. C'est le rôle de
+> `gameplay/phone/PhoneCameraCapture.tsx`, monté dans la scène avec la priorité `FRAME.CAPTURE`
+> (voir `core/framePriority.ts`). L'alternative (`preserveDrawingBuffer`) coûterait des perfs à
+> **chaque** image pour un usage ponctuel.
 
 ---
 

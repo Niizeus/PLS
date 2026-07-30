@@ -196,7 +196,8 @@ sélectionnable aussi simplement qu'une station classique.
 
 ## 📱 2. Prototype du téléphone
 
-> ✅ **Le prototype est FAIT** (touche `P`, accueil, apps `Santé` et `Notes`, catalogue extensible).
+> ✅ **Le prototype est FAIT** (touche `P`, accueil, catalogue extensible, et six applications :
+> `Santé`, `Notes`, `GPS`, `Photo`, `Contacts`, `Réglages`).
 > Ce qui est en place est décrit dans [03 Game Design § Smartphone](03-GAME-DESIGN.md#-smartphone).
 > Cette entrée ne garde que **ce qui reste à faire** : le système de paramètres (§ 2.2) et les
 > données de jeu qui n'existent pas encore (§ 2.1).
@@ -236,8 +237,9 @@ existantes.
   missions, argent). Le prototype doit pouvoir afficher « pas encore branché » proprement plutôt que
   d'inventer des valeurs.
 - **✅ Fait** : l'app `Santé` lit déjà vitaux, caractéristiques, effets en cours et zone dans les
-  stores existants ; l'argent, la réputation et les missions sont affichés comme « pas encore
-  branché ». Il reste à brancher ces systèmes le jour où ils existeront.
+  stores existants ; l'app `GPS` lit la position du joueur, les points d'intérêt et leurs horaires ;
+  l'argent, la réputation et les missions sont affichés comme « pas encore branché ». Il reste à
+  brancher ces systèmes le jour où ils existeront.
 - **Étiquettes** : Priorité souhaitable · Horizon moyen terme · Nature interface · État à étudier
 
 ### 2.2 Paramètres accessibles depuis le téléphone
@@ -249,6 +251,10 @@ touches, sensibilité, options d'affichage.
   réel de cette idée, et il concerne aussi le menu options du jeu en général. La configuration des
   touches dépend en plus de `keyMap.ts`, aujourd'hui une constante figée : le rendre remappable est
   un chantier à part entière (voir aussi le rappel des touches `ControlsHint.tsx`).
+- **⚠️ Partiellement fait** : l'app `Réglages` existe mais n'expose QUE les réglages réels
+  d'aujourd'hui (volume radio + filtre « vieux poste », dans `audio/radioStore.ts`). Les autres y
+  sont listés en « pas encore branché ». **Ne pas** y bricoler des réglages au cas par cas : c'est
+  le système de paramètres qu'il faut construire, l'app n'en sera que la façade.
 - **Étiquettes** : Priorité importante (comme préalable) · Horizon moyen terme · Nature architecture + interface · État spec à rédiger
 
 ### 2.3 Structure du prototype — ✅ fait

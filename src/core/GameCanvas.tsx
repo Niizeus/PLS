@@ -6,6 +6,7 @@ import DynamicSky from './DynamicSky'
 import TimeFog from './TimeFog'
 import World from '../world/World'
 import Characters from '../entities/Characters'
+import PhoneCameraCapture from '../gameplay/phone/PhoneCameraCapture'
 import PhysicsRoot from '../gameplay/physics/PhysicsRoot'
 import WorldBuildingColliders from '../gameplay/physics/WorldBuildingColliders'
 import WorldPhysicsColliders from '../gameplay/physics/WorldPhysicsColliders'
@@ -54,6 +55,10 @@ export default function GameCanvas() {
 
       {/* Rend l'image en dernier — voir core/framePriority.ts. */}
       <SceneRenderer />
+
+      {/* ...puis, si le joueur a appuyé sur le déclencheur, photographie l'image
+          qui vient d'être rendue (app Photo du téléphone). */}
+      <PhoneCameraCapture />
     </Canvas>
   )
 }

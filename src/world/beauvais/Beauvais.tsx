@@ -8,6 +8,7 @@ import { BUILDINGS, SPAWN, type Building } from './cityData'
 import { buildBuilding } from './buildingMesh'
 import { CATHEDRAL } from './cathedralMesh'
 import { editorTileReach } from '../editorStreaming'
+import { createTileResourceCache } from './tileResourceCache'
 
 /**
  * 🏙️  Beauvais, bâtiment par bâtiment.
@@ -23,7 +24,8 @@ import { editorTileReach } from '../editorStreaming'
  * On fait donc du STREAMING par tuiles :
  *  - les bâtiments sont rangés par tuile de TILE mètres (calcul léger, sans 3D) ;
  *  - seules les tuiles autour du joueur sont montées ; la géométrie d'une tuile
- *    est construite à son montage et libérée à son démontage.
+ *    passe par un cache LRU : elle survit aux petits allers-retours, puis se libère
+ *    quand elle sort du cache.
  *
  * ⚠️ Cohérence avec les collisions : on affiche TOUS les bâtiments de la donnée,
  * à UNE exception près — la cathédrale, qui a son propre modèle (`Cathedral.tsx`)
@@ -35,6 +37,8 @@ import { editorTileReach } from '../editorStreaming'
 
 const TILE = 180 // côté d'une tuile, en mètres
 const REACH = 1 // anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
+const PREPARE_DELAY_MS = 16
+const CITY_TILE_MATERIAL = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient })
 
 // --- Rangement des bâtiments par tuile (une seule fois, au chargement) ---
 const tiles = new Map<string, Building[]>()
@@ -48,9 +52,11 @@ for (const b of BUILDINGS) {
   list.push(b)
 }
 
-/** Une tuile de ville : géométrie construite au montage, libérée au démontage. */
-function CityTile({ tileKey }: { tileKey: string }) {
-  const geometry = useMemo(() => {
+/** Une tuile de ville : géométrie streamée, gardée brièvement en cache pour les retours arrière. */
+const cityTileCache = createTileResourceCache<THREE.BufferGeometry | null>({
+  name: 'city-buildings',
+  maxEntries: 72,
+  build: (tileKey) => {
     const list = tiles.get(tileKey)
     if (!list) return null
     const parts: THREE.BufferGeometry[] = []
@@ -61,17 +67,45 @@ function CityTile({ tileKey }: { tileKey: string }) {
     if (parts.length === 0) return null
     const merged = mergeGeometries(parts, false)
     parts.forEach((p) => p.dispose())
+    merged?.computeBoundingSphere()
     return merged
-  }, [tileKey])
+  },
+})
 
-  // Libère la mémoire GPU quand la tuile s'éloigne du joueur.
-  useEffect(() => () => geometry?.dispose(), [geometry])
+export function warmCityTilesAround(x: number, z: number, reach = REACH): number {
+  const centerTx = Math.floor(x / TILE)
+  const centerTz = Math.floor(z / TILE)
+  let warmed = 0
+  for (let dx = -reach; dx <= reach; dx++) {
+    for (let dz = -reach; dz <= reach; dz++) {
+      const key = keyOf(centerTx + dx, centerTz + dz)
+      if (!tiles.has(key)) continue
+      cityTileCache.get(key)
+      warmed += 1
+    }
+  }
+  return warmed
+}
+
+function CityTile({ tileKey }: { tileKey: string }) {
+  const geometry = useMemo(() => cityTileCache.get(tileKey), [tileKey])
+
+  // Libère la mémoire GPU quand la tuile sort du cache.
+  useEffect(() => {
+    cityTileCache.retain(tileKey)
+    return () => cityTileCache.release(tileKey)
+  }, [tileKey])
 
   if (!geometry) return null
   return (
-    <mesh geometry={geometry} castShadow receiveShadow>
-      <meshToonMaterial vertexColors gradientMap={toonGradient} />
-    </mesh>
+    <mesh
+      geometry={geometry}
+      material={CITY_TILE_MATERIAL}
+      castShadow
+      receiveShadow
+      matrixAutoUpdate={false}
+      dispose={null}
+    />
   )
 }
 
@@ -83,6 +117,7 @@ export default function Beauvais({ mode = 'game' }: { mode?: 'game' | 'editor' }
     tz: Math.floor(SPAWN.z / TILE),
     reach: REACH,
   }))
+  const [preparedKeys, setPreparedKeys] = useState<Set<string>>(() => new Set())
   const frame = useRef(0)
 
   useFrame(() => {
@@ -111,10 +146,48 @@ export default function Beauvais({ mode = 'game' }: { mode?: 'game' | 'editor' }
       if (tiles.has(key)) keys.push(key)
     }
   }
+  const tileSignature = keys.join('|')
+
+  useEffect(() => {
+    let cancelled = false
+    let cursor = 0
+
+    const publishPrepared = () => {
+      setPreparedKeys((current) => {
+        const next = new Set<string>()
+        for (const key of keys) {
+          if (cityTileCache.has(key)) next.add(key)
+        }
+        const changed = next.size !== current.size || [...next].some((key) => !current.has(key))
+        return changed ? next : current
+      })
+    }
+
+    const prepareNext = () => {
+      if (cancelled) return
+      while (cursor < keys.length) {
+        const key = keys[cursor++]
+        if (!cityTileCache.has(key)) {
+          cityTileCache.get(key)
+          publishPrepared()
+          window.setTimeout(prepareNext, PREPARE_DELAY_MS)
+          return
+        }
+      }
+      publishPrepared()
+    }
+
+    prepareNext()
+    return () => {
+      cancelled = true
+    }
+  }, [tileSignature])
+
+  const visibleKeys = keys.filter((key) => preparedKeys.has(key) && cityTileCache.has(key))
 
   return (
     <>
-      {keys.map((key) => (
+      {visibleKeys.map((key) => (
         <CityTile key={key} tileKey={key} />
       ))}
     </>

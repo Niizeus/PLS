@@ -38,7 +38,10 @@ stream des tuiles `TrimeshCollider` fixes autour du joueur à partir de la surfa
 finale praticable (`driveSurfaceHeightAt`, basee sur `groundHeight()`) : Rapier devient l'autorité locale du
 sol proche, pas seulement un outil de test. `<WorldBuildingColliders>` stream aussi
 les façades proches sous forme de murs `CuboidCollider` fixes, pour que la voiture
-collide avec les bâtiments dans Rapier et plus avec une caisse 2D séparée. Les
+collide avec les bâtiments dans Rapier et plus avec une caisse 2D séparée. ⚠️ Ces murs
+sont montés **par lots de 48, un lot par image maximum** : une tuile du centre-ville en
+compte jusqu'à 770, et les créer d'un coup coûtait 40 à 80 ms de commit React/Rapier
+(la source des drops FPS en voiture rapide — voir `docs/04-MONDE-BEAUVAIS.md`). Les
 props/colliders de test attendent le chargement du relief avant de se créer, sinon
 Rapier les figerait à une hauteur provisoire avant que le sol visible existe.
 
@@ -179,6 +182,7 @@ changer le feeling véhicule, profiler en priorité le nombre de colliders actif
 | Un menu ou un écran | `ui/` |
 | Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. |
 | Un paramètre de gameplay à régler en live | `src/devtools/devTuningSchema.ts`, puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/import un JSON d'overrides. |
+| Un probleme de performance a diagnostiquer | `F9` en DEV lance/arrete une capture perf. Le rapport JSON est ecrit dans `public/dev/perf-reports/` via `vite/perfReportPlugin.ts`. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
@@ -223,9 +227,33 @@ un parametre deja lu par le gameplay, ajoute une entree dans `DEV_TUNING_FIELDS`
 systeme, cree d'abord son type/default clair, puis ajoute une fonction de lecture equivalent a
 `getPlayerTuning()`.
 
+> 💡 **Une refonte ergonomique du panneau est souhaitee** (noms clairs au lieu des noms de variables,
+> descriptions, categories, prereglages, mode simple / mode avance, schema de voiture cliquable,
+> avant/apres). Le point d'entree serait `devTuningSchema.ts`, qui devrait porter descriptions, unites
+> et categories. Idee non specifiee, a ne pas implementer sans demande :
+> [07 - Backlog d'idees § Menu F2](07-BACKLOG-IDEES.md#-4-refonte-ergonomique-du-menu-f2), et la passe
+> ergonomique globale des outils au [§ 5](07-BACKLOG-IDEES.md#-5-passe-ergonomique-globale-des-outils).
+
 `F2` est reserve a cet outil. Les raccourcis temps restent dans `TimeDevControls.tsx` : `F6` cycle la
-vitesse, `F7` met midi, `F8` met nuit, `F9` pause/play, `F10` met l'aube, `F11` saute a la prochaine
-nuit.
+vitesse, `F7` met midi, `F8` met nuit, `Shift+F9` pause/play, `F10` met l'aube, `F11` saute a la prochaine
+nuit. `F9` seul est reserve au profiler de performance.
+
+## Profiler de performance in-game (`F9`)
+
+Le profiler dev-only sert a generer un rapport exploitable avant d'optimiser :
+
+- `PerfProfilerControls.tsx` ecoute `F9` : premier appui = demarre, deuxieme appui = arrete et sauvegarde.
+- `PerfProfilerRecorder.tsx` vit dans le canvas R3F et mesure les frames apres le rendu.
+- `perfProfiler.ts` garde les donnees hors React pour ne pas provoquer de re-render a chaque frame.
+- `vite/perfReportPlugin.ts` ecrit le JSON dans `public/dev/perf-reports/` pendant `npm run dev`.
+
+Le rapport contient les temps frame par frame, les frames lentes, des mesures approximatives par
+phase `useFrame`, les stats renderer Three (`calls`, triangles, geometries, textures), une photo de
+la scene, la position joueur/voiture, le temps de jeu, la memoire navigateur quand elle existe, et
+les stats des caches de tuiles, dont `builds`, `evictions`, `maxBuildMs`, `lastBuildMs` et
+`lastBuiltKey`. Il ne pretend pas profiler chaque composant React individuellement :
+il sert surtout a distinguer hitch de streaming/physique, cout de rendu stable, explosion de scene,
+ou allocation memoire.
 
 ---
 

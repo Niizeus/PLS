@@ -6,6 +6,7 @@ import mapMarkersPlugin from './vite/mapMarkersPlugin'
 import zonesPlugin from './vite/zonesPlugin'
 import devTuningPlugin from './vite/devTuningPlugin'
 import interiorsPlugin from './vite/interiorsPlugin'
+import perfReportPlugin from './vite/perfReportPlugin'
 
 // Config Vite. Le plugin React suffit pour du R3F ; `radioManifestPlugin` scanne
 // `public/musique/radio/` pour que les fichiers audio déposés soient joués sans code,
@@ -15,5 +16,14 @@ import interiorsPlugin from './vite/interiorsPlugin'
 // ⚠️ `regie.html` est un outil de développement : il n'est PAS dans les entrées du
 // build, donc il ne part pas dans le jeu compilé.
 export default defineConfig({
-  plugins: [react(), radioManifestPlugin(), radioSchedulePlugin(), mapMarkersPlugin(), zonesPlugin(), interiorsPlugin(), devTuningPlugin()],
+  plugins: [
+    react(),
+    radioManifestPlugin(),
+    radioSchedulePlugin(),
+    mapMarkersPlugin(),
+    zonesPlugin(),
+    interiorsPlugin(),
+    devTuningPlugin(),
+    perfReportPlugin(),
+  ],
 })

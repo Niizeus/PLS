@@ -9,6 +9,7 @@ import Characters from '../entities/Characters'
 import PhysicsRoot from '../gameplay/physics/PhysicsRoot'
 import WorldBuildingColliders from '../gameplay/physics/WorldBuildingColliders'
 import WorldPhysicsColliders from '../gameplay/physics/WorldPhysicsColliders'
+import PerfProfilerRecorder from '../devtools/PerfProfilerRecorder'
 
 /**
  * La scène 3D complète.
@@ -46,6 +47,7 @@ export default function GameCanvas() {
         <WorldPhysicsColliders />
         <WorldBuildingColliders />
         <Characters />
+        <PerfProfilerRecorder />
       </PhysicsRoot>
 
       <FollowCamera />

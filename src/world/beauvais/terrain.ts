@@ -57,11 +57,11 @@ export function loadTerrain(): Promise<void> {
   if (loading) return loading
   loading = (async () => {
     try {
-      const index = await (await fetch('terrain/index.json')).json()
+      const index = await (await fetch('/terrain/index.json')).json()
       const g = index.global
       if (!g) throw new Error('index.json sans bloc "global" (lance build-terrain-global.mjs)')
 
-      const bitmap = await createImageBitmap(await (await fetch(`terrain/${g.file}`)).blob())
+      const bitmap = await createImageBitmap(await (await fetch(`/terrain/${g.file}`)).blob())
       const canvas = new OffscreenCanvas(g.w, g.h)
       const ctx = canvas.getContext('2d')
       if (!ctx) throw new Error('pas de contexte 2d pour décoder la heightmap')

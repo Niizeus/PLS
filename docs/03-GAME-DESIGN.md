@@ -229,6 +229,12 @@ Le téléphone peut être cassé, sans batterie ou sans réseau dans certains ca
 doivent rester ponctuelles. Elles doivent créer des situations drôles ou tendues, pas empêcher le
 joueur de jouer confortablement.
 
+> 💡 **Un premier prototype est envisagé** (écran d'accueil, app stats, app paramètres, structure
+> extensible), avec la règle « le téléphone consulte les systèmes existants, il ne duplique pas les
+> données » : [07 - Backlog d'idées § Prototype du téléphone](07-BACKLOG-IDEES.md#-2-prototype-du-téléphone).
+> ⚠️ Préalable identifié : il n'existe pas encore de **système de paramètres joueur** (le panneau
+> `F2` est dev-only).
+
 ---
 
 ## 🥊 Combat au corps à corps
@@ -391,6 +397,11 @@ Le joueur peut utiliser ou voler :
 
 Même si les sorties routières sont bloquées par les travaux, les véhicules restent essentiels pour
 circuler, fuir la police, faire des missions ou provoquer le chaos.
+
+> 💡 **Pistes de conduite pas encore tranchées** (limitateur de vitesse, frein à main et drift,
+> effets de pneus, contrôle du véhicule dans les airs, klaxon, phares, radio éteinte) :
+> [07 - Backlog d'idées § Véhicules](07-BACKLOG-IDEES.md#-1-véhicules-et-qualité-de-conduite).
+> Ce sont des **idées**, pas des décisions : rien n'est à coder tant que ce n'est pas spécifié ici.
 
 **Deja en place :** un **scooter** et une **voiture Chevrolet FBX** conduisibles
 (`src/entities/vehicles/`). On s'en approche et on monte/descend avec **E** ; conduite a ZQSD
@@ -578,10 +589,16 @@ maintenant l'essai principal du chassis dynamique Rapier : `Car.tsx` monte le FB
 pose physique pour le joueur et la camera. Les façades proches sont aussi migrées en colliders
 Rapier streamés par tuiles stables : un `RigidBody fixed` par tuile regroupe plusieurs murs
 `CuboidCollider`, afin d'eviter les remounts massifs et les drops FPS quand la voiture roule vite.
-Retour de test actuel : quand un rollback de voiture se produit, un drop FPS est visible au même
-moment. La prochaine passe ne doit donc pas commencer par retoucher le grip, la camera ou la
-suspension, mais par une vraie passe d'optimisation/profiling du monde physique : budget de
-colliders, streaming des tuiles, remounts React/Rapier et coût du step physique à haute vitesse.
+**Cause des drops FPS en voiture rapide (identifiée au profileur, corrigée)** : ce regroupement par
+tuile ne suffisait pas. Une tuile de 96 m du centre-ville pèse 150 à 770 murs, montés dans un seul
+commit React → une long task de 40 à 80 ms à chaque franchissement de tuile, soit toutes les ~3 s à
+110 km/h. Sur six captures `F9` d'affilée, `cache.build:physics-building-walls` est 20 à 220 fois
+plus fréquent au voisinage d'une frame lente que d'une frame rapide, et le coût est *hors* boucle de
+jeu (cpu mesuré ~14 ms pour une frame de ~56 ms) — donc dans le commit React/Rapier, pas dans le
+rendu ni dans le step physique. `WorldBuildingColliders` étale désormais la création et la
+destruction des colliders sur plusieurs images (lots de 48 murs, un lot par image maximum).
+Le span `react.mount:physics-building-walls-batch` du rapport `F9` mesure ce coût : il doit rester
+très en dessous de 16 ms.
 Ces briques servent à régler la gravite globale, les materiaux, le sommeil des
 objets, les groupes de collision, le decollage, les tonneaux et les atterrissages.
 
@@ -639,6 +656,19 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
 
 - [ ] Ajouter des références visuelles : Borderlands, jeux toon, BD franco-belge, cartoon adulte.
 
+### Ciel et ambiances de la journée
+
+Le ciel et le cycle jour/nuit sont **déjà en place** (`src/gameplay/time/` + `src/core/DynamicSky.tsx`,
+`GradientSky.tsx`, `TimeFog.tsx`, `Lights.tsx`) : horloge, palettes aube/jour/soir/nuit interpolées,
+soleil, lune avec phases, étoiles et nuages en sprites. Les raccourcis DEV `F7` (midi), `F8` (nuit),
+`F10` (aube) et `F11` (nuit suivante) servent à juger les ambiances.
+
+> 💡 **Une grosse passe visuelle est souhaitée** — pas pour du réalisme, mais pour créer plusieurs
+> ambiances fortes : aurore chaude californienne, journée non générique, coucher de soleil dramatique,
+> **nuit cosy / lo-fi / synthwave** (mood Kavinsky), nuages teintés par l'heure, halos autour des
+> astres. Direction détaillée et dépendances :
+> [07 - Backlog d'idées § Ciel et cycle jour/nuit](07-BACKLOG-IDEES.md#-3-ciel-et-cycle-journuit).
+
 ---
 
 ## 🔊 Ambiance sonore
@@ -673,6 +703,7 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
 | Drogues et monde psychique | `src/gameplay/substances/` + `src/world/psychic/` |
 | Dialogues & réfs perso | `src/data/` |
 | Look cell-shading | `src/shaders/` + matériaux dans `src/world/` & `src/entities/` |
+| Ciel, cycle jour/nuit, astres, nuages | `src/gameplay/time/` (horloge, `celestialCycle.ts`) + `src/core/DynamicSky.tsx`, `TimeFog.tsx`, `Lights.tsx` |
 | PNJ, routines et dialogues | `src/entities/` + `src/gameplay/npc/` + `src/data/npcs.*` |
 | Véhicules | `src/entities/vehicles/` |
 | Physique sandbox / ragdoll | `src/gameplay/physics/` + Rapier (`@react-three/rapier`) |

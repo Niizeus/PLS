@@ -14,6 +14,7 @@ Pour comprendre le projet depuis zero :
 5. [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md) : vraie ville, quartiers, carte, relief, routes.
 6. [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) : items, inventaire, equipements.
 7. [06 - Editeur PLS](06-EDITEUR-PLS.md) : outil de production, carte, interieurs, futurs modules.
+8. [07 - Backlog d'idees](07-BACKLOG-IDEES.md) : idees pas encore specifiees. **Rien n'y est a coder.**
 
 ## Chercher vite
 
@@ -28,6 +29,7 @@ Pour comprendre le projet depuis zero :
 | Liste d'objets, categories, structure item, equipements | [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) |
 | Editeur carte, interieurs, items, PNJ, factions, validations | [06 - Editeur PLS](06-EDITEUR-PLS.md) |
 | Radios, identite des stations, workflow audio | [Documentations RADIO](Documentations%20RADIO/) |
+| Une idee pas encore tranchee, une envie, une piste a explorer | [07 - Backlog d'idees](07-BACKLOG-IDEES.md) |
 | Anciennes recherches utiles mais plus forcement actuelles | [archive](archive/) |
 
 ## Regle de rangement
@@ -38,6 +40,8 @@ Pour comprendre le projet depuis zero :
 - **Outil pour creer du contenu** : [06 - Editeur PLS](06-EDITEUR-PLS.md).
 - **Implementation et architecture de code** : [02 - Architecture](02-ARCHITECTURE.md).
 - **Recherche ancienne ou piste mise de cote** : [archive](archive/).
+- **Idee pas encore decidee ni specifiee** : [07 - Backlog d'idees](07-BACKLOG-IDEES.md). Des qu'elle
+  devient une decision, elle demenage dans le document du systeme concerne.
 
 Si une idee touche plusieurs domaines, on met la decision principale dans le document le plus
 proche, puis on ajoute seulement un renvoi court dans les autres docs.
@@ -50,4 +54,5 @@ proche, puis on ajoute seulement un renvoi court dans les autres docs.
 | [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md) | A jour sur le monde actuel, mais contient beaucoup de notes techniques. |
 | [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) | Base de bible items. Doit devenir plus data-driven avec les prochains objets. |
 | [06 - Editeur PLS](06-EDITEUR-PLS.md) | Vision + roadmap + etat implemente. A separer plus tard entre vision et suivi technique si besoin. |
+| [07 - Backlog d'idees](07-BACKLOG-IDEES.md) | Recueil d'idees non specifiees. Ne decrit PAS le jeu actuel et ne doit pas etre implemente sans demande explicite. |
 

@@ -1237,6 +1237,14 @@ sortie n'est pas testable et enferme le joueur.
 Mur en arc, prefabs, miroir, reseau, mesure de distance, verifications automatiques (piece non
 fermee, spawn dans un mur, sortie qui ne mene nulle part), et test 3D demarrant a l'endroit edite.
 
+> 💡 **Materiaux des murs et des sols — idee non specifiee.** Chaque mur et chaque sol porte deja un
+> champ `material` (`proto_wall` / `proto_floor`) : le crochet de donnees existe, la bibliotheque de
+> textures et l'outil d'application n'existent pas. La direction souhaitee est un fonctionnement
+> **proche d'un outil de peinture** (je choisis une texture, je survole, la surface s'illumine, je
+> clique), avec pipette, pot de peinture, echelle et orientation. Detail, dependances et pieges
+> connus (murs de separation en double, UV autour des ouvertures, explosion du nombre de materiaux) :
+> [07 - Backlog d'idees § Outil de creation d'interieur](07-BACKLOG-IDEES.md#-6-outil-de-création-dintérieur--matériaux-des-murs-et-des-sols).
+
 Cote generateur : rattacher un plan genere directement a un point d'interet depuis la carte, choisir
 le nombre de chambres/etages avant de generer, et rejouer une graine precise pour retrouver un plan.
 
@@ -1278,6 +1286,12 @@ du point (bouton Sauver POI du module Carte).
 - Ils se **replient** avec la fleche posee sur le bord de la carte, ou par un double-clic sur la
   poignee. Largeurs et etat replie sont gardes d'une session a l'autre (`localStorage`).
 - Les deux modules partagent la meme disposition de volets.
+
+> 💡 **Chantier futur : passe ergonomique globale des outils**, a lancer **apres stabilisation** des
+> modules (sinon on polit et on documente une interface qui bouge encore). Elle couvrirait noms,
+> descriptions, navigation, messages d'erreur, aide contextuelle, conventions partagees entre tous
+> les outils (editeur, `F2`, Regie, profiler) et guides. Voir
+> [07 - Backlog d'idees § Passe ergonomique globale](07-BACKLOG-IDEES.md#-5-passe-ergonomique-globale-des-outils).
 
 ⚠️ Les deux modules restent **montes en permanence**, celui du fond etant masque. Avant, changer
 d'onglet demontait le module quitte et jetait tout son travail non sauvegarde en silence — ce qui

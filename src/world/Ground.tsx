@@ -6,6 +6,7 @@ import { BOUNDS, SPAWN } from './beauvais/cityData'
 import { getHeightMap } from './beauvais/terrain'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { editorTileReach } from './editorStreaming'
+import { createTileResourceCache } from './beauvais/tileResourceCache'
 
 /**
  * 🏔️  Le sol de Beauvais, avec son VRAI relief (LiDAR HD de l'IGN).
@@ -30,7 +31,9 @@ import { editorTileReach } from './editorStreaming'
 const GROUND_COLOR = '#8a9470'
 const CHUNK_CELLS = 32 // côté d'une dalle, en cases de grille (32 × 8 m = 256 m)
 const REACH = 1 // anneaux de dalles autour du joueur (1 = 3×3)
+const PREPARE_DELAY_MS = 16
 const MARGIN = 400 // marge du plan de repli, pour ne pas voir le bord du monde
+const GROUND_MATERIAL = new THREE.MeshToonMaterial({ color: GROUND_COLOR, gradientMap: toonGradient })
 
 /**
  * Construit une dalle de terrain à partir de la grille d'altitudes.
@@ -76,18 +79,53 @@ function buildChunk(ci: number, cj: number): THREE.BufferGeometry | null {
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geo.setIndex(indices)
   geo.computeVertexNormals() // le relief a besoin de vraies normales pour être lisible
+  geo.computeBoundingSphere()
   return geo
 }
 
+const groundChunkCache = createTileResourceCache<THREE.BufferGeometry | null>({
+  name: 'ground-chunks',
+  maxEntries: 64,
+  build: (key) => {
+    const [ci, cj] = key.split(':').map(Number)
+    return buildChunk(ci, cj)
+  },
+})
+
+export function warmGroundChunksAround(x: number, z: number, reach = REACH): number {
+  const map = getHeightMap()
+  if (!map) return 0
+  const chunkSize = CHUNK_CELLS * map.res
+  const centerCi = Math.floor((x - map.x0) / chunkSize)
+  const centerCj = Math.floor((z - map.z0) / chunkSize)
+  const maxCi = Math.floor((map.w - 2) / CHUNK_CELLS)
+  const maxCj = Math.floor((map.h - 2) / CHUNK_CELLS)
+  let warmed = 0
+
+  for (let di = -reach; di <= reach; di++) {
+    for (let dj = -reach; dj <= reach; dj++) {
+      const ci = centerCi + di
+      const cj = centerCj + dj
+      if (ci < 0 || cj < 0 || ci > maxCi || cj > maxCj) continue
+      groundChunkCache.get(ci + ':' + cj)
+      warmed += 1
+    }
+  }
+
+  return warmed
+}
+
 function TerrainChunk({ ci, cj }: { ci: number; cj: number }) {
-  const geometry = useMemo(() => buildChunk(ci, cj), [ci, cj])
-  useEffect(() => () => geometry?.dispose(), [geometry])
+  const key = ci + ':' + cj
+  const geometry = useMemo(() => groundChunkCache.get(key), [key])
+  useEffect(() => {
+    groundChunkCache.retain(key)
+    return () => groundChunkCache.release(key)
+  }, [key])
 
   if (!geometry) return null
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshToonMaterial color={GROUND_COLOR} gradientMap={toonGradient} />
-    </mesh>
+    <mesh geometry={geometry} material={GROUND_MATERIAL} receiveShadow matrixAutoUpdate={false} dispose={null} />
   )
 }
 
@@ -103,9 +141,7 @@ function FlatGround() {
   }, [])
 
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshToonMaterial color={GROUND_COLOR} gradientMap={toonGradient} />
-    </mesh>
+    <mesh geometry={geometry} material={GROUND_MATERIAL} receiveShadow matrixAutoUpdate={false} dispose={null} />
   )
 }
 
@@ -120,6 +156,7 @@ export default function Ground({ mode = 'game' }: { mode?: 'game' | 'editor' }) 
     cj: map ? Math.floor((SPAWN.z - map.z0) / chunkSize) : 0,
     reach: REACH,
   }))
+  const [preparedKeys, setPreparedKeys] = useState<Set<string>>(() => new Set())
   const frame = useRef(0)
 
   useFrame(() => {
@@ -149,10 +186,52 @@ export default function Ground({ mode = 'game' }: { mode?: 'game' | 'editor' }) 
       chunks.push({ ci, cj })
     }
   }
+  const chunkKeys = chunks.map(({ ci, cj }) => ci + ':' + cj)
+  const chunkSignature = chunkKeys.join('|')
+
+  useEffect(() => {
+    let cancelled = false
+    let cursor = 0
+
+    const publishPrepared = () => {
+      setPreparedKeys((current) => {
+        const next = new Set<string>()
+        for (const key of chunkKeys) {
+          if (groundChunkCache.has(key)) next.add(key)
+        }
+        const changed = next.size !== current.size || [...next].some((key) => !current.has(key))
+        return changed ? next : current
+      })
+    }
+
+    const prepareNext = () => {
+      if (cancelled) return
+      while (cursor < chunkKeys.length) {
+        const key = chunkKeys[cursor++]
+        if (!groundChunkCache.has(key)) {
+          groundChunkCache.get(key)
+          publishPrepared()
+          window.setTimeout(prepareNext, PREPARE_DELAY_MS)
+          return
+        }
+      }
+      publishPrepared()
+    }
+
+    prepareNext()
+    return () => {
+      cancelled = true
+    }
+  }, [chunkSignature])
+
+  const visibleChunks = chunks.filter(({ ci, cj }) => {
+    const key = ci + ':' + cj
+    return preparedKeys.has(key) && groundChunkCache.has(key)
+  })
 
   return (
     <>
-      {chunks.map(({ ci, cj }) => (
+      {visibleChunks.map(({ ci, cj }) => (
         <TerrainChunk key={ci + ':' + cj} ci={ci} cj={cj} />
       ))}
     </>

@@ -7,6 +7,8 @@ import { SPAWN, terrainHeight } from './cityData'
 import { ROADWAY, ROADWAY_TILE, roadwayTiles, type RoadChunk } from './roadway'
 import roadSurfaceTest from './data/road-surface-test.json'
 import { editorTileReach } from '../editorStreaming'
+import { createTileResourceCache } from './tileResourceCache'
+import { buildRoadSurfaceBuffers } from './roadSurfaceGeometry'
 
 /**
  * Routes de Beauvais en volume.
@@ -21,18 +23,22 @@ const KERB = '#8d9199'
 const SHOULDER = '#6d6659'
 
 const REACH = 1
+const SURFACE_PREPARE_DELAY_MS = 12
 
 const BAND_COLORS = [SHOULDER, KERB, KERB, ASPHALT, KERB, KERB, SHOULDER].map(
   (c) => new THREE.Color(c),
 )
+const ROAD_TILE_MATERIAL = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient })
+const SURFACE_MATERIAL = new THREE.MeshToonMaterial({
+  color: ASPHALT,
+  gradientMap: toonGradient,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+})
+const SURFACE_EDGE_MATERIAL = new THREE.MeshToonMaterial({ color: KERB, gradientMap: toonGradient })
 
 const PROFILE = 8
-const SURFACE_VISUAL_LIFT = 0.045
 const SURFACE_HIDE_PAD = 8
-const SURFACE_TESSELLATION_STEP = 6
-const SURFACE_HEIGHT_SAMPLE_RADIUS = 1.6
-const SURFACE_EDGE_DROP = 0.24
-const SURFACE_EDGE_SAMPLE_STEP = 3
 
 type RoadSurfaceTile = {
   polygons: number[][][][]
@@ -235,208 +241,132 @@ function buildTile(chunks: RoadChunk[]): THREE.BufferGeometry | null {
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
   geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3))
   geo.computeVertexNormals()
+  geo.computeBoundingSphere()
   return geo
 }
 
 
-function ringArea(ring: number[][]): number {
-  let area = 0
-  for (let i = 0; i < ring.length; i++) {
-    const a = ring[i]
-    const b = ring[(i + 1) % ring.length]
-    area += a[0] * b[1] - b[0] * a[1]
-  }
-  return area / 2
+type SurfaceGeometryResource = {
+  surfaceGeometry: THREE.BufferGeometry | null
+  edgeGeometry: THREE.BufferGeometry | null
+  dispose: () => void
 }
 
-function cleanRing(ring: number[][]): THREE.Vector2[] {
-  const points = ring.slice()
-  const first = points[0]
-  const last = points[points.length - 1]
-  if (first && last && Math.abs(first[0] - last[0]) < 0.001 && Math.abs(first[1] - last[1]) < 0.001) {
-    points.pop()
-  }
-  return points.map(([x, z]) => new THREE.Vector2(x, z))
-}
+const roadTileCache = createTileResourceCache<THREE.BufferGeometry | null>({
+  name: 'road-ribbons',
+  maxEntries: 96,
+  build: (tileKey) => {
+    const chunks = roadwayTiles().get(tileKey)
+    return chunks ? buildTile(chunks) : null
+  },
+})
 
-function surfaceTopHeight(x: number, z: number): number {
-  const r = SURFACE_HEIGHT_SAMPLE_RADIUS
-  let h = terrainHeight(x, z)
-  h = Math.max(h, terrainHeight(x + r, z), terrainHeight(x - r, z))
-  h = Math.max(h, terrainHeight(x, z + r), terrainHeight(x, z - r))
-  h = Math.max(h, terrainHeight(x + r, z + r), terrainHeight(x - r, z - r))
-  h = Math.max(h, terrainHeight(x + r, z - r), terrainHeight(x - r, z + r))
-  return h + ROADWAY.THICKNESS + SURFACE_VISUAL_LIFT
-}
-
-function edgeLength(a: THREE.Vector2, b: THREE.Vector2): number {
-  return Math.hypot(a.x - b.x, a.y - b.y)
-}
-
-function midpoint(a: THREE.Vector2, b: THREE.Vector2): THREE.Vector2 {
-  return new THREE.Vector2((a.x + b.x) * 0.5, (a.y + b.y) * 0.5)
-}
-
-function pushSurfaceVertex(p: THREE.Vector2, positions: number[]) {
-  positions.push(p.x, surfaceTopHeight(p.x, p.y), p.y)
-}
-
-function addSurfaceTriangle(
-  a: THREE.Vector2,
-  b: THREE.Vector2,
-  c: THREE.Vector2,
-  positions: number[],
-  depth = 0,
-) {
-  const ab = edgeLength(a, b)
-  const bc = edgeLength(b, c)
-  const ca = edgeLength(c, a)
-  if (depth < 9 && Math.max(ab, bc, ca) > SURFACE_TESSELLATION_STEP) {
-    if (ab >= bc && ab >= ca) {
-      const m = midpoint(a, b)
-      addSurfaceTriangle(a, m, c, positions, depth + 1)
-      addSurfaceTriangle(m, b, c, positions, depth + 1)
-    } else if (bc >= ca) {
-      const m = midpoint(b, c)
-      addSurfaceTriangle(a, b, m, positions, depth + 1)
-      addSurfaceTriangle(a, m, c, positions, depth + 1)
-    } else {
-      const m = midpoint(c, a)
-      addSurfaceTriangle(a, b, m, positions, depth + 1)
-      addSurfaceTriangle(m, b, c, positions, depth + 1)
+const surfaceTileCache = createTileResourceCache<SurfaceGeometryResource>({
+  name: 'road-surfaces',
+  maxEntries: 96,
+  build: (tileKey) => {
+    const polygons = tileKey === '__legacy__' ? LEGACY_SURFACE_POLYGONS : surfacePolygonsForTile(tileKey)
+    const buffers = buildRoadSurfaceBuffers(polygons)
+    const surfaceGeometry = buildGeometryFromPositions(buffers.surfacePositions)
+    const edgeGeometry = buildGeometryFromPositions(buffers.edgePositions)
+    return {
+      surfaceGeometry,
+      edgeGeometry,
+      dispose: () => {
+        surfaceGeometry?.dispose()
+        edgeGeometry?.dispose()
+      },
     }
-    return
-  }
+  },
+})
 
-  pushSurfaceVertex(a, positions)
-  pushSurfaceVertex(b, positions)
-  pushSurfaceVertex(c, positions)
-}
-
-function addSurfacePolygon(poly: number[][][], positions: number[]) {
-  if (poly.length === 0) return
-
-  const outerRing = ringArea(poly[0]) < 0 ? poly[0].slice().reverse() : poly[0]
-  const holeRings = poly.slice(1).map((ring) => (ringArea(ring) > 0 ? ring.slice().reverse() : ring))
-  const outer = cleanRing(outerRing)
-  const holes = holeRings.map(cleanRing).filter((ring) => ring.length >= 3)
-  if (outer.length < 3) return
-
-  const vertices = [...outer, ...holes.flat()]
-  const triangles = THREE.ShapeUtils.triangulateShape(outer, holes)
-
-  for (const tri of triangles) {
-    // ShapeUtils returns clockwise triangles in XY. After mapping XY to world XZ,
-    // that faces downward, so each triangle is flipped once here.
-    addSurfaceTriangle(vertices[tri[0]], vertices[tri[2]], vertices[tri[1]], positions)
-  }
-}
-
-function buildSurfaceGeometry(polygons: number[][][][]): THREE.BufferGeometry | null {
-  const positions: number[] = []
-  for (const poly of polygons) addSurfacePolygon(poly, positions)
-  if (positions.length === 0) return null
-
+function buildGeometryFromPositions(positions: Float32Array | null): THREE.BufferGeometry | null {
+  if (!positions || positions.length === 0) return null
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geo.computeVertexNormals()
+  geo.computeBoundingSphere()
   return geo
 }
 
-function addEdgeVertex(p: THREE.Vector2, top: boolean, positions: number[]) {
-  const terrain = terrainHeight(p.x, p.y)
-  const topY = surfaceTopHeight(p.x, p.y)
-  const bottomY = Math.min(topY - SURFACE_EDGE_DROP, terrain - ROADWAY.EMBED * 0.2)
-  positions.push(p.x, top ? topY : bottomY, p.y)
-}
+export function warmRoadTilesAround(x: number, z: number, reach = REACH): number {
+  const centerTx = Math.floor(x / ROADWAY_TILE)
+  const centerTz = Math.floor(z / ROADWAY_TILE)
+  const tiles = roadwayTiles()
+  let warmed = 0
 
-function addSurfaceRingEdge(ring: number[][], positions: number[]) {
-  const points = cleanRing(ring)
-  if (points.length < 2) return
-
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i]
-    const b = points[(i + 1) % points.length]
-    const steps = Math.max(1, Math.ceil(edgeLength(a, b) / SURFACE_EDGE_SAMPLE_STEP))
-    for (let step = 0; step < steps; step++) {
-      const t0 = step / steps
-      const t1 = (step + 1) / steps
-      const p0 = new THREE.Vector2(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0)
-      const p1 = new THREE.Vector2(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1)
-
-      addEdgeVertex(p0, true, positions)
-      addEdgeVertex(p1, false, positions)
-      addEdgeVertex(p1, true, positions)
-      addEdgeVertex(p0, true, positions)
-      addEdgeVertex(p0, false, positions)
-      addEdgeVertex(p1, false, positions)
-
-      addEdgeVertex(p0, true, positions)
-      addEdgeVertex(p1, true, positions)
-      addEdgeVertex(p1, false, positions)
-      addEdgeVertex(p0, true, positions)
-      addEdgeVertex(p1, false, positions)
-      addEdgeVertex(p0, false, positions)
+  for (let dx = -reach; dx <= reach; dx++) {
+    for (let dz = -reach; dz <= reach; dz++) {
+      const key = centerTx + dx + ':' + (centerTz + dz)
+      if (tiles.has(key)) {
+        roadTileCache.get(key)
+        warmed += 1
+      }
+      if (hasSurfaceTile(key)) {
+        surfaceTileCache.get(key)
+        warmed += 1
+      }
     }
   }
-}
 
-function buildSurfaceEdgeGeometry(polygons: number[][][][]): THREE.BufferGeometry | null {
-  const positions: number[] = []
-  for (const poly of polygons) {
-    for (const ring of poly) addSurfaceRingEdge(ring, positions)
-  }
-  if (positions.length === 0) return null
-
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
-  geo.computeVertexNormals()
-  return geo
+  return warmed
 }
 
 function ExperimentalRoadSurface({ tileKey }: { tileKey?: string }) {
-  const polygons = tileKey ? surfacePolygonsForTile(tileKey) : LEGACY_SURFACE_POLYGONS
-  const surfaceGeometry = useMemo(() => buildSurfaceGeometry(polygons), [polygons])
-  const edgeGeometry = useMemo(() => buildSurfaceEdgeGeometry(polygons), [polygons])
+  const cacheKey = tileKey ?? '__legacy__'
+  const resource = useMemo(() => surfaceTileCache.get(cacheKey), [cacheKey])
+  useEffect(() => {
+    surfaceTileCache.retain(cacheKey)
+    return () => surfaceTileCache.release(cacheKey)
+  }, [cacheKey])
 
-  useEffect(
-    () => () => {
-      surfaceGeometry?.dispose()
-      edgeGeometry?.dispose()
-    },
-    [surfaceGeometry, edgeGeometry],
-  )
-
+  if (!resource) return null
+  const { surfaceGeometry, edgeGeometry } = resource
   if (!surfaceGeometry && !edgeGeometry) return null
   return (
     <>
       {surfaceGeometry && (
-        <mesh geometry={surfaceGeometry} castShadow={false} receiveShadow={false}>
-          <meshToonMaterial color={ASPHALT} gradientMap={toonGradient} polygonOffset polygonOffsetFactor={-2} />
-        </mesh>
+        <mesh
+          geometry={surfaceGeometry}
+          material={SURFACE_MATERIAL}
+          castShadow={false}
+          receiveShadow={false}
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
       )}
       {edgeGeometry && (
-        <mesh geometry={edgeGeometry} castShadow={false} receiveShadow={false}>
-          <meshToonMaterial color={KERB} gradientMap={toonGradient} />
-        </mesh>
+        <mesh
+          geometry={edgeGeometry}
+          material={SURFACE_EDGE_MATERIAL}
+          castShadow={false}
+          receiveShadow={false}
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
       )}
     </>
   )
 }
 
 function RoadTile({ tileKey }: { tileKey: string }) {
-  const geometry = useMemo(() => {
-    const chunks = roadwayTiles().get(tileKey)
-    return chunks ? buildTile(chunks) : null
-  }, [tileKey])
+  const geometry = useMemo(() => roadTileCache.get(tileKey), [tileKey])
 
-  useEffect(() => () => geometry?.dispose(), [geometry])
+  useEffect(() => {
+    roadTileCache.retain(tileKey)
+    return () => roadTileCache.release(tileKey)
+  }, [tileKey])
 
   if (!geometry) return null
   return (
-    <mesh geometry={geometry} castShadow={false} receiveShadow={false}>
-      <meshToonMaterial vertexColors gradientMap={toonGradient} />
-    </mesh>
+    <mesh
+      geometry={geometry}
+      material={ROAD_TILE_MATERIAL}
+      castShadow={false}
+      receiveShadow={false}
+      matrixAutoUpdate={false}
+      dispose={null}
+    />
   )
 }
 
@@ -447,6 +377,8 @@ export default function Roads({ mode = 'game' }: { mode?: 'game' | 'editor' }) {
     tz: Math.floor(SPAWN.z / ROADWAY_TILE),
     reach: REACH,
   }))
+  const [preparedRoadKeys, setPreparedRoadKeys] = useState<Set<string>>(() => new Set())
+  const [preparedSurfaceKeys, setPreparedSurfaceKeys] = useState<Set<string>>(() => new Set())
   const frame = useRef(0)
 
   useFrame(() => {
@@ -469,14 +401,76 @@ export default function Roads({ mode = 'game' }: { mode?: 'game' | 'editor' }) {
     }
   }
 
+  const roadKeys = keys.filter((key) => tiles.has(key))
+  const surfaceKeys = SURFACE_TILES ? keys.filter(hasSurfaceTile) : ['__legacy__']
+  const prepareSignature = roadKeys.map((key) => 'r:' + key).concat(surfaceKeys.map((key) => 's:' + key)).join('|')
+
+  useEffect(() => {
+    if (roadKeys.length === 0 && surfaceKeys.length === 0) {
+      setPreparedRoadKeys((current) => (current.size === 0 ? current : new Set()))
+      setPreparedSurfaceKeys((current) => (current.size === 0 ? current : new Set()))
+      return undefined
+    }
+
+    let cancelled = false
+    let cursor = 0
+
+    const publishPrepared = () => {
+      setPreparedRoadKeys((current) => {
+        const next = new Set<string>()
+        for (const key of roadKeys) {
+          if (roadTileCache.has(key)) next.add(key)
+        }
+        const changed = next.size !== current.size || [...next].some((key) => !current.has(key))
+        return changed ? next : current
+      })
+      setPreparedSurfaceKeys((current) => {
+        const next = new Set<string>()
+        for (const key of surfaceKeys) {
+          if (surfaceTileCache.has(key)) next.add(key)
+        }
+        const changed = next.size !== current.size || [...next].some((key) => !current.has(key))
+        return changed ? next : current
+      })
+    }
+
+    const prepareNext = () => {
+      if (cancelled) return
+
+      const total = roadKeys.length + surfaceKeys.length
+      while (cursor < total) {
+        const cursorIndex = cursor++
+        const isRoad = cursorIndex < roadKeys.length
+        const key = isRoad ? roadKeys[cursorIndex] : surfaceKeys[cursorIndex - roadKeys.length]
+        const cache = isRoad ? roadTileCache : surfaceTileCache
+        if (!cache.has(key)) {
+          cache.get(key)
+          publishPrepared()
+          window.setTimeout(prepareNext, SURFACE_PREPARE_DELAY_MS)
+          return
+        }
+      }
+
+      publishPrepared()
+    }
+
+    prepareNext()
+    return () => {
+      cancelled = true
+    }
+  }, [prepareSignature])
+
+  const visibleRoadKeys = roadKeys.filter((key) => preparedRoadKeys.has(key) && roadTileCache.has(key))
+  const visibleSurfaceKeys = surfaceKeys.filter((key) => preparedSurfaceKeys.has(key) && surfaceTileCache.has(key))
+
   return (
     <>
-      {keys.map((key) => (
+      {visibleRoadKeys.map((key) => (
         <RoadTile key={key} tileKey={key} />
       ))}
       {SURFACE_TILES
-        ? keys.map((key) => <ExperimentalRoadSurface key={'surface:' + key} tileKey={key} />)
-        : <ExperimentalRoadSurface />}
+        ? visibleSurfaceKeys.map((key) => <ExperimentalRoadSurface key={'surface:' + key} tileKey={key} />)
+        : preparedSurfaceKeys.has('__legacy__') && <ExperimentalRoadSurface />}
     </>
   )
 }

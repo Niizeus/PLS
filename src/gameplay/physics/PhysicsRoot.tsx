@@ -1,6 +1,7 @@
 import { Physics } from '@react-three/rapier'
 import { Suspense, type ReactNode } from 'react'
 import { PHYSICS_WORLD } from './physicsConfig'
+import { useCollisionDebugStore } from '../../devtools/collisionDebugStore'
 
 interface PhysicsRootProps {
   children: ReactNode
@@ -8,6 +9,8 @@ interface PhysicsRootProps {
 
 /** Enveloppe Rapier unique : toutes les entites physiques partagent ces lois. */
 export default function PhysicsRoot({ children }: PhysicsRootProps) {
+  const collisionDebugEnabled = useCollisionDebugStore((state) => state.enabled)
+
   return (
     <Suspense fallback={null}>
       <Physics
@@ -19,11 +22,10 @@ export default function PhysicsRoot({ children }: PhysicsRootProps) {
         numAdditionalFrictionIterations={PHYSICS_WORLD.FRICTION_ITERATIONS}
         maxCcdSubsteps={PHYSICS_WORLD.CCD_SUBSTEPS}
         updatePriority={PHYSICS_WORLD.UPDATE_PRIORITY}
-        debug={import.meta.env.DEV && PHYSICS_WORLD.DEBUG}
+        debug={import.meta.env.DEV && (PHYSICS_WORLD.DEBUG || collisionDebugEnabled)}
       >
         {children}
       </Physics>
     </Suspense>
   )
 }
-

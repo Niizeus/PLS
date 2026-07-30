@@ -154,6 +154,7 @@ Les fichiers :
 | `src/world/beauvais/terrain.ts` | Charge cette carte et l'échantillonne : **source unique de la hauteur du sol**. |
 | `src/world/beauvais/data/beauvais-buildings.json` | Le fichier compact charge par le jeu (batiments avec hauteurs et toits IGN, routes enrichies, eau, limites). ~6,4 Mo. |
 | `src/world/beauvais/cityData.ts` | Source unique lue par tout le monde : bâtiments, routes, eau, limites, point de spawn dégagé. |
+| `src/world/beauvais/tileResourceCache.ts` | Petit cache LRU partage par les tuiles de rendu et de physique : il garde les geometries/colliders recents pour eviter les hitches quand le joueur revient sur ses pas, puis libere les ressources inactives au-dela d'un plafond. |
 | `src/world/beauvais/Beauvais.tsx` | **Temps 3** : monte/démonte les bâtiments par **TUILES** de 180 m autour du joueur (la forme d'un bâtiment, elle, est faite par `buildingMesh.ts`). Saute la cathédrale, qui a son propre modèle. |
 | `src/world/beauvais/Cathedral.tsx` | La **cathédrale Saint-Pierre**, affichée en permanence (repère central, visible de loin). Voir « La cathédrale » plus bas. |
 | `src/world/beauvais/cathedralMesh.ts` | Construit son maillage : masses étagées, toit, contreforts, arcs-boutants, verrières, rosaces. |
@@ -288,6 +289,27 @@ jeu fluide :
 - **Streaming des tuiles** (`Beauvais.tsx`) : on ne construit et n'affiche QUE les tuiles
   autour du joueur (le brouillard masque déjà au-delà de ~110 m). Elles se montent/démontent
   quand le joueur se déplace → chargement quasi instantané, peu de géométrie à l'écran.
+- **Cache LRU de tuiles** (`tileResourceCache.ts`) : les dalles de sol, bâtiments, routes,
+  surfaces de route et colliders proches sont gardés brièvement en mémoire. Revenir sur ses pas ne
+  reconstruit donc pas les mêmes ressources, et les anciennes tuiles sont libérées quand le cache
+  dépasse son plafond. Le cache expose aussi `maxBuildMs` / `lastBuildMs` au rapport `F9`.
+- **Streaming progressif des colliders physiques** (`WorldPhysicsColliders.tsx`,
+  `WorldBuildingColliders.tsx`) : les tuiles Rapier sont préparées du centre vers les anneaux
+  extérieurs et montées seulement quand leurs données sont prêtes. Un changement de zone ne doit pas
+  reconstruire toute une couronne de colliders dans la même frame. Le sol physique utilise des
+  `HeightfieldCollider` de 128 m échantillonnés tous les 8 m, préparés en worker puis montés une
+  tuile à la fois avec une cadence volontairement ralentie pour éviter les longs commits React/Rapier. Les anciennes tuiles restent montées
+  jusqu'à ce que la nouvelle couronne active soit prête, afin d'éviter les trous de collision.
+- **Budget de colliders par image** (`WorldBuildingColliders.tsx`) : une tuile de façades de 96 m
+  du centre-ville contient de **150 à 770 murs**. Les monter d'un coup crée autant de
+  `CuboidCollider` Rapier + `Object3D` dans un seul commit React → une « long task » de 40 à 80 ms,
+  soit la grosse saccade qu'on ressentait toutes les ~3 s en voiture rapide. Les murs sont donc
+  pré-découpés en **lots de 48** au moment du build, et le planificateur n'autorise **qu'un seul
+  lot par image**, à l'apparition comme à la disparition. Chaque lot est un composant `memo` :
+  ajouter un lot ne re-réconcilie pas les précédents. ⚠️ Ne jamais revenir à un montage
+  « toute la tuile d'un coup » — c'est exactement ce qui provoquait les drops FPS.
+- **Ressources statiques partagées** (`Ground.tsx`, `Beauvais.tsx`, `Roads.tsx`) : les matériaux
+  identiques sont réutilisés entre tuiles et les meshes immobiles désactivent `matrixAutoUpdate`.
 - **Ombres qui suivent le joueur** (`Lights.tsx`) : la zone d'ombre reste petite (~70 m
   autour du perso) au lieu de couvrir toute la ville.
 - **Minimap** (`Minimap.tsx`) : ne dessine que les bâtiments proches, récupérés via la grille

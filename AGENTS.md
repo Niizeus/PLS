@@ -15,6 +15,8 @@
 - Tu changes la stack, une commande, l'installation → [`README.md`](README.md) et/ou [`docs/00-SETUP.md`](docs/00-SETUP.md).
 - Tu changes le fonctionnement de la carte/Beauvais → [`docs/04-MONDE-BEAUVAIS.md`](docs/04-MONDE-BEAUVAIS.md).
 - Tu changes le workflow Git → [`docs/01-WORKFLOW-GIT.md`](docs/01-WORKFLOW-GIT.md).
+- On te donne une **idée pas encore tranchée** (envie, piste, direction) → [`docs/07-BACKLOG-IDEES.md`](docs/07-BACKLOG-IDEES.md),
+  **sans coder**. Une idée devient du code seulement après analyse + spec écrite dans la doc du système.
 
 **La documentation est la source de vérité.** Si le code et la doc se contredisent, c'est un bug :
 corrige-le. **Mais ne modifie que le(s) document(s) réellement concerné(s)** — ne réécris pas
@@ -120,6 +122,7 @@ Résumé — détail complet dans [`docs/01-WORKFLOW-GIT.md`](docs/01-WORKFLOW-G
 | Concept & game design | [`docs/03-GAME-DESIGN.md`](docs/03-GAME-DESIGN.md) |
 | Le monde de Beauvais | [`docs/04-MONDE-BEAUVAIS.md`](docs/04-MONDE-BEAUVAIS.md) |
 | Vision de l'éditeur de production | [`docs/06-EDITEUR-PLS.md`](docs/06-EDITEUR-PLS.md) |
+| Idées pas encore décidées (⛔ **ne pas coder sans demande explicite**) | [`docs/07-BACKLOG-IDEES.md`](docs/07-BACKLOG-IDEES.md) |
 | Règles de contribution | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 > 📝 **Ce fichier `AGENTS.md` doit lui aussi rester à jour.** Si la stack, les conventions ou les

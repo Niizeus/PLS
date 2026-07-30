@@ -62,7 +62,7 @@ export default function TimeDevControls() {
         event.preventDefault()
         setHour(22)
       }
-      if (event.code === 'F9') {
+      if (event.code === 'F9' && event.shiftKey) {
         event.preventDefault()
         const store = useGameTimeStore.getState()
         store.setPaused(!store.isPaused)

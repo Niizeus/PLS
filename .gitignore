@@ -40,3 +40,6 @@ coverage/
 
 # --- Copies de secours de l'editeur PLS (filet local, l'historique partage = les commits) ---
 src/data/.backups/
+
+# --- Rapports de performance locaux (generes avec F9 en DEV) ---
+public/dev/perf-reports/

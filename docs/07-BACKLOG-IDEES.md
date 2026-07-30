@@ -369,6 +369,161 @@ Doivent finir **synchronisés** : ciel, soleil, lune, étoiles, nuages, éclaira
   qui décident chacun de leur propre courbe = incohérences garanties.
 - **Étiquettes** : Priorité importante · Horizon moyen terme · Nature architecture + visuel · État à étudier
 
+### 3.9 Étude : ciel procédural stylisé en masses de peinture
+
+**Intention** — créer un ciel signature, non réaliste, qui donne l'impression de grandes masses de
+peinture douce déposées dans le ciel : formes rondes et organiques, contours flous, dégradés
+progressifs, mouvement très lent, légère évolution de forme, sans effet bulle de savon, sans
+irisation arc-en-ciel, et avec des couleurs qui suivent naturellement l'aurore, la journée, le
+coucher de soleil et la nuit.
+
+#### Résumé du rendu actuel
+
+- Le projet utilise **Vite + React + TypeScript** pour l'application, mais le rendu 3D réel est
+  **Three.js via React Three Fiber** (`@react-three/fiber`, `@react-three/drei`). Vite n'est donc que
+  le build/dev server.
+- Le renderer est le **WebGLRenderer de Three.js**, créé par `<Canvas>` dans
+  `src/core/GameCanvas.tsx`. Aucun WebGPU, Babylon.js ou moteur maison n'a été trouvé.
+- `SceneRenderer.tsx` appelle `gl.render(scene, camera)` en dernier, parce que l'ordre des
+  `useFrame` est fixé dans `framePriority.ts`.
+- Le ciel actuel est `DynamicSky.tsx` : fond de scène en `CanvasTexture`, soleil/lune en sprites,
+  étoiles en `Points`, nuages en sprites camera-centered avec atlas (`cloudSpriteManifest.ts`).
+- Le cycle temps vient de `src/gameplay/time/` : `gameTimeStore.ts` avance un jour en 1 h réelle,
+  `getSkyColors()` interpole 4 palettes, `celestialCycle.ts` calcule soleil, lune, étoiles et
+  visibilité des nuages.
+- Le brouillard (`TimeFog.tsx`) reprend la couleur de fog issue de `getSkyColors()`.
+- La lumière (`Lights.tsx`) suit aussi l'heure, mais avec ses propres courbes/couleurs. Il n'existe
+  pas encore une source unique qui renvoie toute l'ambiance.
+- Les shaders personnalisés sont très limités aujourd'hui : principalement `toonGradient.ts` pour
+  `MeshToonMaterial`. Il n'y a pas de `ShaderMaterial` de ciel ni de chaîne de post-traitement active.
+
+#### Fichiers concernés
+
+| Besoin | Fichiers actuels |
+|---|---|
+| Assemblage scène | `src/core/GameCanvas.tsx`, `SceneRenderer.tsx`, `framePriority.ts` |
+| Ciel actuel | `src/core/DynamicSky.tsx`, `GradientSky.tsx`, `cloudSpriteManifest.ts` |
+| Temps et palettes | `src/gameplay/time/gameTimeStore.ts`, `celestialCycle.ts`, `TimeDevControls.tsx` |
+| Brouillard et lumières | `src/core/TimeFog.tsx`, `Lights.tsx` |
+| Réglages DEV | `src/devtools/devTuningSchema.ts`, `devTuningStore.ts`, `public/dev/dev-tuning.json` |
+| Style shader existant | `src/shaders/toonGradient.ts` |
+
+#### Architecture proposée
+
+La solution doit rester modulaire et désactivable. Forme recommandée :
+
+1. garder `DynamicSky` comme système stable et fallback ;
+2. ajouter plus tard un composant optionnel `ProceduralPaintSky` ou `PaintSkyDome`, monté derrière
+   les astres et compatible avec les nuages actuels ;
+3. déplacer les données artistiques vers un module dédié, par exemple `src/core/sky/skyPalettes.ts`
+   ou `src/gameplay/time/skyAtmosphere.ts`, pour séparer palettes, paramètres horaires et rendu ;
+4. exposer une fonction pure du type `getSkyAtmosphere(totalMinutes)` qui renvoie palette, opacité,
+   échelle de formes, douceur, vitesse, intensité horizon/zenith, halos ;
+5. laisser le shader ou le générateur visuel consommer uniquement ces paramètres et le temps ;
+6. prévoir un flag DEV/prototype `enabled` pour revenir instantanément au ciel actuel.
+
+La logique mathématique cible peut rester :
+
+```text
+SkyColor = F(ViewDirection, DayProgress, PaintLayerParams)
+```
+
+avec un fond vertical/sphérique, 4 palettes principales, interpolation continue, 1 ou 2 masques de
+formes, FBM/value noise/simplex, domain warping léger, et éventuellement des metaballs stylisées si
+les formes ne sont pas assez rondes.
+
+#### Approches possibles
+
+| Approche | Avantages | Inconvénients |
+|---|---|---|
+| Améliorer le `CanvasTexture` actuel en générant une texture procédurale 2D | Très compatible, coût GPU quasi nul après génération, fallback simple | Animation fluide plus difficile, coût CPU si régénéré souvent, moins naturel avec la direction de vue |
+| Ajouter un skydome `ShaderMaterial` WebGL | Une seule géométrie, animation fluide par uniforms, idéal pour `SkyColor = F(ViewDirection, DayProgress)` | Coût fragment plein écran, demande un shader propre, nouvelle brique technique dans un projet peu shaderisé |
+| Ajouter des couches de sprites/metaballs sur le ciel actuel | Très contrôlable artistiquement, proche du système de nuages existant | Plus de draw calls/transparence, risque d'effet collage, transitions de forme moins élégantes |
+| Ajouter un post-process ou fullscreen pass | Puissant pour halos/exposition/bloom plus tard | Pas de chaîne postprocess aujourd'hui, risque de chantier trop large, peut contrarier le rendu cell-shading |
+
+#### Solution recommandée
+
+Pour un prototype minimal, la meilleure piste est un **skydome WebGL optionnel avec ShaderMaterial**,
+alimenté par `getSkyAtmosphere(totalMinutes)` et monté sans supprimer `DynamicSky`.
+
+Pourquoi : c'est l'approche la plus proche de l'intention `SkyColor = F(ViewDirection, DayProgress)`,
+elle permet des formes fluides et continues, elle évite de multiplier les sprites transparents, et
+elle reste un prototype isolé si le composant peut être désactivé.
+
+À ne pas faire au premier prototype :
+
+- ne pas remplacer directement `DynamicSky` ;
+- ne pas ajouter une météo complète ;
+- ne pas ajouter de post-traitement juste pour ce ciel ;
+- ne pas exposer des dizaines de paramètres avant d'avoir validé la base visuelle ;
+- ne pas coder les palettes en dur dans le shader final.
+
+#### Risques techniques
+
+- **Fill-rate GPU** : un skydome shader est peu coûteux en draw calls, mais son fragment shader couvre
+  beaucoup de pixels. Limiter les octaves, éviter les boucles coûteuses et profiler avec `F9`.
+- **Transparence et ordre de rendu** : le ciel doit rester derrière soleil, lune, étoiles et nuages.
+  Il faudra définir `renderOrder`, `depthWrite={false}`, `fog={false}` et un placement camera-centered
+  cohérent avec `DynamicSky`.
+- **Incohérence des ambiances** : si palettes de ciel, fog, lumières et nuages restent séparés, les
+  transitions risquent de se contredire. Le prototype doit déjà préparer une source `skyAtmosphere`.
+- **Compatibilité WebGL** : rester sur GLSL compatible Three.js/WebGL, pas WebGPU.
+- **Lisibilité nuit** : une nuit plus stylisée peut devenir trop sombre sans lampadaires/phares.
+- **Dette artistique** : trop de bruit ou de couleurs donnera vite un effet savon/arc-en-ciel, à
+  éviter par palettes limitées, opacité contrôlée et contours très doux.
+
+#### Impact performance attendu
+
+- Prototype skydome : 1 mesh + 1 matériau + quelques uniforms par frame.
+- Coût principal : fragment shader plein écran. Cible prudente : 1 à 2 couches procédurales, 3 à 5
+  octaves maximum au total, domain warping léger, pas de texture 3D, pas de volumétrique.
+- Les sprites de nuages actuels coûtent déjà de la transparence ; le prototype doit pouvoir masquer
+  ou réduire son opacité pour comparer.
+- Toute validation doit passer par le profiler `F9` avant/après, avec stats `calls`, triangles,
+  textures et temps frame.
+
+#### Plan de prototype minimal
+
+1. Créer une branche/prototype isolée et garder un flag `paintSky.enabled`.
+2. Ajouter une fonction pure `getSkyAtmosphere(totalMinutes)` avec 4 palettes : aurore, jour,
+   coucher, nuit.
+3. Ajouter un `PaintSkyDome` camera-centered, `BackSide`, `depthWrite=false`, `fog=false`.
+4. Dans le shader : gradient horizon/zenith, une couche principale de formes douces, une couche
+   secondaire plus légère, animation lente, interpolation continue des palettes et paramètres.
+5. Monter le composant sans retirer `DynamicSky`; prévoir un retour immédiat au ciel actuel.
+6. Ajouter des contrôles temporaires DEV : heure, opacité, échelle, warp, douceur, vitesse.
+7. Tester visuellement avec `F7`, `F8`, `F10`, `F11`, puis mesurer avec `F9`.
+
+#### Paramètres artistiques exposables dans `F2`
+
+Noms proposés pour le menu DEV, avec descriptions à écrire dans le schéma :
+
+| Paramètre interne possible | Nom F2 proposé | Usage |
+|---|---|---|
+| `sky.paint.enabled` | Ciel peinture actif | Active/désactive le prototype. |
+| `sky.paint.opacity` | Opacité des masses | Intensité globale des formes peintes. |
+| `sky.paint.primaryShapeScale` | Taille formes principales | Taille des grandes masses organiques. |
+| `sky.paint.secondaryShapeScale` | Taille détails doux | Taille de la couche secondaire. |
+| `sky.paint.warpStrength` | Fluidité des formes | Force de déformation/domain warping. |
+| `sky.paint.shapeSoftness` | Douceur des contours | Transition entre ciel et masses colorées. |
+| `sky.paint.horizontalStretch` | Étirement horizontal | Allonge les formes vers l'horizon. |
+| `sky.paint.animationSpeed` | Vitesse du ciel | Vitesse d'évolution lente. |
+| `sky.paint.horizonIntensity` | Intensité horizon | Force des couleurs proches de l'horizon. |
+| `sky.paint.zenithIntensity` | Intensité zénith | Force des couleurs en haut du ciel. |
+| `sky.paint.sunHaloIntensity` | Halo soleil | Intensité du halo solaire stylisé. |
+| `sky.paint.moonHaloIntensity` | Halo lune | Intensité du halo lunaire stylisé. |
+
+Les palettes `DawnPalette`, `DayPalette`, `SunsetPalette`, `NightPalette` doivent rester dans une
+structure artistique dédiée plutôt que comme simples nombres dans `F2`, sauf si le panneau évolue
+plus tard pour éditer proprement des couleurs.
+
+- **Dépend de** : `DynamicSky.tsx`, `gameTimeStore.ts`, `celestialCycle.ts`, `TimeFog.tsx`,
+  `Lights.tsx`, `devTuningSchema.ts`.
+- **Risques** : coût shader plein écran, incohérence avec les sprites de nuages existants, besoin de
+  QA visuelle en jeu par l'humain, et tentation de transformer le prototype en refonte complète.
+- **Étiquettes** : Priorité importante · Horizon moyen terme · Nature visuel + architecture +
+  outil de dev · État prototype nécessaire
+
 ---
 
 ## 🎛️ 4. Refonte ergonomique du menu `F2`

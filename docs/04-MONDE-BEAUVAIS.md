@@ -225,6 +225,22 @@ deux. Chaque versant est ainsi un plan parfait, **quelle que soit la forme du b�
 (même en L). Effet de bord agréable : les murs d'extrémité montent en biais et forment
 tout seuls les **pignons**.
 
+⚠️ **À condition de couper les murs sur le faîtage.** Le profil du toit est un chapeau :
+il monte jusqu'à la crête puis redescend. Un mur de pignon va d'un bord à l'autre, donc ses
+deux coins sont en bas et son milieu doit culminer à `rh`. Tant qu'on reliait les deux coins
+en ligne droite, **tout le triangle du pignon manquait** et on voyait l'intérieur du bâtiment
+sous chaque toit. `buildingMesh.ts` insère donc un sommet là où le mur croise le faîtage
+(fonction `ridgeCrossing`) — exactement comme les triangles de toit sont déjà coupés par
+`splitAtRidge`. Vérification : hors du fond volontairement ouvert (la jupe enterrée), plus
+aucune arête libre sur les 200 premiers bâtiments en pente.
+
+**Nuances de toiture.** Le matériau réel (`rm`) donne la couleur de base, puis chaque toit
+reçoit une variation déterministe de luminosité (± `ROOF_SHADE`) et un soupçon de température,
+tirées de la position du bâtiment. Sans ça un quartier entier devient un seul aplat orange où
+l'on ne distingue plus les maisons. La variation se fait **en sRGB** : en espace linéaire, ±20 %
+de luminosité ne se voit quasiment pas. Les monuments (`kind`) gardent leur teinte exacte —
+ce sont des repères, pas du tissu urbain.
+
 L'orientation du faîtage suit la vraie règle d'architecture : **il est parallèle aux
 façades libres, jamais aux murs mitoyens** (`roofs.mjs` détecte les murs mitoyens).
 Une maison de ville est étroite sur rue et profonde : prendre bêtement son plus long

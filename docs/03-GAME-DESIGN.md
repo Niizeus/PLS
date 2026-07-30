@@ -443,9 +443,21 @@ contact, normale, glissement latéral mesuré sur le corps, nature du sol — pu
 **Contrôle en l'air.** Roues décollées, ZQSD pilote l'assiette en **vitesse de rotation cible**
 (plafonnée par `AIR_MAX_RATE`) : réactif, mais pas de vrille instantanée ni de rotation absurde.
 Sans consigne, `AIR_LEVEL_ASSIST` ramène doucement la caisse à plat pour rattraper un saut mal
-négocié. ⚠️ Sur le toit, **aucun rayon de suspension ne touche** (ils partent vers le ciel) : la
-voiture est « en l'air » au sens du code alors qu'elle est posée. La remise sur les roues est donc
-testée **avant** le contrôle aérien, sinon on resterait bloqué à l'envers.
+négocié. Le pilotage aérien est volontairement **doux** : une voiture n'est pas un avion, on corrige
+son assiette avant de se poser, on n'enchaîne pas les saltos. Sens des commandes (une seule
+convention, en vol comme sur le toit) : **avant pique du nez, arrière cabre** — comme un manche à
+balai qu'on pousse — et **la touche gauche/droite fait basculer la caisse de ce côté-là**.
+
+**Sur le toit.** ⚠️ **Aucun rayon de suspension ne touche** (ils partent vers le ciel) : la voiture
+est « en l'air » au sens du code alors qu'elle est posée. Le rétablissement est donc testé **avant**
+le contrôle aérien, sinon on resterait bloqué à l'envers. Deux façons de s'en sortir, qui
+cohabitent :
+- **les flèches** appliquent un couple (`FLIP_TORQUE`) directement sur la caisse et la font
+  **rouler** — on se débat, c'est plus vivant. Le réglage doit dépasser le couple de rappel de la
+  gravité (≈ poids × demi-largeur, ~11 000 N·m pour la voiture), sinon la caisse frémit sans jamais
+  basculer ;
+- **le frein à main maintenu** `FLIP_RECOVERY_HOLD` secondes la repose d'aplomb : dépannage garanti
+  quand on est coincé contre un mur.
 
 **Klaxon (F).** Synthétisé en WebAudio (deux oscillateurs à la tierce), donc aucun fichier à charger
 et un timbre différent par véhicule. Source positionnelle (`PannerNode`) suivant le véhicule,
@@ -712,6 +724,56 @@ Objectif : un rendu **BD animée**, aplats de couleur, contours nets.
   post-traitement (`@react-three/postprocessing`) pour cerner les objets d'un trait noir.
 - **Palette** : couleurs vives et franches, peu de nuances.
 - **Ombres** : douces et stylisées, pas réalistes.
+
+⚠️ **Les modèles importés doivent repasser au toon.** Les FBX du projet arrivent en
+`MeshPhongMaterial` (spéculaire `#333`, brillance 25, carte de normales issue d'un scan) : des
+objets luisants, à la rugosité aléatoire, au milieu d'une ville entièrement en aplats. Tout passe
+donc par `src/shaders/toonMaterial.ts` → `MeshToonMaterial` + la **gradient map partagée** : on garde
+la texture de couleur quand elle existe, on **jette la brillance** (le toon n'a pas de spéculaire, sa
+lumière est un simple escalier) et on **calme le relief** (`IMPORTED_NORMAL_STRENGTH`, un tiers de la
+carte de normales — assez pour lire les plis du tissu, pas assez pour salir la couleur).
+👉 Tout nouveau modèle FBX/GLB suit cette règle : **aucun matériau d'import ne reste tel quel.**
+
+### ⚠️ Une texture référencée mais absente peint le modèle en NOIR
+
+Le FBX de Chibrux référence ses textures par un chemin de la machine d'export —
+`.../skins_xxx.fbm/Color_xxx.png` — un dossier qui n'a jamais été joint. Le chargeur crée quand même
+un objet `Texture`, mais avec `image === null`.
+
+Et une texture sans image **n'est pas ignorée** : le shader y échantillonne du noir opaque, donc le
+modèle s'affiche **entièrement noir**. Mesuré au `readPixels` sur un rendu hors écran :
+`{ color: #cccccc, map: textureVide }` → `rgb(0,0,0)`, le même matériau sans `map` → `rgb(200,200,200)`.
+D'où la règle de `usableTexture` : **une texture ne sert que si elle a réellement une image.**
+
+👉 **Pour retrouver les vraies textures** d'un modèle, déposer les PNG d'origine à côté du `.fbx` (le
+dossier `.fbm` de l'export) suffit : rien à coder, elles sont reprises automatiquement.
+
+### Les matériaux de la voiture
+
+Le FBX de la voiture porte de **vrais matériaux nommés**, un par zone, et un maillage de vitrage
+séparé. On garde donc le découpage de l'artiste — chaque maillage conserve ses `groups` et son
+**tableau** de matériaux — et on se contente de les repasser au toon en imposant la palette du jeu
+(`CAR_COLORS` dans `carConfig.ts`, seul endroit où se règle l'allure de la voiture) :
+
+| Matériau FBX | Couleur du jeu | Ce que c'est |
+|---|---|---|
+| `Carroserie01` | `body` | la tôle |
+| `Carosserie02` | `bumper` | chromes, pare-chocs, entourages |
+| `Glass` | `glass` | le vitrage |
+| `Roue` | `wheel` | la gomme |
+| `Jante` | `tireHub` | les jantes |
+
+Un matériau absent de la table garde la couleur du FBX. (L'orthographe est celle du fichier, coquille
+comprise — ce sont des clés, pas du texte.)
+
+⚠️ **Ne jamais aplatir le tableau de matériaux en un seul.** Les `groups` de la géométrie pointent
+dedans par indice : n'en garder qu'un repeindrait toute la voiture d'une seule couleur et ferait
+disparaître vitres, chromes et jantes.
+
+⚠️ **Remplacer le FBX par un autre export casse le démarrage** si les noms de maillages changent
+(`Mesh FBX voiture introuvable`). `Car.tsx` attend `Carcasse`, `Glass001` et les maillages préfixés
+`Roue`. Les deux trains de roues, eux, sont triés par **position** (l'avant est vers +Z) et pas par
+nom : un ré-export peut renommer `Roue` en `Roue002` sans rien casser.
 
 ### Style à viser
 

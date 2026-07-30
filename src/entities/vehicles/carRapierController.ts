@@ -27,6 +27,8 @@ const FULL_SLIP_SPEED = 6.5
 const FLIPPED_UP_DOT = 0.25
 /** Vitesse en dessous de laquelle on autorise la remise sur les roues. */
 const FLIP_RECOVERY_MAX_SPEED = 2.5
+/** Plafond de rotation pendant un retournement manuel (rad/s). */
+const FLIP_MAX_RATE = 2.4
 
 interface WheelRay {
   localX: number
@@ -214,6 +216,10 @@ export function applyRapierCarForces(
   const upsideDown = up.y < FLIPPED_UP_DOT
   const nearlyStopped = linearVelocity.lengthSq() < FLIP_RECOVERY_MAX_SPEED * FLIP_RECOVERY_MAX_SPEED
   if (upsideDown && nearlyStopped) {
+    // Deux façons de s'en sortir, qui cohabitent : les flèches font ROULER la
+    // caisse (on se débat, c'est plus vivant), le frein à main maintenu la
+    // repose d'aplomb (dépannage garanti si on est coincé contre un mur).
+    applyFlipTorque(body, controls, config)
     applyFlipRecovery(body, controls, config, runtime, dt)
   } else {
     runtime.flipHold = 0
@@ -523,10 +529,8 @@ function applySteeringTorque(
  * un saut mal négocié, pas assez pour annuler une figure voulue.
  */
 function applyAirControl(body: RapierRigidBody, controls: VehicleControlInput, config: VehicleDriveConfig) {
-  // Z pique du nez, S cabre, Q/D font tourner la caisse sur son axe : la
-  // convention de tous les jeux de conduite, pour que ça vienne sans réfléchir.
-  const pitchInput = (controls.forward ? 1 : 0) - (controls.backward ? 1 : 0)
-  const rollInput = (controls.left ? 1 : 0) - (controls.right ? 1 : 0)
+  const pitchInput = airPitchInput(controls)
+  const rollInput = airRollInput(controls)
 
   // Rotations actuelles projetées sur les axes PROPRES de la caisse : le joueur
   // doit cabrer par rapport à la voiture, pas par rapport au monde.
@@ -546,6 +550,22 @@ function applyAirControl(body: RapierRigidBody, controls: VehicleControlInput, c
   }
 }
 
+/**
+ * Sens des commandes en l'air — UNE seule convention, partagée par le vol et par
+ * le retournement sur le toit, pour ne pas avoir à réapprendre selon la situation.
+ *
+ * Avant/arrière : **avant pique du nez, arrière cabre** (comme un manche à
+ * balai qu'on pousse). Gauche/droite : **la touche fait tomber la caisse de ce
+ * côté-là** — on appuie sur le côté vers lequel on veut basculer.
+ */
+function airPitchInput(controls: VehicleControlInput): number {
+  return (controls.backward ? 1 : 0) - (controls.forward ? 1 : 0)
+}
+
+function airRollInput(controls: VehicleControlInput): number {
+  return (controls.right ? 1 : 0) - (controls.left ? 1 : 0)
+}
+
 /** Pousse une vitesse de rotation vers sa cible autour d'un axe donné. */
 function applyRateTorque(
   body: RapierRigidBody,
@@ -557,6 +577,31 @@ function applyRateTorque(
 ) {
   force.copy(axis).multiplyScalar((targetRate - currentRate) * gain * config.MASS)
   body.addTorque({ x: force.x, y: force.y, z: force.z }, true)
+}
+
+/**
+ * 🤸 SE DÉBATTRE SUR LE TOIT.
+ *
+ * Sur le toit, les rayons de suspension partent vers le ciel : plus aucune roue
+ * ne touche, donc ni le moteur ni la direction ne répondent — on restait planté
+ * là. Les flèches appliquent maintenant un couple directement sur la caisse pour
+ * la faire ROULER et la remettre à l'endroit.
+ *
+ * `FLIP_TORQUE` doit dépasser le couple de rappel de la gravité (≈ poids × demi-
+ * largeur, soit ~11 000 N·m pour cette voiture), sinon la caisse se contente de
+ * frémir. Même convention de touches qu'en vol (voir `airRollInput`).
+ */
+function applyFlipTorque(body: RapierRigidBody, controls: VehicleControlInput, config: VehicleDriveConfig) {
+  const rollInput = airRollInput(controls)
+  const pitchInput = airPitchInput(controls)
+  if (rollInput === 0 && pitchInput === 0) return
+
+  const rollRate = angularVelocity.dot(forward)
+  const pitchRate = angularVelocity.dot(right)
+  applyRateTorque(body, forward, rollRate, rollInput * FLIP_MAX_RATE, config.FLIP_TORQUE, config)
+  // Le tangage aide surtout quand la voiture est calée nez ou cul en l'air ;
+  // moitié moins fort, parce qu'une caisse bascule bien plus mal dans ce sens.
+  applyRateTorque(body, right, pitchRate, pitchInput * FLIP_MAX_RATE, config.FLIP_TORQUE * 0.5, config)
 }
 
 /**

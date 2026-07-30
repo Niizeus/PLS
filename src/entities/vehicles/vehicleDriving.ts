@@ -166,6 +166,8 @@ export interface VehicleDriveConfig {
   AIR_LEVEL_ASSIST: number
   /** Durée d'appui sur le frein à main pour se remettre sur les roues (s). */
   FLIP_RECOVERY_HOLD: number
+  /** Couple des flèches pour se débattre sur le toit (N·m par kg de masse). */
+  FLIP_TORQUE: number
 }
 
 export interface VehicleDriveState {

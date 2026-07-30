@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFBX, useAnimations } from '@react-three/drei'
 import * as THREE from 'three'
+import { toonFromImported } from '../../shaders/toonMaterial'
 import { usePlayerStore, type AttackMove, type PlayerAction } from '../../gameplay/stats/playerStore'
 import { useScooterStore } from '../vehicles/scooterStore'
 import { useCarStore } from '../vehicles/carStore'
@@ -142,13 +143,17 @@ export default function PlayerModel() {
   // Le mesh du perso projette une ombre, et on DÉSACTIVE le frustum culling :
   // les SkinnedMesh animés ont souvent une boîte englobante mal calculée → sinon
   // three les masque à tort (perso invisible).
+  //
+  // On en profite pour REPRENDRE LES MATÉRIAUX du FBX : voir `toonFromImported`.
   useEffect(() => {
     character.traverse((o) => {
       const mesh = o as THREE.Mesh
-      if (mesh.isMesh) {
-        mesh.castShadow = true
-        mesh.frustumCulled = false
-      }
+      if (!mesh.isMesh) return
+      mesh.castShadow = true
+      mesh.frustumCulled = false
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((m) => toonFromImported(m))
+        : toonFromImported(mesh.material)
     })
   }, [character])
 

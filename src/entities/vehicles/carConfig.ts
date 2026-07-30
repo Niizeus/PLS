@@ -116,15 +116,25 @@ export const CAR: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   SURFACE_GRIP_OFFROAD: 0.66,
 
   // --- Controle en l'air ---
-  /** Tangage : assez pour piquer du nez avant l'atterrissage, pas pour faire un salto instantane. */
-  AIR_PITCH_TORQUE: 3.4,
-  AIR_ROLL_TORQUE: 4.2,
-  /** Plafond de rotation : ~1 tour toutes les 2,5 s. Utile, jamais absurde. */
-  AIR_MAX_RATE: 2.6,
+  /**
+   * Tangage / roulis en vol : volontairement DOUX. Une voiture n'est pas un
+   * avion — on corrige son assiette avant de se poser, on n'enchaine pas les
+   * saltos. Monte ces valeurs si tu veux un rendu plus cascade.
+   */
+  AIR_PITCH_TORQUE: 2,
+  AIR_ROLL_TORQUE: 2.4,
+  /** Plafond de rotation : ~1 tour toutes les 4 s. Lisible a l'ecran. */
+  AIR_MAX_RATE: 1.6,
   /** Sans consigne, la caisse revient doucement a plat : atterrissages moins punitifs. */
   AIR_LEVEL_ASSIST: 1.5,
   /** Frein a main maintenu ~0,9 s sur le toit = la voiture se remet sur ses roues. */
   FLIP_RECOVERY_HOLD: 0.9,
+  /**
+   * Se debattre sur le toit avec les fleches. La gravite retient la caisse avec
+   * ~11 000 N·m (poids x demi-largeur) : a 9, on dispose de ~28 000 N·m, donc
+   * elle bascule en insistant un peu — mais pas d'un simple tapotement.
+   */
+  FLIP_TORQUE: 9,
 }
 
 /** Palette BD de la voiture prototype. */

@@ -108,6 +108,8 @@ export const SCOOTER: VehicleDriveConfig & { MOUNT_RANGE: number } = {
   AIR_MAX_RATE: 2.2,
   AIR_LEVEL_ASSIST: 1.8,
   FLIP_RECOVERY_HOLD: 0.8,
+  /** Bien plus leger qu'une voiture : un scooter se releve d'une pichenette. */
+  FLIP_TORQUE: 6,
 }
 
 /** Couleurs du scooter (cartoon). */

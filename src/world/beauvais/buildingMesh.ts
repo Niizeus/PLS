@@ -69,10 +69,43 @@ function facadeColor(b: Building): THREE.Color {
   return new THREE.Color(FACADES[Math.floor(hash01(b.cx, b.cz) * FACADES.length)])
 }
 
+/**
+ * Amplitude de la variation de teinte d'un toit à l'autre. Deux maisons voisines
+ * n'ont jamais exactement la même tuile : sans ça, un quartier entier devient un
+ * seul aplat orange et on ne distingue plus les bâtiments les uns des autres.
+ * On ne change QUE la nuance (clair/sombre + un rien de chaud/froid), jamais le
+ * matériau : de loin la ville reste tuile ou ardoise, elle n'est plus plate.
+ */
+const ROOF_SHADE = 0.2
+
 function roofColor(b: Building): THREE.Color {
-  if (!(b.rh! > 0)) return new THREE.Color(ROOF_FLAT)
-  if (b.rm) return new THREE.Color(ROOF_COLORS[b.rm] ?? ROOF_TILE)
-  return new THREE.Color(b.kind ? ROOF_SLATE : ROOF_TILE)
+  const base = new THREE.Color(
+    !(b.rh! > 0)
+      ? ROOF_FLAT
+      : b.rm
+        ? (ROOF_COLORS[b.rm] ?? ROOF_TILE)
+        : b.kind
+          ? ROOF_SLATE
+          : ROOF_TILE,
+  )
+  // Les monuments gardent leur teinte exacte : ce sont des repères, pas du tissu urbain.
+  if (b.kind) return base
+
+  // Deux tirages indépendants (on décale la graine) : luminosité et température.
+  // ⚠️ On travaille en sRGB : en espace linéaire (le défaut de three), ±20 % de
+  // luminosité ne se voit quasiment pas une fois affiché.
+  const hsl = { h: 0, s: 0, l: 0 }
+  base.getHSL(hsl, THREE.SRGBColorSpace)
+  // Graines décalées : sinon la nuance du toit suivrait celle de la façade et on
+  // retomberait sur des « familles » de bâtiments toujours identiques.
+  const shade = (hash01(b.cx + 41.3, b.cz + 19.7) - 0.5) * 2 * ROOF_SHADE
+  const warm = (hash01(b.cz + 137.1, b.cx - 71.7) - 0.5) * 0.03
+  return base.setHSL(
+    hsl.h + warm,
+    hsl.s,
+    THREE.MathUtils.clamp(hsl.l * (1 + shade), 0.06, 0.9),
+    THREE.SRGBColorSpace,
+  )
 }
 
 // `orientRing` (importé) remet le contour dans le sens qui donne des murs tournés
@@ -120,6 +153,18 @@ function splitAtRidge(tri: Tri, d: (p: number[]) => number): Tri[] {
     [x1, tri[o1], tri[o2]],
     [x1, tri[o2], x2],
   ]
+}
+
+/**
+ * Le point où le segment [a, c] croise le faîtage, s'il le croise. Renvoie une
+ * liste (vide ou d'un point) pour se glisser directement dans la boucle des murs.
+ */
+function ridgeCrossing(a: number[], c: number[], d: (p: number[]) => number): number[][] {
+  const da = d(a)
+  const dc = d(c)
+  if (da === 0 || dc === 0 || (da > 0) === (dc > 0)) return []
+  const t = da / (da - dc)
+  return [[a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t]]
 }
 
 /** Construit le volume complet d'un bâtiment : murs + toit, en un seul maillage. */
@@ -172,19 +217,30 @@ export function buildBuilding(b: Building): THREE.BufferGeometry | null {
 
   // --- MURS. Le haut de chaque mur suit le toit : les murs d'extrémité montent
   // donc en biais et dessinent les pignons sans qu'on ait rien à faire de plus.
+  //
+  // ⚠️ …à condition de COUPER le mur là où le faîtage le traverse. Le profil du
+  // toit est un chapeau : il monte jusqu'à la crête puis redescend. Un mur de
+  // PIGNON va d'un bord à l'autre, donc ses deux extrémités sont en bas et son
+  // milieu devrait culminer à `rh`. Sans cette coupe, on reliait les deux coins
+  // en ligne droite : tout le triangle du pignon manquait, et on voyait
+  // l'intérieur du bâtiment sous chaque toit.
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i]
     const c = ring[(i + 1) % ring.length]
-    const topA = eave + roofRise(a)
-    const topC = eave + roofRise(c)
-    // Deux triangles, orientés vers l'extérieur (le contour est déjà remis d'aplomb).
-    push(a[0], bottom, a[1], wall)
-    push(a[0], topA, a[1], wall)
-    push(c[0], topC, c[1], wall)
+    let prev = a
+    for (const p of [...ridgeCrossing(a, c, distToRidge), c]) {
+      const topPrev = eave + roofRise(prev)
+      const topP = eave + roofRise(p)
+      // Deux triangles, orientés vers l'extérieur (le contour est déjà remis d'aplomb).
+      push(prev[0], bottom, prev[1], wall)
+      push(prev[0], topPrev, prev[1], wall)
+      push(p[0], topP, p[1], wall)
 
-    push(a[0], bottom, a[1], wall)
-    push(c[0], topC, c[1], wall)
-    push(c[0], bottom, c[1], wall)
+      push(prev[0], bottom, prev[1], wall)
+      push(p[0], topP, p[1], wall)
+      push(p[0], bottom, p[1], wall)
+      prev = p
+    }
   }
 
   // --- TOIT. On découpe l'emprise en triangles, on coupe ceux qui traversent le

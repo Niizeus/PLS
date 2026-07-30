@@ -57,7 +57,10 @@ pièges à ne pas « simplifier » sont dans
 La voiture principale charge le FBX `public/models/Vehicule/Voiture/Chevrolet.fbx`
 dans `entities/vehicles/Car.tsx`. Le modèle est préparé en trois parties (caisse,
 essieu avant, essieu arrière) pour exposer les pivots nécessaires au braquage, à la
-rotation des roues et à la suspension visuelle. Elle possède un chassis Rapier
+rotation des roues et à la suspension visuelle (plus le vitrage, maillage séparé
+dans le FBX). Les matériaux du modèle sont conservés — groupes compris — et
+repassés au toon par `shaders/toonMaterial.ts` : voir
+[03 Game Design § Les matériaux de la voiture](03-GAME-DESIGN.md#les-matériaux-de-la-voiture). Elle possède un chassis Rapier
 `dynamic` invisible : `carRapierController.ts` applique les forces moteur, frein,
 grip latéral, couple de direction et suspensions par raycasts sur ce rigidbody. Le
 store voiture publie ensuite la pose Rapier pour que le joueur/caméra suivent le

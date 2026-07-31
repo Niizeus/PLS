@@ -63,7 +63,7 @@ Respecte la stack existante, n'introduis pas d'outil concurrent sans qu'on te le
 |---------|--------------|
 | Base | **Vite + React + TypeScript** |
 | 3D | **Three.js** via **React Three Fiber** (`@react-three/fiber`, `@react-three/drei`) |
-| Style visuel | Cell-shading : `MeshToonMaterial` + gradient map + contours (`<Outlines>` / postprocessing) |
+| Style visuel | Cell-shading : `MeshToonMaterial` + gradient map partagée + contours en passe d'image (`postprocessing`, voir `src/core/postfx/`) |
 | État du jeu | **Zustand** |
 | Données ville | **OpenStreetMap** (GeoJSON) |
 | Export `.exe` (phase 2) | **Tauri v2** (Electron seulement en secours) |
@@ -98,6 +98,27 @@ Résumé — détail complet dans [`docs/01-WORKFLOW-GIT.md`](docs/01-WORKFLOW-G
      Request, changer de branche distante, ou toute action qui touche le dépôt distant GitHub.
    - Même si l'humain semble le demander, rappelle-lui que la synchro GitHub se fait à la main
      via GitHub Desktop. L'IA s'arrête au commit local.
+
+---
+
+## 4bis. Économie de contexte (le projet a un budget d'usage limité)
+
+Chaque tour de conversation **renvoie tout l'historique** au modèle. Un contexte gonflé coûte donc
+à chaque message, pas une seule fois. Règles pour ne pas gaspiller :
+
+1. **Cherche avant de lire.** `Grep`/`Glob` pour localiser, puis `Read` avec `offset`/`limit` sur la
+   zone utile. Ne lis jamais un fichier de 500 lignes pour en modifier 3.
+2. **Ne relis pas un fichier que tu viens d'éditer** pour « vérifier » : si l'édition avait échoué,
+   l'outil aurait renvoyé une erreur.
+3. **Reste dans `PLS/`.** Le dossier parent contient `PLS - Copie` (doublon complet) et
+   `VoiceStudioQwen` (venv Python + modèles TTS) : toute recherche lancée depuis le parent
+   ramène deux fois les mêmes résultats plus des milliers de fichiers inutiles.
+4. **Pas de sous-agent sans demande explicite.** Un sous-agent repart de zéro et doit re-découvrir
+   tout le contexte : c'est le chemin le plus cher pour une tâche que l'agent principal sait faire.
+5. **Une tâche = une conversation.** Quand un sujet est fini, l'humain fait `/clear` : repartir
+   propre coûte moins cher que traîner l'historique d'un chantier terminé.
+6. **Commandes ciblées.** Pas de `du -sh` ni de `find` récursif sur le dossier parent — ça expire
+   au bout de deux minutes et ne rapporte rien.
 
 ---
 

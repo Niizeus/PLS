@@ -272,7 +272,8 @@ systèmes existants, il ne duplique jamais les données ».
 - **Le curseur revient** dès qu'on le sort (et il ne se fait pas reprendre par un clic à côté),
   comme pour le panneau dev `F2`. Voir `src/gameplay/input/pointerLock.ts`.
 - **Le jeu ne se met PAS en pause** : c'est un objet du monde, pas un menu. La ville continue de
-  tourner, et le téléphone reste utilisable en voiture (il se décale à gauche du tableau de bord).
+  tourner, et le téléphone reste utilisable en voiture, **sans bouger** : le tableau de bord est en
+  bas à gauche, il ne lui dispute plus le coin.
 - Il s'affiche **en bas à droite**, sans masquer les stats (à gauche) ni la minimap (en haut à
   droite) — contrairement à l'inventaire et à la carte, qui sont plein écran.
 - **Il sort verrouillé** : heure en grand, jour, et les notifications non lues d'un coup d'œil.
@@ -655,10 +656,15 @@ X puis Z separement, d'ou des micro-saccades) ; on **ressort** automatiquement s
 coince dans un batiment ; et un choc **frontal** coute beaucoup de vitesse la ou un **frolement**
 n'en coute presque pas. Le deplacement est decoupe en sous-pas plus courts que le corps :
 aucune traversee de facade, meme a pleine vitesse.
-Quand le joueur conduit, un tableau de bord affiche la vitesse reelle en km/h avec aiguille et
-compteur numerique, le **rapport engage** (« CVT » pour le scooter), un **compte-tours** qui vire au
-rouge en zone rouge, ainsi qu'une jauge d'essence prevue pour la future boucle de ravitaillement.
+Quand le joueur conduit, un tableau de bord s'affiche **en bas a gauche**, sous la forme d'un
+**disque unique** : l'anneau exterieur est le **compte-tours** (il vire au rouge en zone rouge) avec
+l'**aiguille de vitesse** qui glisse dessus, l'anneau interieur est la **jauge d'essence** (prevue
+pour la future boucle de ravitaillement), et le centre porte la vitesse reelle en km/h, le **rapport
+engage** (« CVT » pour le scooter) et le pourcentage d'essence. Le limiteur et les phares
+apparaissent en pastilles au-dessus du disque, seulement quand ils sont actifs.
 Le cadran se gradue **selon le vehicule** (~80 km/h pour le scooter, ~220 pour la voiture).
+Le disque tient dans 138 px de large : il laisse le coin bas droit **entierement** au telephone, qui
+n'a donc plus a se decaler quand on conduit.
 Chaque vehicule garde sa station radio attribuee : au premier demarrage, une radio est choisie aleatoirement **parmi celles qui ont de la musique**, puis elle reste la meme quand on descend et qu'on remonte. (Le tirage evite les stations sans fichier dans `Musiques/` : elles sont muettes hors de leurs emissions, et comme le choix est memorise, une caisse sur cinq restait sinon definitivement silencieuse.) **La touche R change de station** (elle tourne en boucle sur les cinq) ; le choix est memorise sur le vehicule, donc chaque caisse garde SA station. La touche est rappelee sur le tableau de bord, a cote du nom de la station. Les stations utilisent une timeline mondiale commune : si deux sources diffusent R01, elles doivent pointer vers le meme morceau et le meme moment de diffusion.
 Le contenu des stations est **detecte sur disque**, pas ecrit en dur : chaque fichier audio depose dans `public/musique/radio/RXX_Nom/` entre dans la programmation, quel que soit son nom. Le titre affiche sur le tableau de bord est deduit du nom du fichier. Voir `public/musique/radio/README.md`.
 

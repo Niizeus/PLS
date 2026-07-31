@@ -8,7 +8,8 @@ import { HUD, kbd, panel, sectionLabel } from './hudStyle'
  *
  * Il occupait douze lignes en permanence : c'était le bloc qui mangeait le plus
  * d'écran, alors qu'on n'en a besoin que les premières minutes. Il est donc
- * REPLIÉ par défaut (une simple pastille) et se déplie avec F1.
+ * INVISIBLE par défaut et s'ouvre avec F1. Même la pastille « F1 Touches » a
+ * disparu : le coin bas gauche revient au compteur de vitesse.
  *
  * Il est aussi CONTEXTUEL : à pied on ne montre pas les commandes de conduite, et
  * en véhicule on ne montre pas "sauter" ou "s'accroupir". Moins de lignes à lire,
@@ -66,14 +67,11 @@ export default function ControlsHint() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  if (!open) {
-    return (
-      <div style={{ ...panel, ...wrapStyle, ...collapsedStyle }}>
-        <kbd style={kbd}>F1</kbd>
-        <span style={{ color: HUD.textDim }}>Touches</span>
-      </div>
-    )
-  }
+  // Replié, il n'affiche PLUS RIEN : la pastille « F1 Touches » occupait en
+  // permanence le coin bas gauche, qui revient maintenant au compteur de vitesse
+  // (`VehicleDashboard`). La touche F1, elle, marche toujours — le rappel est
+  // aussi mentionné dans l'app Réglages du téléphone.
+  if (!open) return null
 
   // Déplié, on répartit sur DEUX colonnes. En une seule, le panneau montait à
   // ~370 px et venait mordre sur les stats dès qu'on jouait en fenêtre basse.
@@ -117,11 +115,4 @@ const wrapStyle: CSSProperties = {
   bottom: HUD.edge,
   left: HUD.edge,
   pointerEvents: 'none',
-}
-
-const collapsedStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '6px 10px',
 }

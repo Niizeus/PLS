@@ -752,6 +752,36 @@ annuler/rétablir, favoris, textures récemment utilisées, recherche, aperçu a
 
 ---
 
+## ✒️ 6bis. Suites de la passe de contours cell-shading
+
+Le trait noir est désormais appliqué à **toute l'image** par `core/postfx/` (voir
+[02 Architecture § La chaîne d'effets d'image](02-ARCHITECTURE.md)). Deux suites restent ouvertes.
+
+### 6bis.1 Retirer les `<Outlines>` par objet devenus redondants
+
+- **Intention** : un seul trait, le même partout. Aujourd'hui la voiture, le scooter, les objets
+  ramassables, les props sandbox et les marqueurs portent **en plus** un contour de géométrie
+  dupliquée : ils sont donc encrés deux fois, un peu plus gras que le décor.
+- **Ce qui existe** : `<Outlines>` dans `entities/vehicles/Car.tsx`, `entities/vehicles/Scooter.tsx`,
+  `entities/items/ItemPickups.tsx`, `gameplay/physics/SandboxPhysicsProps.tsx`,
+  `entities/map/MapMarkerEntities.tsx`, `world/beauvais/ScaleReferences.tsx`.
+- **Comment décider** : mettre `opacity: 0` dans `TOON_OUTLINE` pour revoir l'ancien rendu, comparer,
+  puis trancher. À faire **après** avoir réglé épaisseur et sensibilité, pas avant.
+- **Bénéfice attendu** : moins de géométrie dessinée sur les entités les plus fréquentes.
+- **Étiquettes** : Priorité confort · Horizon court terme · Nature nettoyage · État à valider visuellement
+
+### 6bis.2 Lignes intérieures sur les surfaces courbes
+
+- **Intention** : la passe actuelle lit la profondeur, donc elle voit les silhouettes et les arêtes,
+  mais pas un pli sur une carrosserie lisse (aucune cassure de profondeur).
+- **Piste** : ajouter un `NormalPass` pour comparer aussi l'orientation des faces.
+- **Risques** : il **re-rend toute la scène** une deuxième fois (coût réel sur une ville 1:1), et il
+  peint les objets transparents (particules, nuages) comme s'ils étaient opaques → contours parasites.
+  À ne tenter que si le manque se voit vraiment en jeu.
+- **Étiquettes** : Priorité confort · Horizon long terme · Nature rendu · État à étudier
+
+---
+
 ## ❓ 7. Questions ouvertes transverses
 
 Ces questions reviennent dans plusieurs idées. Y répondre une fois débloquerait plusieurs chantiers.
@@ -760,7 +790,7 @@ Ces questions reviennent dans plusieurs idées. Y répondre une fois débloquera
 |---|---|
 | Existe-t-il une notion de **matériau de surface** exploitable en jeu (asphalte, terre, herbe) ? | 1.2, 1.3 |
 | Quelle est la **couche d'entrées** cible (clavier, souris, **manette**), et les touches deviennent-elles remappables ? | 1.1, 1.5, 1.6, 2.2, 2.3 |
-| Y a-t-il un **post-traitement** dans le projet, et lequel (contours cell-shading + effets de ciel) ? | 3.7, direction artistique |
+| ~~Y a-t-il un **post-traitement** dans le projet ?~~ ✅ Oui : `core/postfx/`, avec les contours cell-shading. Les effets de ciel (3.7) peuvent s'y greffer. | 3.7, 6bis, direction artistique |
 | Comment gère-t-on les **lumières nocturnes** en ville 1:1 sans effondrer les performances ? | 1.6, 3.5 |
 | À quoi ressemble un **vrai système de paramètres joueur** (distinct du DEV `F2`) ? | 2.2, 2.3, 4.x |
 | Un préréglage doit-il rester affiché comme tel après une modification manuelle ? | 4.4, 4.7 |

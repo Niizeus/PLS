@@ -25,7 +25,7 @@ import { column } from './hudStyle'
  *   │                  [quartier]        minimap+heure │
  *   │                                                  │
  *   │                                                  │
- *   │  touches (F1)      raccourcis      tableau bord  │
+ *   │  tableau bord      raccourcis        téléphone   │
  *   └──────────────────────────────────────────────────┘
  *
  * Les colonnes s'empilent toutes seules (`display: grid`) : les composants ne
@@ -43,6 +43,8 @@ import { column } from './hudStyle'
  * • Le nom du quartier collé en permanence : il s'annonce maintenant à l'entrée
  *   dans le quartier (`ZoneToast`), puis s'efface.
  * • Le compteur FPS : visible uniquement en développement.
+ * • La pastille « F1 Touches » : `F1` ouvre toujours le rappel des commandes, mais
+ *   plus rien ne l'annonce en permanence — le coin bas gauche sert au compteur.
  *
  * Principe directeur : **si une information ne change pas, ou si elle est
  * consultable dans le téléphone, elle n'a rien à faire à l'écran en permanence.**

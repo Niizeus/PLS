@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useVehicleTelemetryStore } from '../../entities/vehicles/vehicleTelemetryStore'
 import { KEY } from '../../gameplay/input/keyMap'
 import { setCursorUiOpen } from '../../gameplay/input/pointerLock'
 import {
@@ -44,20 +43,19 @@ import { PHONE, screen, shell } from './phoneStyle'
 /** Nombre d'icônes par ligne sur l'accueil — sert aussi aux flèches haut/bas. */
 const COLUMNS = 3
 
-/** Marge par rapport au coin bas droit de l'écran. */
-const EDGE = 18
 /**
- * Au volant, le tableau de bord occupe déjà le coin bas droit (`VehicleDashboard`,
- * 238 px de large). Le téléphone se décale alors à sa gauche au lieu de lui passer
- * dessus. Si le tableau de bord change de largeur, c'est ici qu'on ajuste.
+ * Marge par rapport au coin bas droit de l'écran.
+ *
+ * Le téléphone ne se décale PLUS en conduisant : le tableau de bord est passé
+ * en bas à GAUCHE (`VehicleDashboard`), il n'y a donc plus rien à éviter. Avant,
+ * sortir son téléphone au volant le faisait sauter de 250 px vers la gauche.
  */
-const EDGE_DRIVING = EDGE + 238 + 12
+const EDGE = 18
 
 export default function PhoneOverlay() {
   const isOpen = usePhoneStore((s) => s.isOpen)
   const locked = usePhoneStore((s) => s.locked)
   const appId = usePhoneStore((s) => s.appId)
-  const riding = useVehicleTelemetryStore((s) => s.riding)
   const scale = usePhoneScale()
   const [selected, setSelected] = useState(0)
 
@@ -145,7 +143,7 @@ export default function PhoneOverlay() {
 
   if (!mounted) {
     // Téléphone rangé : une simple pastille discrète si quelque chose attend.
-    return unreadCount > 0 ? <PocketBadge count={unreadCount} riding={riding} /> : null
+    return unreadCount > 0 ? <PocketBadge count={unreadCount} /> : null
   }
 
   const app = findPhoneApp(appId)
@@ -154,13 +152,13 @@ export default function PhoneOverlay() {
     <div
       style={{
         position: 'fixed',
-        right: riding ? EDGE_DRIVING : EDGE,
+        right: EDGE,
         bottom: EDGE,
         // Sorti de la poche : il monte et se redresse légèrement.
         transform: `${shown ? 'translateY(0) rotate(0deg)' : 'translateY(38px) rotate(4deg)'} scale(${scale})`,
         transformOrigin: 'bottom right',
         opacity: shown ? 1 : 0,
-        transition: `right 200ms ease, transform ${PHONE.animMs}ms cubic-bezier(.2,.9,.3,1.2), opacity ${PHONE.animMs}ms ease`,
+        transition: `transform ${PHONE.animMs}ms cubic-bezier(.2,.9,.3,1.2), opacity ${PHONE.animMs}ms ease`,
         pointerEvents: 'none', // seule la coque est cliquable (voir `shell`)
       }}
     >
@@ -337,12 +335,12 @@ function NotificationBanner({ title, body }: { title: string; body: string }) {
  * Téléphone rangé : une pastille à l'endroit où il se trouverait, indiquant le
  * nombre de notifications non lues. C'est ce qui donne envie de le sortir.
  */
-function PocketBadge({ count, riding }: { count: number; riding: boolean }) {
+function PocketBadge({ count }: { count: number }) {
   return (
     <div
       style={{
         position: 'fixed',
-        right: riding ? EDGE_DRIVING : EDGE,
+        right: EDGE,
         bottom: EDGE,
         display: 'flex',
         alignItems: 'center',

@@ -16,6 +16,7 @@ PLS/
     ├── App.tsx            ← assemble l'écran de jeu
     │
     ├── core/              ← le "moteur" : boucle de jeu, systèmes partagés
+    │   └── postfx/         ← effets appliqués à l'image finie (contours cell-shading...)
     ├── world/             ← LE MONDE (map de Beauvais, décor, bâtiments)
     │   └── beauvais/       ← données OSM + IGN, génération de la ville
     ├── entities/          ← personnages & objets (1 fichier par entité)
@@ -135,13 +136,43 @@ L'ordre est maintenant explicite, via les constantes de `FRAME` :
 | `LOGIC` (1) | `usePlayerMovement` | déplace le joueur / conduit le véhicule |
 | `ATTACHED` (2) | `Car`, `Scooter` | place ce qui est accroché au joueur |
 | `CAMERA` (3) | `FollowCamera` | vise une position déjà à jour |
-| `RENDER` (10) | `SceneRenderer` | dessine l'image |
+| `RENDER` (10) | `SceneRenderer` | dessine l'image (via la chaîne d'effets, voir plus bas) |
 
 > ⚠️ **Piège à connaître.** Dès qu'un `useFrame` a une priorité > 0, React Three Fiber **arrête
 > de rendre tout seul** (il considère qu'on prend la main sur la boucle). C'est pour ça que
-> `core/SceneRenderer.tsx` existe et appelle `gl.render()` en dernier. Si un jour on enlève
+> `core/SceneRenderer.tsx` existe et rend l'image en dernier. Si un jour on enlève
 > toutes les priorités, il faut enlever `SceneRenderer` en même temps — sinon plus rien
 > ne s'affiche, ou la scène est rendue deux fois.
+
+### 🎞️ La chaîne d'effets d'image — `core/postfx/`
+
+La scène n'est plus dessinée directement à l'écran : elle passe par un `EffectComposer`
+(bibliothèque `postprocessing`) monté par `core/postfx/usePostProcessing.ts`. On rend la scène
+dans une image en mémoire, on la retouche, on affiche le résultat. C'est ce qui permet les effets
+qui ont besoin de voir l'image **entière**.
+
+| Fichier | Rôle |
+|---|---|
+| `core/postfx/usePostProcessing.ts` | fabrique le composer et la liste des passes. **Le seul endroit à toucher pour ajouter un effet.** |
+| `core/postfx/ToonOutlineEffect.ts` | le trait noir du cell-shading, appliqué à toute l'image |
+| `core/SceneRenderer.tsx` | le seul à appeler `composer.render()` |
+
+**Le contour** ne duplique aucune géométrie : il relit le tampon de profondeur et noircit les
+pixels où il « casse » (silhouette d'un bâtiment, arête entre un mur et un toit). Il compare
+chaque pixel à la **moyenne de ses deux voisins opposés**, ce qui donne zéro sur toute surface
+plane même très inclinée — sans ça, une route vue de biais se remplirait de traits parasites.
+Les réglages (épaisseur en pixels, sensibilité, opacité, effacement au loin) sont regroupés dans
+la constante `TOON_OUTLINE` en haut du fichier.
+
+> 🔭 **Deux règles.** (1) Une seule chose appelle `render()` — deux appels et la scène est
+> dessinée deux fois par image, sans erreur visible, juste des FPS divisés par deux.
+> (2) Empile les nouveaux effets dans le **même** `EffectPass` : il les fusionne en un seul
+> shader, c'est bien moins cher que trois passes séparées.
+
+> ⚠️ **Reste des contours par objet.** Plusieurs entités portent encore un `<Outlines>` de drei
+> (voiture, scooter, objets ramassables, props, marqueurs). Ils font double emploi avec la passe
+> d'image et devront être retirés une fois le rendu validé — voir
+> [07 Backlog](07-BACKLOG-IDEES.md).
 
 En voiture, le joueur/caméra suit une pose publiée par le chassis Rapier. `FollowCamera`
 lisse donc uniquement son point cible voiture (X/Z plus vite que Y) pour absorber les
@@ -215,6 +246,9 @@ tant que le fichier n'est pas installé.
 
 - Ce qui sert **à jouer dans l'instant** (raccourcis, minimap, heure, tableau de bord) reste
   affiché.
+  > Le **rappel des touches** (`F1`) ne laisse plus AUCUNE trace à l'écran quand il est replié :
+  > la pastille « F1 Touches » a été supprimée, et le coin **bas gauche** revient au tableau de
+  > bord du véhicule. La touche est rappelée dans l'app **Réglages** du téléphone.
 - **L'état du personnage** (vie, faim, soif, mental, caractéristiques, argent, réputation) est
   **dans le téléphone** (touche `P`), pas à l'écran. Le téléphone est le tableau de bord de
   Chibrux ; l'écran, lui, montre le monde.

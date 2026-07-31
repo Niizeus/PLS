@@ -1,4 +1,23 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": [
+      "Read(**/node_modules/**)",
+      "Read(**/.venv/**)",
+      "Read(**/.venv-cosy/**)",
+      "Read(**/site-packages/**)",
+      "Read(**/dist/**)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {

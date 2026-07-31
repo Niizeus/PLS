@@ -366,7 +366,7 @@ export function usePlayerMovement(
       moveDir.current.set(dirX, 0, dirZ)
       if (moveDir.current.lengthSq() > 0) moveDir.current.normalize()
 
-      const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.items)
+      const speedMultiplier = getMovementSpeedMultiplier(effectiveStats, inventory.stacks)
       const speed =
         (crouching ? playerTuning.CROUCH_SPEED : running ? playerTuning.RUN_SPEED : playerTuning.WALK_SPEED) *
         speedMultiplier

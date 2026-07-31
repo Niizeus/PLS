@@ -1,38 +1,88 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ITEMS_BY_ID, type EquipmentSlot, type ItemCategory, type ItemEffectKey } from '../data/items'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  ITEMS_BY_ID,
+  getItemSize,
+  isItemRotatable,
+  type EquipmentSlot,
+  type ItemCategory,
+  type ItemEffectKey,
+} from '../data/items'
 import { KEY } from '../gameplay/input/keyMap'
+import { setCursorUiOpen } from '../gameplay/input/pointerLock'
+import {
+  BACKPACK_COLS,
+  BACKPACK_ROWS,
+  buildOccupancy,
+  canPlace,
+  countUsedCells,
+  findMergeTarget,
+  getFootprint,
+} from '../gameplay/inventory/backpackGrid'
 import { QUICK_SLOT_IDS, useInventoryStore } from '../gameplay/inventory/inventoryStore'
-import { formatWeight, getInventoryWeight, getMaxCarryWeight } from '../gameplay/inventory/inventoryWeight'
+import { getInventoryWeight, getMaxCarryWeight, formatWeight } from '../gameplay/inventory/inventoryWeight'
+import { usePendingPlacementStore } from '../gameplay/inventory/pendingPlacementStore'
 import { usePickupStore } from '../gameplay/inventory/pickupStore'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { isBlocked } from '../world/beauvais/collision'
 import { SPAWN } from '../world/beauvais/cityData'
 import { HUD, hardShadow, hardShadowSmall, outline, outlineThin, sectionLabel } from './hudStyle'
 
+/**
+ * 🎒 LE SAC À DOS — une grille de 8×5 cases.
+ *
+ * ── Comment ça se manipule ─────────────────────────────────────────────────
+ * • **Un clic** sur un objet le prend en main, **un clic** sur une case le
+ *   repose. Pas de glisser-déposer maintenu : c'est plus tolérant à la souris
+ *   qui dérape, et ça marche pareil sur un pavé tactile.
+ * • **R** fait pivoter l'objet tenu (s'il n'est pas carré).
+ * • **Échap** repose ce qu'on tient / referme le sac.
+ * • Lâcher une pile sur une pile identique les **fusionne**.
+ *
+ * ── Le ramassage ───────────────────────────────────────────────────────────
+ * Quand le joueur appuie sur `E` devant un objet du monde, celui-ci arrive
+ * **en main** et le sac s'ouvre tout seul : il faut lui trouver une place. Tant
+ * qu'il n'est pas posé, **l'objet reste par terre** — annuler ne perd rien.
+ * Voir `gameplay/inventory/pendingPlacementStore.ts`.
+ */
+
 const CATEGORY_LABEL: Record<ItemCategory, string> = {
-  arme: 'Armes',
+  arme: 'Arme',
   arme_lancer: 'Lancer',
   consommable_nourriture: 'Bouffe',
-  consommable_boisson: 'Boissons',
+  consommable_boisson: 'Boisson',
   consommable_chelou: 'Chelou',
-  alcool: 'Alcools',
+  alcool: 'Alcool',
   armure_tete: 'Tete',
   armure_torse: 'Torse',
+  armure_bras: 'Bras',
   armure_jambes: 'Jambes',
-  armure_pieds: 'Pieds',
-  accessoire: 'Accessoires',
-  vehicule: 'Vehicules',
+  vehicule: 'Vehicule',
+}
+
+/** Une pastille par famille : on reconnaît un objet dans la grille sans le lire. */
+const CATEGORY_ICON: Record<ItemCategory, string> = {
+  arme: '🔨',
+  arme_lancer: '🧱',
+  consommable_nourriture: '🍔',
+  consommable_boisson: '🥤',
+  consommable_chelou: '💊',
+  alcool: '🍺',
+  armure_tete: '🧢',
+  armure_torse: '🦺',
+  armure_bras: '💍',
+  armure_jambes: '👖',
+  vehicule: '🛵',
 }
 
 const SLOT_LABEL: Record<EquipmentSlot, string> = {
   head: 'Tete',
   torso: 'Torse',
+  arms: 'Bras',
   legs: 'Jambes',
-  feet: 'Pieds',
-  accessory: 'Accessoire',
-  rightHand: 'Main droite',
-  leftHand: 'Main gauche',
+  hand: 'Main',
 }
+
+const SLOTS: EquipmentSlot[] = ['head', 'torso', 'arms', 'legs', 'hand']
 
 const EFFECT_LABEL: Record<ItemEffectKey, string> = {
   health: 'Sante',
@@ -47,51 +97,43 @@ const EFFECT_LABEL: Record<ItemEffectKey, string> = {
   chaos: 'Chaos',
 }
 
-const CATEGORY_ORDER: ItemCategory[] = [
-  'arme',
-  'arme_lancer',
-  'consommable_nourriture',
-  'consommable_boisson',
-  'consommable_chelou',
-  'alcool',
-  'armure_tete',
-  'armure_torse',
-  'armure_jambes',
-  'armure_pieds',
-  'accessoire',
-  'vehicule',
-]
+/** Côté d'une case, en pixels. Toute la grille se dimensionne à partir de là. */
+const CELL = 48
+const CELL_GAP = 3
 
-const SLOTS: EquipmentSlot[] = ['head', 'torso', 'legs', 'feet', 'accessory', 'rightHand', 'leftHand']
-type InventorySortMode = 'name' | 'quantity' | 'weight' | 'price'
-
-const SORT_LABEL: Record<InventorySortMode, string> = {
-  name: 'Nom',
-  quantity: 'Quantite',
-  weight: 'Poids',
-  price: 'Valeur',
+/** Ce que le joueur tient en main, en attente d'être posé. */
+interface HeldItem {
+  itemId: string
+  quantity: number
+  rotated: boolean
+  /** Pile déjà dans le sac qu'on est en train de déplacer. */
+  fromUid?: string
+  /** Objet du monde à consommer une fois posé. */
+  pickupId?: string
 }
-
-const SORT_MODES: InventorySortMode[] = ['name', 'quantity', 'weight', 'price']
 
 export default function InventoryPanel() {
   const [open, setOpen] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<ItemCategory>('arme')
-  const [sortMode, setSortMode] = useState<InventorySortMode>('name')
-  const compact = useCompactLayout()
-  const items = useInventoryStore((s) => s.items)
+  const [held, setHeld] = useState<HeldItem | null>(null)
+  const [hovered, setHovered] = useState<{ x: number; y: number } | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  const stacks = useInventoryStore((s) => s.stacks)
   const equipped = useInventoryStore((s) => s.equipped)
   const quickSlots = useInventoryStore((s) => s.quickSlots)
-  const selectedItemId = useInventoryStore((s) => s.selectedItemId)
+  const selectedUid = useInventoryStore((s) => s.selectedUid)
   const lastMessage = useInventoryStore((s) => s.lastMessage)
-  const selectItem = useInventoryStore((s) => s.selectItem)
-  const useItem = useInventoryStore((s) => s.useItem)
-  const equipItem = useInventoryStore((s) => s.equipItem)
-  const unequipSlot = useInventoryStore((s) => s.unequipSlot)
-  const assignQuickSlot = useInventoryStore((s) => s.assignQuickSlot)
-  const removeItem = useInventoryStore((s) => s.removeItem)
   const clearMessage = useInventoryStore((s) => s.clearMessage)
   const addDroppedPickup = usePickupStore((s) => s.addDroppedPickup)
+  const collectPickup = usePickupStore((s) => s.collectPickup)
+  const pending = usePendingPlacementStore((s) => s.pending)
+
+  // Un objet ramassé arrive « en main » : le sac s'ouvre tout seul dessus.
+  useEffect(() => {
+    if (!pending) return
+    setHeld({ itemId: pending.itemId, quantity: pending.quantity, rotated: pending.rotated, pickupId: pending.pickupId })
+    setOpen(true)
+  }, [pending])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -100,21 +142,35 @@ export default function InventoryPanel() {
         // l'inventaire s'ouvrirait ET le navigateur sauterait sur un bouton.
         event.preventDefault()
         setOpen((current) => !current)
-        document.exitPointerLock?.()
-      } else if (event.key === 'Escape') {
-        setOpen(false)
+        return
+      }
+      if (!open) return
+
+      if (event.code === 'Escape') {
+        // Premier Échap : on repose ce qu'on tient. Deuxième : on ferme.
+        if (held) releaseHeld()
+        else setOpen(false)
+        return
+      }
+      // R fait pivoter l'objet tenu — seule touche utile pendant un placement.
+      if (event.code === 'KeyR' && held && isItemRotatable(held.itemId)) {
+        event.preventDefault()
+        setHeld({ ...held, rotated: !held.rotated })
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  })
 
+  // Sac ouvert = curseur rendu au joueur (voir `gameplay/input/pointerLock.ts`).
   useEffect(() => {
+    setCursorUiOpen('inventory', open)
     if (open) document.body.dataset.plsInventoryOpen = 'true'
     else delete document.body.dataset.plsInventoryOpen
 
     return () => {
+      setCursorUiOpen('inventory', false)
       delete document.body.dataset.plsInventoryOpen
     }
   }, [open])
@@ -125,215 +181,287 @@ export default function InventoryPanel() {
     return () => window.clearTimeout(timeoutId)
   }, [clearMessage, lastMessage])
 
-  const visibleItems = useMemo(
-    () =>
-      items
-        .filter((entry) => ITEMS_BY_ID[entry.itemId]?.category === activeCategory)
-        .sort((a, b) => compareEntries(a, b, sortMode)),
-    [activeCategory, items, sortMode],
-  )
-  const totalWeight = useMemo(() => getInventoryWeight(items), [items])
+  const usedCells = useMemo(() => countUsedCells(stacks), [stacks])
+  const totalCells = BACKPACK_COLS * BACKPACK_ROWS
+  const totalWeight = useMemo(() => getInventoryWeight(stacks), [stacks])
   const maxCarryWeight = getMaxCarryWeight()
-  const weightRatio = Math.min(1, totalWeight / maxCarryWeight)
-  const selectedItem = selectedItemId ? ITEMS_BY_ID[selectedItemId] : null
-  const selectedEntry = selectedItemId ? items.find((entry) => entry.itemId === selectedItemId) : null
-  const occupiedSlot = selectedItemId
-    ? (Object.entries(equipped).find(([, itemId]) => itemId === selectedItemId)?.[0] as EquipmentSlot | undefined)
-    : undefined
-  const canDropSelectedItem = selectedItem?.id !== 'poing-basique'
+  const overloaded = totalWeight > maxCarryWeight * 0.72
 
-  const dropSelectedItem = (quantity: number) => {
-    if (!selectedItem || !selectedEntry || !canDropSelectedItem) return
-    const dropQuantity = Math.min(quantity, selectedEntry.quantity)
-    if (dropQuantity <= 0) return
+  const selectedStack = stacks.find((stack) => stack.uid === selectedUid) ?? null
+  const selectedItem = selectedStack ? ITEMS_BY_ID[selectedStack.itemId] : null
 
+  /** Repose ce qu'on tient : soit on annule le ramassage, soit rien ne bouge. */
+  const releaseHeld = () => {
+    if (held?.pickupId) usePendingPlacementStore.getState().cancelPlacement()
+    setHeld(null)
+  }
+
+  /** Clic sur une case de la grille. */
+  const onCellClick = (x: number, y: number) => {
+    const store = useInventoryStore.getState()
+
+    if (held) {
+      const placed = held.fromUid
+        ? store.moveStack(held.fromUid, x, y, held.rotated)
+        : store.placeItem(held.itemId, held.quantity, x, y, held.rotated)
+
+      if (!placed) return
+      // Posé pour de bon : l'objet du monde peut enfin disparaître.
+      if (held.pickupId) {
+        collectPickup(held.pickupId)
+        usePendingPlacementStore.getState().cancelPlacement()
+      }
+      setHeld(null)
+      return
+    }
+
+    // Main vide : on prend la pile qui est sous le curseur.
+    const uid = buildOccupancy(stacks)[y]?.[x]
+    const stack = uid ? stacks.find((candidate) => candidate.uid === uid) : null
+    if (!stack) return
+    store.selectStack(stack.uid)
+    setHeld({ itemId: stack.itemId, quantity: stack.quantity, rotated: stack.rotated, fromUid: stack.uid })
+  }
+
+  const dropStack = (uid: string, quantity: number) => {
+    const stack = stacks.find((candidate) => candidate.uid === uid)
+    if (!stack) return
     const spot = findDropSpot()
     addDroppedPickup({
-      id: createDroppedPickupId(selectedItem.id),
-      itemId: selectedItem.id,
-      quantity: dropQuantity,
+      id: createDroppedPickupId(stack.itemId),
+      itemId: stack.itemId,
+      quantity: Math.min(quantity, stack.quantity),
       x: spot.x,
       z: spot.z,
     })
-    if (occupiedSlot && dropQuantity >= selectedEntry.quantity) unequipSlot(occupiedSlot)
-    removeItem(selectedItem.id, dropQuantity)
+    useInventoryStore.getState().removeStack(uid, quantity)
   }
 
-  if (!open) {
-    return lastMessage ? <Toast>{lastMessage}</Toast> : null
-  }
+  if (!open) return lastMessage ? <Toast>{lastMessage}</Toast> : null
+
+  const occupancy = buildOccupancy(stacks)
+  const heldFootprint = held ? getFootprint(held.itemId, held.rotated) : null
+  // Aperçu sous le curseur : vert si ça rentre, rouge sinon. Le joueur voit
+  // AVANT de cliquer, il ne découvre pas le refus après coup.
+  const previewValid =
+    held && hovered
+      ? Boolean(
+          findMergeTarget(stacks, held.itemId, hovered.x, hovered.y, held.quantity, { ignoreUid: held.fromUid }) ||
+            canPlace(stacks, held.itemId, hovered.x, hovered.y, held.rotated, { ignoreUid: held.fromUid }),
+        )
+      : false
 
   return (
     <div style={overlayStyle}>
-      <div style={compact ? compactPanelStyle : panelStyle}>
+      <div style={panelStyle}>
         <div style={headerStyle}>
           <div>
             <div style={eyebrowStyle}>Chibrux</div>
-            <h2 style={titleStyle}>Inventaire</h2>
+            <h2 style={titleStyle}>Sac à dos</h2>
           </div>
-          <div style={weightBoxStyle}>
-            <span style={weightLabelStyle}>Charge</span>
-            <strong>{formatWeight(totalWeight)} / {formatWeight(maxCarryWeight)}</strong>
-            <span style={weightTrackStyle}>
-              <span style={{ ...weightFillStyle, width: `${weightRatio * 100}%` }} />
+          <div style={statsBoxStyle}>
+            <span>
+              <strong>{usedCells}</strong>/{totalCells} cases
+            </span>
+            <span style={{ color: overloaded ? '#b32217' : HUD.ink }}>
+              {formatWeight(totalWeight)}
+              {overloaded ? ' · chargé' : ''}
             </span>
           </div>
-          <button onClick={() => setOpen(false)} style={closeButtonStyle} title="Fermer">
-            X
+          <button onClick={() => setOpen(false)} style={closeButtonStyle} title="Fermer (Échap)">
+            ✕
           </button>
         </div>
 
-        <div style={compact ? compactContentStyle : contentStyle}>
-          <aside style={compact ? compactSidebarStyle : sidebarStyle}>
-            {CATEGORY_ORDER.map((category) => {
-              const count = items.filter((entry) => ITEMS_BY_ID[entry.itemId]?.category === category).length
-              return (
-                <button
-                  key={category}
-                  onClick={() => setActiveCategory(category)}
-                  style={category === activeCategory ? activeCategoryStyle : categoryStyle}
-                >
-                  <span>{CATEGORY_LABEL[category]}</span>
-                  <span style={countStyle}>{count}</span>
-                </button>
-              )
-            })}
-          </aside>
-
-          <main style={listStyle}>
-            <div style={sortBarStyle}>
-              {SORT_MODES.map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setSortMode(mode)}
-                  style={sortMode === mode ? activeSortButtonStyle : sortButtonStyle}
-                >
-                  {SORT_LABEL[mode]}
-                </button>
-              ))}
-            </div>
-            {visibleItems.length === 0 ? (
-              <div style={emptyStyle}>Rien ici pour le moment.</div>
-            ) : (
-              visibleItems.map((entry) => {
-                const item = ITEMS_BY_ID[entry.itemId]
-                const isSelected = selectedItemId === entry.itemId
-                const isEquipped = Object.values(equipped).includes(entry.itemId)
-                const stackText = item.stackable ? `${entry.quantity}/${item.maxStack ?? 99}` : `${entry.quantity}/1`
-                return (
+        <div style={contentStyle}>
+          <div style={gridColumnStyle}>
+            <div
+              ref={gridRef}
+              style={gridStyle}
+              onMouseLeave={() => setHovered(null)}
+              onContextMenu={(event) => {
+                // Clic droit = rotation : le réflexe de tous les jeux à grille.
+                event.preventDefault()
+                if (held && isItemRotatable(held.itemId)) setHeld({ ...held, rotated: !held.rotated })
+              }}
+            >
+              {/* Les cases vides : le quadrillage. */}
+              {Array.from({ length: BACKPACK_ROWS }).map((_, y) =>
+                Array.from({ length: BACKPACK_COLS }).map((__, x) => (
                   <button
-                    key={entry.itemId}
-                    onClick={() => selectItem(entry.itemId)}
-                    style={isSelected ? selectedItemStyle : itemStyle}
+                    key={`${x}-${y}`}
+                    type="button"
+                    onMouseEnter={() => setHovered({ x, y })}
+                    onClick={() => onCellClick(x, y)}
+                    style={{
+                      ...cellStyle,
+                      left: x * (CELL + CELL_GAP),
+                      top: y * (CELL + CELL_GAP),
+                    }}
+                    aria-label={`case ${x + 1}, ${y + 1}`}
+                  />
+                )),
+              )}
+
+              {/* Les objets posés. */}
+              {stacks.map((stack) => {
+                const item = ITEMS_BY_ID[stack.itemId]
+                if (!item) return null
+                const footprint = getFootprint(stack.itemId, stack.rotated)
+                const isHeld = held?.fromUid === stack.uid
+                return (
+                  <div
+                    key={stack.uid}
+                    style={{
+                      ...tileStyle,
+                      left: stack.x * (CELL + CELL_GAP),
+                      top: stack.y * (CELL + CELL_GAP),
+                      width: footprint.w * CELL + (footprint.w - 1) * CELL_GAP,
+                      height: footprint.h * CELL + (footprint.h - 1) * CELL_GAP,
+                      background: stack.uid === selectedUid ? '#ffd83d' : HUD.paper,
+                      // La pile qu'on déplace reste visible mais en retrait.
+                      opacity: isHeld ? 0.35 : 1,
+                    }}
                   >
-                    <span style={itemNameStyle}>{item.name}</span>
-                    <span style={metaStyle}>
-                      x{stackText} / {item.rarity}
-                      {isEquipped ? ' / equipe' : ''}
-                    </span>
-                  </button>
+                    <span style={tileIconStyle}>{CATEGORY_ICON[item.category]}</span>
+                    <span style={tileNameStyle}>{item.name}</span>
+                    {stack.quantity > 1 && <span style={tileQtyStyle}>×{stack.quantity}</span>}
+                  </div>
                 )
-              })
-            )}
-          </main>
+              })}
 
-          <section style={compact ? compactDetailsStyle : detailsStyle}>
-            {selectedItem && selectedEntry ? (
-              <>
-                <div style={detailTopStyle}>
-                  <div>
-                    <div style={eyebrowStyle}>{CATEGORY_LABEL[selectedItem.category]}</div>
-                    <h3 style={detailTitleStyle}>{selectedItem.name}</h3>
-                  </div>
-                  <div style={priceStackStyle}>
-                    <div style={priceStyle}>{selectedItem.price} EUR</div>
-                    <div style={weightPillStyle}>{formatWeight(selectedItem.weightKg)}</div>
-                    <div style={stackPillStyle}>
-                      Pile {selectedEntry.quantity}/{selectedItem.stackable ? selectedItem.maxStack ?? 99 : 1}
-                    </div>
-                  </div>
-                </div>
+              {/* L'aperçu de ce qu'on tient. */}
+              {held && hovered && heldFootprint && (
+                <div
+                  style={{
+                    ...previewStyle,
+                    left: hovered.x * (CELL + CELL_GAP),
+                    top: hovered.y * (CELL + CELL_GAP),
+                    width: heldFootprint.w * CELL + (heldFootprint.w - 1) * CELL_GAP,
+                    height: heldFootprint.h * CELL + (heldFootprint.h - 1) * CELL_GAP,
+                    background: previewValid ? 'rgba(90, 168, 50, 0.5)' : 'rgba(230, 57, 70, 0.5)',
+                  }}
+                />
+              )}
+            </div>
 
-                <p style={descriptionStyle}>{selectedItem.description}</p>
+            <div style={handBarStyle}>
+              {held ? (
+                <>
+                  <span>
+                    En main : <strong>{ITEMS_BY_ID[held.itemId]?.name}</strong>
+                    {held.quantity > 1 ? ` ×${held.quantity}` : ''}
+                  </span>
+                  <span style={{ color: HUD.textDim }}>
+                    Clic : poser
+                    {isItemRotatable(held.itemId) ? ' · R ou clic droit : tourner' : ''} · Échap : annuler
+                  </span>
+                </>
+              ) : (
+                <span style={{ color: HUD.textDim }}>
+                  Clic sur un objet pour le prendre en main. {occupancy.length ? '' : ''}
+                </span>
+              )}
+            </div>
+          </div>
 
-                <div style={effectsStyle}>
-                  {selectedItem.effects ? (
-                    <>
-                      {Object.entries(selectedItem.effects).map(([key, value]) => (
-                        <span key={key} style={effectPillStyle}>
-                          {EFFECT_LABEL[key as ItemEffectKey]} {value && value > 0 ? '+' : ''}
-                          {value}
-                        </span>
-                      ))}
-                      {selectedItem.effectDurationMs ? (
-                        <span style={durationPillStyle}>Duree {Math.round(selectedItem.effectDurationMs / 1000)}s</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span style={effectPillStyle}>Aucun effet direct</span>
-                  )}
-                </div>
-
-                <div style={actionsStyle}>
-                  {selectedItem.consumable && (
-                    <button onClick={() => useItem(selectedItem.id)} style={primaryButtonStyle}>
-                      Utiliser
-                    </button>
-                  )}
-                  {selectedItem.equipSlot && (
-                    <button onClick={() => equipItem(selectedItem.id)} style={primaryButtonStyle}>
-                      Equiper
-                    </button>
-                  )}
-                  {occupiedSlot && (
-                    <button onClick={() => unequipSlot(occupiedSlot)} style={secondaryButtonStyle}>
-                      Retirer
-                    </button>
-                  )}
-                  {canDropSelectedItem && (
-                    <button onClick={() => dropSelectedItem(1)} style={dangerButtonStyle}>
-                      Deposer 1
-                    </button>
-                  )}
-                  {canDropSelectedItem && selectedEntry.quantity > 1 && (
-                    <button onClick={() => dropSelectedItem(selectedEntry.quantity)} style={dangerButtonStyle}>
-                      Tout
-                    </button>
-                  )}
-                </div>
-
-                <div style={quickAssignStyle}>
-                  <span style={sectionTitleStyle}>Raccourcis</span>
-                  <div style={quickAssignButtonsStyle}>
-                    {QUICK_SLOT_IDS.map((slot, index) => (
-                      <button
-                        key={slot}
-                        onClick={() => assignQuickSlot(slot, quickSlots[slot] === selectedItem.id ? null : selectedItem.id)}
-                        style={quickSlots[slot] === selectedItem.id ? activeQuickAssignButtonStyle : quickAssignButtonStyle}
-                      >
-                        {index + 1}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={emptyStyle}>Selectionne un objet.</div>
-            )}
-
-            <div style={equipmentStyle}>
-              <div style={sectionTitleStyle}>Equipement</div>
+          <section style={detailsStyle}>
+            <div style={sectionTitleStyle}>Équipement</div>
+            <div style={{ display: 'grid', gap: 6 }}>
               {SLOTS.map((slot) => {
                 const itemId = equipped[slot]
                 const item = itemId ? ITEMS_BY_ID[itemId] : null
                 return (
-                  <button key={slot} onClick={() => itemId && selectItem(itemId)} style={slotStyle}>
+                  <button
+                    key={slot}
+                    onClick={() => itemId && useInventoryStore.getState().unequipSlot(slot)}
+                    style={slotStyle}
+                    title={item ? `Retirer ${item.name}` : 'Emplacement vide'}
+                  >
                     <span style={slotLabelStyle}>{SLOT_LABEL[slot]}</span>
-                    <span style={slotItemStyle}>{item?.name ?? 'Vide'}</span>
+                    <span style={slotItemStyle}>{item?.name ?? '—'}</span>
                   </button>
                 )
               })}
             </div>
+
+            {selectedItem && selectedStack ? (
+              <>
+                <div style={sectionTitleStyle}>{CATEGORY_LABEL[selectedItem.category]}</div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <h3 style={detailTitleStyle}>{selectedItem.name}</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <span style={priceStyle}>{selectedItem.price} €</span>
+                    <span style={weightPillStyle}>{formatWeight(selectedItem.weightKg)}</span>
+                    <span style={stackPillStyle}>
+                      {getItemSize(selectedItem.id).w}×{getItemSize(selectedItem.id).h}
+                    </span>
+                    {selectedStack.quantity > 1 && (
+                      <span style={weightPillStyle}>×{selectedStack.quantity}</span>
+                    )}
+                  </div>
+                  <p style={descriptionStyle}>{selectedItem.description}</p>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {selectedItem.effects ? (
+                      Object.entries(selectedItem.effects).map(([key, value]) => (
+                        <span key={key} style={effectPillStyle}>
+                          {EFFECT_LABEL[key as ItemEffectKey]} {value && value > 0 ? '+' : ''}
+                          {value}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={effectPillStyle}>Aucun effet</span>
+                    )}
+                    {selectedItem.effectDurationMs ? (
+                      <span style={durationPillStyle}>{Math.round(selectedItem.effectDurationMs / 1000)}s</span>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                    {selectedItem.consumable && (
+                      <button onClick={() => useInventoryStore.getState().useStack(selectedStack.uid)} style={primaryButtonStyle}>
+                        Utiliser
+                      </button>
+                    )}
+                    {selectedItem.equipSlot && (
+                      <button onClick={() => useInventoryStore.getState().equipStack(selectedStack.uid)} style={primaryButtonStyle}>
+                        Équiper
+                      </button>
+                    )}
+                    <button onClick={() => dropStack(selectedStack.uid, 1)} style={dangerButtonStyle}>
+                      Jeter 1
+                    </button>
+                    {selectedStack.quantity > 1 && (
+                      <button onClick={() => dropStack(selectedStack.uid, selectedStack.quantity)} style={dangerButtonStyle}>
+                        Tout jeter
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <span style={sectionTitleStyle}>Raccourcis</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 36px)', gap: 7 }}>
+                      {QUICK_SLOT_IDS.map((slot, index) => (
+                        <button
+                          key={slot}
+                          onClick={() =>
+                            useInventoryStore
+                              .getState()
+                              .assignQuickSlot(slot, quickSlots[slot] === selectedItem.id ? null : selectedItem.id)
+                          }
+                          style={quickSlots[slot] === selectedItem.id ? activeQuickAssignButtonStyle : quickAssignButtonStyle}
+                        >
+                          {index + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={emptyStyle}>Clique un objet du sac.</div>
+            )}
           </section>
         </div>
 
@@ -347,26 +475,12 @@ function Toast({ children }: { children: string }) {
   return <div style={toastStyle}>{children}</div>
 }
 
-function compareEntries(
-  a: { itemId: string; quantity: number },
-  b: { itemId: string; quantity: number },
-  sortMode: InventorySortMode,
-) {
-  const itemA = ITEMS_BY_ID[a.itemId]
-  const itemB = ITEMS_BY_ID[b.itemId]
-  if (!itemA || !itemB) return 0
-
-  if (sortMode === 'quantity') return b.quantity - a.quantity || itemA.name.localeCompare(itemB.name)
-  if (sortMode === 'weight') return itemB.weightKg * b.quantity - itemA.weightKg * a.quantity || itemA.name.localeCompare(itemB.name)
-  if (sortMode === 'price') return itemB.price * b.quantity - itemA.price * a.quantity || itemA.name.localeCompare(itemB.name)
-  return itemA.name.localeCompare(itemB.name)
-}
-
 function createDroppedPickupId(itemId: string) {
   const suffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())
   return `dropped-${itemId}-${suffix}`
 }
 
+/** Une case libre devant le joueur pour y déposer un objet. */
 function findDropSpot() {
   const player = usePlayerStore.getState().playerObject
   const baseX = player?.position.x ?? SPAWN.x
@@ -377,11 +491,11 @@ function findDropSpot() {
   const firstZ = baseZ + Math.cos(rot) * 2
   if (!isBlocked(firstX, firstZ)) return { x: firstX, z: firstZ }
 
-  for (let radius = 1.5; radius <= 5; radius += 0.75) {
-    for (let step = 0; step < 12; step++) {
-      const angle = rot + (step / 12) * Math.PI * 2
-      const x = baseX + Math.sin(angle) * radius
-      const z = baseZ + Math.cos(angle) * radius
+  for (let radius = 1.5; radius <= 6; radius += 1.5) {
+    for (let step = 0; step < 10; step++) {
+      const angle = (step / 10) * Math.PI * 2
+      const x = baseX + Math.cos(angle) * radius
+      const z = baseZ + Math.sin(angle) * radius
       if (!isBlocked(x, z)) return { x, z }
     }
   }
@@ -389,22 +503,9 @@ function findDropSpot() {
   return { x: baseX, z: baseZ }
 }
 
-function useCompactLayout() {
-  const [compact, setCompact] = useState(() => window.innerWidth < 820)
-
-  useEffect(() => {
-    const onResize = () => setCompact(window.innerWidth < 820)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
-  return compact
-}
-
 /**
- * 🎨 L'inventaire suit le même langage que le HUD (`ui/hudStyle.ts`) : papier
- * crème, contour d'encre épais, ombre dure, aplats francs. Il ne réinvente ni
- * fond ni bordure — quand le style du jeu bougera, il suivra tout seul.
+ * 🎨 Tout part de `ui/hudStyle.ts` : papier crème, contour d'encre épais, ombre
+ * dure, aplats francs. Aucun fond ni bordure réinventé ici.
  */
 const overlayStyle: CSSProperties = {
   position: 'fixed',
@@ -413,14 +514,13 @@ const overlayStyle: CSSProperties = {
   pointerEvents: 'auto',
   display: 'grid',
   placeItems: 'center',
-  // Le voile est ENCRE, pas gris-bleu : on assombrit la page, on ne la teinte pas.
   background: 'rgba(22, 26, 36, 0.62)',
   color: HUD.text,
 }
 
 const panelStyle: CSSProperties = {
-  width: 'min(1080px, calc(100vw - 32px))',
-  height: 'min(680px, calc(100vh - 32px))',
+  width: 'min(980px, calc(100vw - 32px))',
+  maxHeight: 'calc(100vh - 32px)',
   display: 'grid',
   gridTemplateRows: 'auto 1fr auto',
   borderRadius: HUD.radius + 4,
@@ -431,62 +531,31 @@ const panelStyle: CSSProperties = {
   font: `700 14px ${HUD.font}`,
 }
 
-const compactPanelStyle: CSSProperties = {
-  ...panelStyle,
-  width: 'calc(100vw - 20px)',
-  height: 'calc(100vh - 20px)',
-}
-
 const headerStyle: CSSProperties = {
-  minHeight: 76,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '16px 20px',
+  gap: 12,
+  padding: '12px 18px',
   borderBottom: outline,
   background: '#ffd83d',
   color: HUD.ink,
 }
 
-const weightBoxStyle: CSSProperties = {
-  width: 220,
-  display: 'grid',
-  gap: 4,
-  color: HUD.ink,
-  font: `800 12px ${HUD.font}`,
-}
-
-const weightLabelStyle: CSSProperties = {
-  ...sectionLabel,
-  color: HUD.ink,
-}
-
-const weightTrackStyle: CSSProperties = {
-  height: 11,
-  borderRadius: 999,
-  overflow: 'hidden',
-  background: HUD.paper,
-  border: outlineThin,
-}
-
-const weightFillStyle: CSSProperties = {
-  display: 'block',
-  height: '100%',
-  borderRadius: 999,
-  background: HUD.ink,
-}
-
-const eyebrowStyle: CSSProperties = {
-  ...sectionLabel,
-  color: HUD.ink,
-  opacity: 0.72,
-}
+const eyebrowStyle: CSSProperties = { ...sectionLabel, color: HUD.ink, opacity: 0.72 }
 
 const titleStyle: CSSProperties = {
   margin: '2px 0 0',
   font: `900 26px ${HUD.font}`,
   lineHeight: 1.05,
   letterSpacing: 0.5,
+}
+
+const statsBoxStyle: CSSProperties = {
+  display: 'grid',
+  justifyItems: 'end',
+  gap: 2,
+  font: `800 12px ${HUD.font}`,
 }
 
 const closeButtonStyle: CSSProperties = {
@@ -504,182 +573,117 @@ const closeButtonStyle: CSSProperties = {
 const contentStyle: CSSProperties = {
   minHeight: 0,
   display: 'grid',
-  gridTemplateColumns: '180px minmax(220px, 1fr) minmax(280px, 360px)',
+  gridTemplateColumns: 'auto minmax(260px, 1fr)',
+  gap: 0,
 }
 
-const compactContentStyle: CSSProperties = {
-  ...contentStyle,
-  gridTemplateColumns: '1fr',
-  gridTemplateRows: 'auto minmax(170px, 1fr) auto',
-  overflow: 'auto',
-}
-
-const sidebarStyle: CSSProperties = {
-  padding: 12,
+const gridColumnStyle: CSSProperties = {
+  padding: 16,
   display: 'grid',
+  gap: 10,
   alignContent: 'start',
-  gap: 6,
-  borderRight: outline,
   background: HUD.paperShade,
-  overflow: 'auto',
+  borderRight: outline,
 }
 
-const compactSidebarStyle: CSSProperties = {
-  ...sidebarStyle,
-  gridAutoFlow: 'column',
-  gridAutoColumns: 'max-content',
-  borderRight: 'none',
-  borderBottom: outline,
-  overflowX: 'auto',
-  overflowY: 'hidden',
+const gridStyle: CSSProperties = {
+  position: 'relative',
+  width: BACKPACK_COLS * CELL + (BACKPACK_COLS - 1) * CELL_GAP,
+  height: BACKPACK_ROWS * CELL + (BACKPACK_ROWS - 1) * CELL_GAP,
 }
 
-const categoryStyle: CSSProperties = {
-  height: 34,
-  padding: '0 10px',
+const cellStyle: CSSProperties = {
+  position: 'absolute',
+  width: CELL,
+  height: CELL,
+  padding: 0,
+  borderRadius: 8,
+  border: `2px dashed rgba(22, 26, 36, 0.28)`,
+  background: 'rgba(247, 240, 225, 0.55)',
+  cursor: 'pointer',
+}
+
+const tileStyle: CSSProperties = {
+  position: 'absolute',
+  borderRadius: 9,
+  border: outline,
+  boxShadow: hardShadowSmall,
+  display: 'grid',
+  alignContent: 'center',
+  justifyItems: 'center',
+  gap: 1,
+  padding: 2,
+  // Les clics traversent la tuile : c'est la CASE en dessous qui les reçoit,
+  // donc on n'a pas à recalculer quelle case a été visée.
+  pointerEvents: 'none',
+  overflow: 'hidden',
+}
+
+const tileIconStyle: CSSProperties = { fontSize: 17, lineHeight: 1 }
+
+const tileNameStyle: CSSProperties = {
+  font: `800 9px ${HUD.font}`,
+  textAlign: 'center',
+  lineHeight: 1.1,
+  maxWidth: '100%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+}
+
+const tileQtyStyle: CSSProperties = {
+  position: 'absolute',
+  right: 3,
+  bottom: 2,
+  font: `900 10px ${HUD.mono}`,
+  color: HUD.ink,
+}
+
+const previewStyle: CSSProperties = {
+  position: 'absolute',
+  borderRadius: 9,
+  border: outline,
+  pointerEvents: 'none',
+}
+
+const handBarStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 8,
-  borderRadius: 9,
-  border: '2px solid transparent',
-  background: 'transparent',
-  color: HUD.textDim,
-  cursor: 'pointer',
-  font: `800 13px ${HUD.font}`,
-  textAlign: 'left',
-}
-
-/** La catégorie ouverte est un onglet PLEIN, pas une nuance de gris. */
-const activeCategoryStyle: CSSProperties = {
-  ...categoryStyle,
-  background: HUD.ink,
-  border: outlineThin,
-  color: HUD.paper,
-}
-
-const countStyle: CSSProperties = {
-  minWidth: 24,
-  textAlign: 'center',
-  padding: '1px 7px',
-  borderRadius: 999,
-  background: 'rgba(22, 26, 36, 0.14)',
-  color: 'inherit',
-  font: `800 12px ${HUD.mono}`,
-}
-
-const listStyle: CSSProperties = {
-  padding: 14,
-  display: 'grid',
-  alignContent: 'start',
-  gap: 8,
-  overflow: 'auto',
-}
-
-const sortBarStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  gap: 6,
-  marginBottom: 4,
-}
-
-const sortButtonStyle: CSSProperties = {
-  minWidth: 0,
-  height: 30,
-  borderRadius: 9,
+  gap: 12,
+  minHeight: 30,
+  padding: '6px 10px',
+  borderRadius: 10,
   border: outlineThin,
   background: HUD.paper,
-  color: HUD.textDim,
-  cursor: 'pointer',
-  font: `800 12px ${HUD.font}`,
-}
-
-const activeSortButtonStyle: CSSProperties = {
-  ...sortButtonStyle,
-  background: HUD.ink,
-  color: HUD.paper,
-}
-
-const itemStyle: CSSProperties = {
-  minHeight: 62,
-  padding: '10px 12px',
-  display: 'grid',
-  gap: 4,
-  borderRadius: 11,
-  border: outlineThin,
-  background: HUD.paper,
-  color: HUD.text,
-  cursor: 'pointer',
-  textAlign: 'left',
-}
-
-/**
- * L'objet sélectionné est JAUNE et décalé, comme l'objet équipé de la barre de
- * raccourcis : même code visuel pour « c'est celui-là », partout dans le jeu.
- */
-const selectedItemStyle: CSSProperties = {
-  ...itemStyle,
-  border: outline,
-  background: '#ffd83d',
-  boxShadow: hardShadowSmall,
-}
-
-const itemNameStyle: CSSProperties = {
-  font: `800 15px ${HUD.font}`,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-}
-
-const metaStyle: CSSProperties = {
-  color: HUD.textDim,
-  font: `700 12px ${HUD.font}`,
+  font: `800 11px ${HUD.font}`,
 }
 
 const detailsStyle: CSSProperties = {
   padding: 16,
   display: 'grid',
-  gridTemplateRows: 'auto auto auto auto 1fr',
-  gap: 14,
-  borderLeft: outline,
-  background: HUD.paperShade,
+  alignContent: 'start',
+  gap: 12,
   overflow: 'auto',
 }
 
-const compactDetailsStyle: CSSProperties = {
-  ...detailsStyle,
-  borderLeft: 'none',
-  borderTop: outline,
-}
-
-const detailTopStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'start',
-  justifyContent: 'space-between',
-  gap: 12,
-}
+const sectionTitleStyle: CSSProperties = { ...sectionLabel }
 
 const detailTitleStyle: CSSProperties = {
-  margin: '2px 0 0',
-  font: `900 22px ${HUD.font}`,
+  margin: 0,
+  font: `900 20px ${HUD.font}`,
   lineHeight: 1.14,
-  letterSpacing: 0.3,
 }
 
 const priceStyle: CSSProperties = {
-  flex: '0 0 auto',
-  padding: '4px 9px',
+  padding: '3px 9px',
   borderRadius: 999,
   border: outlineThin,
   background: '#5aa832',
   color: HUD.paper,
-  font: `800 13px ${HUD.font}`,
-}
-
-const priceStackStyle: CSSProperties = {
-  display: 'grid',
-  justifyItems: 'end',
-  gap: 6,
+  font: `800 12px ${HUD.font}`,
 }
 
 const weightPillStyle: CSSProperties = {
@@ -691,53 +695,38 @@ const weightPillStyle: CSSProperties = {
   font: `800 12px ${HUD.font}`,
 }
 
-const stackPillStyle: CSSProperties = {
-  ...weightPillStyle,
-  background: '#c9b6ef',
-}
+const stackPillStyle: CSSProperties = { ...weightPillStyle, background: '#c9b6ef' }
 
 const descriptionStyle: CSSProperties = {
   color: HUD.text,
-  font: `700 13px ${HUD.font}`,
+  font: `700 12px ${HUD.font}`,
   lineHeight: 1.45,
 }
 
-const effectsStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 7,
-}
-
 const effectPillStyle: CSSProperties = {
-  padding: '4px 8px',
+  padding: '3px 8px',
   borderRadius: 999,
   border: outlineThin,
   background: HUD.paper,
   color: HUD.text,
-  font: `800 12px ${HUD.font}`,
+  font: `800 11px ${HUD.font}`,
 }
 
-const durationPillStyle: CSSProperties = {
-  ...effectPillStyle,
-  background: '#9ed3ef',
+const durationPillStyle: CSSProperties = { ...effectPillStyle, background: '#9ed3ef' }
+
+const primaryButtonStyle: CSSProperties = {
+  minHeight: 34,
+  padding: '0 14px',
+  borderRadius: 10,
+  border: outline,
+  background: '#ffd83d',
+  color: HUD.ink,
+  cursor: 'pointer',
+  font: `800 13px ${HUD.font}`,
+  boxShadow: hardShadowSmall,
 }
 
-const actionsStyle: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 8,
-}
-
-const quickAssignStyle: CSSProperties = {
-  display: 'grid',
-  gap: 7,
-}
-
-const quickAssignButtonsStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, 36px)',
-  gap: 7,
-}
+const dangerButtonStyle: CSSProperties = { ...primaryButtonStyle, background: '#e63946', color: HUD.paper }
 
 const quickAssignButtonStyle: CSSProperties = {
   width: 36,
@@ -756,46 +745,9 @@ const activeQuickAssignButtonStyle: CSSProperties = {
   border: outline,
 }
 
-/** L'action principale : jaune, contour épais, ombre — le bouton qu'on voit. */
-const primaryButtonStyle: CSSProperties = {
-  minHeight: 36,
-  padding: '0 14px',
-  borderRadius: 10,
-  border: outline,
-  background: '#ffd83d',
-  color: HUD.ink,
-  cursor: 'pointer',
-  font: `800 13px ${HUD.font}`,
-  boxShadow: hardShadowSmall,
-}
-
-const secondaryButtonStyle: CSSProperties = {
-  ...primaryButtonStyle,
-  background: HUD.paper,
-  boxShadow: 'none',
-}
-
-const dangerButtonStyle: CSSProperties = {
-  ...primaryButtonStyle,
-  background: '#e63946',
-  color: HUD.paper,
-}
-
-const equipmentStyle: CSSProperties = {
-  alignSelf: 'end',
-  display: 'grid',
-  gap: 7,
-  paddingTop: 12,
-  borderTop: `2px dashed ${HUD.ink}`,
-}
-
-const sectionTitleStyle: CSSProperties = {
-  ...sectionLabel,
-}
-
 const slotStyle: CSSProperties = {
-  minHeight: 36,
-  padding: '6px 9px',
+  minHeight: 34,
+  padding: '5px 9px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -808,10 +760,7 @@ const slotStyle: CSSProperties = {
   textAlign: 'left',
 }
 
-const slotLabelStyle: CSSProperties = {
-  color: HUD.textDim,
-  font: `800 12px ${HUD.font}`,
-}
+const slotLabelStyle: CSSProperties = { color: HUD.textDim, font: `800 11px ${HUD.font}` }
 
 const slotItemStyle: CSSProperties = {
   minWidth: 0,
@@ -822,7 +771,7 @@ const slotItemStyle: CSSProperties = {
 }
 
 const emptyStyle: CSSProperties = {
-  minHeight: 140,
+  minHeight: 90,
   display: 'grid',
   placeItems: 'center',
   color: HUD.textDim,
@@ -832,8 +781,8 @@ const emptyStyle: CSSProperties = {
 }
 
 const messageStyle: CSSProperties = {
-  minHeight: 36,
-  padding: '9px 16px',
+  minHeight: 34,
+  padding: '8px 16px',
   color: HUD.ink,
   borderTop: outline,
   background: '#ffd83d',

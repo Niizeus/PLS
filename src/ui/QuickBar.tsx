@@ -12,7 +12,7 @@ const KEY_TO_SLOT: Record<string, QuickSlotId> = {
 }
 
 export default function QuickBar() {
-  const items = useInventoryStore((s) => s.items)
+  const stacks = useInventoryStore((s) => s.stacks)
   const equipped = useInventoryStore((s) => s.equipped)
   const quickSlots = useInventoryStore((s) => s.quickSlots)
   const activateQuickSlot = useInventoryStore((s) => s.activateQuickSlot)
@@ -33,9 +33,12 @@ export default function QuickBar() {
       {QUICK_SLOT_IDS.map((slot, index) => {
         const itemId = quickSlots[slot]
         const item = itemId ? ITEMS_BY_ID[itemId] : null
-        const entry = itemId ? items.find((candidate) => candidate.itemId === itemId) : null
+        // Quantité totale de cet objet dans le sac, toutes piles confondues.
+        const quantity = itemId
+          ? stacks.reduce((total, stack) => (stack.itemId === itemId ? total + stack.quantity : total), 0)
+          : 0
         const isEquipped = itemId ? Object.values(equipped).includes(itemId) : false
-        const stackText = item && entry ? `${entry.quantity}/${item.stackable ? item.maxStack ?? 99 : 1}` : ''
+        const stackText = item && quantity > 0 ? `${quantity}` : ''
 
         return (
           <button key={slot} onClick={() => activateQuickSlot(slot)} style={isEquipped ? equippedSlotStyle : slotStyle}>

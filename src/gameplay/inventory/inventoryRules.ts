@@ -1,8 +1,16 @@
-import { ITEMS_BY_ID } from '../../data/items'
-import type { InventoryEntry } from './inventoryStore'
-import { formatWeight, getInventoryWeight, getItemWeight, getMaxCarryWeight } from './inventoryWeight'
+import { ITEMS_BY_ID, getItemSize } from '../../data/items'
+import { findFreeSpot, type PlacedStack } from './backpackGrid'
 
-export type AddItemFailureReason = 'invalid' | 'stackFull' | 'tooHeavy'
+/**
+ * 📏 Les règles du sac : ce qui rentre, ce qui ne rentre pas, et pourquoi.
+ *
+ * ⚠️ **Le poids n'empêche plus de ramasser.** La seule limite est la PLACE.
+ * Le poids, lui, ralentit le joueur (`inventoryWeight.ts`) : deux contraintes
+ * différentes qui ne font pas doublon — l'une sur ce qu'on emporte, l'autre sur
+ * la façon dont on se déplace avec.
+ */
+
+export type AddItemFailureReason = 'invalid' | 'noRoom'
 
 export function clampInventoryQuantity(itemId: string, quantity: number) {
   const item = ITEMS_BY_ID[itemId]
@@ -11,48 +19,45 @@ export function clampInventoryQuantity(itemId: string, quantity: number) {
   return Math.min(Math.max(quantity, 0), item.maxStack ?? 99)
 }
 
-export function getCurrentQuantity(items: InventoryEntry[], itemId: string) {
-  return items.find((entry) => entry.itemId === itemId)?.quantity ?? 0
-}
-
 export function getMaxQuantity(itemId: string) {
   const item = ITEMS_BY_ID[itemId]
   if (!item) return 0
   return item.stackable ? item.maxStack ?? 99 : 1
 }
 
-export function getStackSpace(items: InventoryEntry[], itemId: string) {
-  return Math.max(0, getMaxQuantity(itemId) - getCurrentQuantity(items, itemId))
+/** Quantité totale d'un objet dans le sac, toutes piles confondues. */
+export function getCurrentQuantity(stacks: PlacedStack[], itemId: string) {
+  return stacks.reduce((total, stack) => (stack.itemId === itemId ? total + stack.quantity : total), 0)
+}
+
+/** Y a-t-il **quelque part** de la place pour cet objet ? */
+export function canFitInBackpack(stacks: PlacedStack[], itemId: string) {
+  return findFreeSpot(stacks, itemId) !== null
 }
 
 export function getAddItemFailureReason(
-  items: InventoryEntry[],
+  stacks: PlacedStack[],
   itemId: string,
   quantity = 1,
 ): AddItemFailureReason | null {
   const item = ITEMS_BY_ID[itemId]
   if (!item || quantity <= 0) return 'invalid'
-  if (getStackSpace(items, itemId) < quantity) return 'stackFull'
-
-  const nextWeight = getInventoryWeight(items) + getItemWeight(itemId) * quantity
-  if (nextWeight > getMaxCarryWeight()) return 'tooHeavy'
-
+  if (!canFitInBackpack(stacks, itemId)) return 'noRoom'
   return null
 }
 
 export function getAddItemFailureMessage(itemId: string, reason: AddItemFailureReason) {
-  const item = ITEMS_BY_ID[itemId]
-  const name = item?.name ?? 'Objet'
-
-  if (reason === 'stackFull') return `${name} ne rentre plus dans la pile.`
-  if (reason === 'tooHeavy') return `${name} est trop lourd. Inventaire plein.`
+  const name = ITEMS_BY_ID[itemId]?.name ?? 'Objet'
+  if (reason === 'noRoom') return `${name} : plus de place dans le sac.`
   return `${name} impossible a ramasser.`
 }
 
-export function getPickupHint(items: InventoryEntry[], itemId: string, quantity = 1) {
-  const reason = getAddItemFailureReason(items, itemId, quantity)
-  if (reason === 'stackFull') return 'Pile pleine'
-  if (reason === 'tooHeavy') return 'Trop lourd'
+/** Petit texte affiché sous l'invite « Ramasser » : la place que ça prend. */
+export function getPickupHint(stacks: PlacedStack[], itemId: string, quantity = 1) {
+  const reason = getAddItemFailureReason(stacks, itemId, quantity)
+  if (reason === 'noRoom') return 'Sac plein'
   if (reason === 'invalid') return 'Impossible'
-  return `+${formatWeight(getItemWeight(itemId) * quantity)}`
+
+  const size = getItemSize(itemId)
+  return `${size.w}×${size.h} cases`
 }

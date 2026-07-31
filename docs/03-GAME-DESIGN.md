@@ -165,28 +165,62 @@ Elles peuvent être augmentées ou modifiées par :
 
 ## 🎒 Équipement
 
-Chibrux possède plusieurs emplacements d'équipement :
+Chibrux a **quatre pièces d'équipement et une main** :
 
 - tête
-- bijoux
-- buste
+- torse
 - bras
 - jambes
-- pieds
+- **main** (une seule arme à la fois)
+
+C'est volontairement le modèle le plus simple : pas de slot chaussures ni de slot bijou séparés
+(les baskets comptent comme « jambes », les bagues comme « bras »). Ajouter un emplacement plus
+tard, c'est une ligne dans `EquipmentSlot` (`src/data/items.ts`).
 
 Les équipements peuvent donner des bonus de stats, des effets spéciaux ou débloquer certaines
-interactions. Les armes et objets utilisables ne sont pas des emplacements d'équipement séparés :
-ils passent par l'inventaire, les raccourcis rapides et l'objet actif du joueur.
+interactions.
+
+> ⚠️ **Un objet équipé n'est plus dans le sac** : il quitte la grille et libère sa place. Le
+> retirer demande donc de la place — s'il n'y en a pas, le jeu refuse et le dit.
 
 ---
 
 ## 🎒 Inventaire sac à dos
 
-L'inventaire doit être repensé comme un **sac à dos physique**, avec une place limitée sur une
-grille. L'objectif est d'avoir un mini puzzle lisible et amusant : le joueur ne gère pas seulement
-un poids maximum, il doit aussi organiser ses objets.
+L'inventaire est un **sac à dos physique** : une grille de **8 × 5 cases** où chaque objet occupe
+une place. L'objectif est un mini puzzle lisible et amusant — le joueur ne gère pas un compteur,
+il organise ses affaires.
 
-Direction validée :
+### Ce qui est en place
+
+- **Grille 8 × 5.** Chaque objet a une taille (`size` dans `src/data/items.ts`) : la canette fait
+  1×2, la pelle 1×4, le gilet 2×2. Absent = 1×1.
+- **Le ramassage ne range pas tout seul.** `E` sur un objet du monde le met **en main** et ouvre
+  le sac : c'est le joueur qui lui trouve une place. Tant qu'il n'est pas posé, **l'objet reste
+  par terre** — annuler (`Échap`) ne perd rien. C'est là que se joue la gestion de place.
+- **Clic pour prendre, clic pour poser.** Pas de glisser-déposer maintenu (plus tolérant à la
+  souris qui dérape, identique au pavé tactile). **R** ou **clic droit** fait pivoter l'objet
+  tenu s'il n'est pas carré ; un aperçu **vert / rouge** dit avant le clic si ça rentre.
+- **Deux piles identiques qui se rencontrent fusionnent**, dans la limite du `maxStack`.
+- **Le poids ne bloque plus rien** : il **ralentit**. Au-delà d'environ 72 % de la charge de
+  référence, Chibrux traîne la patte (`inventoryWeight.ts` + `getMovementSpeedMultiplier`). Deux
+  contraintes qui ne font pas doublon : la place décide de ce qu'on emporte, le poids de la
+  façon dont on se déplace avec.
+- **L'équipement sort du sac** (voir plus haut).
+
+Code : `gameplay/inventory/backpackGrid.ts` (la logique de grille, pure et sans React),
+`inventoryStore.ts` (l'état + la sauvegarde), `pendingPlacementStore.ts` (l'objet tenu en main),
+`ui/InventoryPanel.tsx` (l'écran).
+
+### Reste à faire
+
+- des **contenants** qui changent l'espace disponible : sac plastique, sac de sport, coffre de
+  voiture, planque de l'appartement. `backpackGrid.ts` prend déjà les dimensions en paramètre,
+  c'est fait pour ça ;
+- des **icônes** par objet (aujourd'hui une pastille par famille) ;
+- des **formes non rectangulaires**, si un jour ça apporte vraiment du fun.
+
+Direction validée à l'origine :
 
 - inventaire principal en grille, par exemple **8 x 5** au départ, à ajuster après test en jeu ;
 - chaque objet occupe une taille claire : `1x1`, `1x2`, `2x2`, `1x4`, `2x3`, etc. ;

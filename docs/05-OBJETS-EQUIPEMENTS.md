@@ -7,25 +7,26 @@ integration dans les fichiers de donnees du jeu.
 items, l'inventaire cible et les listes d'objets. Les stats exactes et l'equilibrage fin viendront
 plus tard avec l'editeur d'items.
 
-## Direction inventaire
+## Direction inventaire — ✅ en place
 
-L'inventaire cible est un **sac à dos en grille**, pas une simple liste avec poids maximum. Chaque
-objet prend une place physique dans le sac. Le joueur doit donc choisir quoi emporter et comment
-l'organiser.
+L'inventaire est un **sac à dos en grille**, pas une liste avec poids maximum. Chaque objet prend
+une place physique. Le joueur choisit quoi emporter **et** comment l'organiser.
 
-Base de départ à tester :
+- grille du sac principal : **8 × 5** cases ;
+- objets rectangulaires : `1x1`, `1x2`, `2x2`, `1x4`… (champ `size` ; absent = `1x1`) ;
+- rotation avec **R** ou **clic droit**, si l'objet n'est pas carré (champ `rotatable`) ;
+- empilement réservé aux petits objets cohérents (`stackable` + `maxStack`) ; deux piles
+  identiques qui se rencontrent fusionnent ;
+- **poids = malus de vitesse**, plus une limite de ramassage ;
+- **ramasser oblige à placer soi-même** : l'objet arrive « en main », et reste par terre tant
+  qu'on ne l'a pas posé.
+- contenants à venir : sac plastique, sac de sport, coffre de voiture, boîte à outils, planque
+  d'appartement. La logique de grille prend déjà ses dimensions en paramètre.
 
-- grille de sac principale : **8 x 5** cases ;
-- objets rectangulaires au début : `1x1`, `1x2`, `2x2`, `1x4`, `2x3`, etc. ;
-- rotation possible si l'objet l'autorise ;
-- stack réservé aux petits objets cohérents : médicaments, canettes, munitions, petits consommables ;
-- poids conservé comme information secondaire, utile pour le feeling, les véhicules, les sacs et
-  certains malus ;
-- contenants possibles plus tard : sac plastique, sac de sport, coffre de voiture, boîte à outils,
-  planque d'appartement.
+Les objets équipés **quittent le sac** et libèrent leur place ; les retirer exige de la place.
 
-Les objets équipés ne prennent pas forcément de place dans le sac tant qu'ils sont portés, mais ils
-doivent pouvoir être rangés si le joueur les retire.
+Le détail du fonctionnement en jeu vit dans
+[03 - Game Design § Inventaire sac à dos](03-GAME-DESIGN.md#-inventaire-sac-à-dos).
 
 ## Structure conseillee
 
@@ -44,7 +45,7 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | `poids` | Poids secondaire, utile pour le feeling et certains malus |
 | `icone` | Image 2D dans l'inventaire |
 | `modele` | Modele 3D ou prefab visuel optionnel |
-| `emplacement` | Slot d'equipement si applicable : tete, bijoux, buste, bras, jambes, pieds |
+| `emplacement` | Slot d'equipement si applicable : **tete, torse, bras, jambes, main** (`equipSlot`) |
 | `stackable` / `maxStack` | Empilement autorise et limite |
 | `degats` | Degats pour les armes |
 | `defense` | Protection pour les armures |
@@ -66,12 +67,14 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | `consommable_chelou` | Produits avec effets forts ou aleatoires |
 | `alcool` | Boissons alcoolisees |
 | `armure_tete` | Equipement de tete |
-| `armure_buste` | Equipement de buste |
-| `armure_bras` | Equipement de bras |
-| `armure_jambes` | Equipement de jambes |
-| `armure_pieds` | Equipement de pieds |
-| `bijoux` | Bijoux, colliers, bagues, accessoires portes |
+| `armure_torse` | Equipement de torse |
+| `armure_bras` | Equipement de bras (gants, bracelets, bagues) |
+| `armure_jambes` | Equipement de jambes (pantalons, chaussures) |
 | `vehicule` | Moyens de deplacement |
+
+> ⚠️ Ces categories sont celles du code (`ItemCategory`, `src/data/items.ts`). Il n'y a
+> volontairement **ni `armure_pieds` ni `bijoux`** : voir les emplacements d'equipement dans
+> [03](03-GAME-DESIGN.md#-inventaire-sac-à-dos).
 
 ## Armes
 

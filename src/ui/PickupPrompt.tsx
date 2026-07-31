@@ -5,12 +5,12 @@ import { HUD, hardShadow, kbd, outline } from './hudStyle'
 
 export default function PickupPrompt() {
   const nearbyPickup = usePickupStore((s) => s.nearbyPickup)
-  const items = useInventoryStore((s) => s.items)
+  const stacks = useInventoryStore((s) => s.stacks)
 
   if (!nearbyPickup) return null
 
-  const failureReason = getAddItemFailureReason(items, nearbyPickup.itemId, nearbyPickup.quantity)
-  const hint = getPickupHint(items, nearbyPickup.itemId, nearbyPickup.quantity)
+  const failureReason = getAddItemFailureReason(stacks, nearbyPickup.itemId, nearbyPickup.quantity)
+  const hint = getPickupHint(stacks, nearbyPickup.itemId, nearbyPickup.quantity)
   const blocked = Boolean(failureReason)
 
   return (

@@ -9,7 +9,7 @@ export type CombatStyle = 'fists' | 'weapon'
 
 /**
  * Objets "arme" qui ne comptent PAS comme une vraie arme : ce sont les poings.
- * (Le joueur commence avec `poing-basique` équipé dans la main droite.)
+ * (Le joueur peut équiper `poing-basique` dans sa main.)
  */
 const BARE_HANDS_ITEMS = new Set(['poing-basique'])
 
@@ -20,11 +20,10 @@ const BARE_HANDS_ITEMS = new Set(['poing-basique'])
  * boucle de jeu (useFrame), on ne veut surtout pas de re-render à chaque frame.
  */
 export function getCombatStyle(): CombatStyle {
-  const { rightHand, leftHand } = useInventoryStore.getState().equipped
-  for (const itemId of [rightHand, leftHand]) {
-    if (!itemId || BARE_HANDS_ITEMS.has(itemId)) continue
-    const item = ITEMS_BY_ID[itemId]
-    if (item?.category === 'arme' || item?.category === 'arme_lancer') return 'weapon'
-  }
-  return 'fists'
+  // Une seule main depuis le passage au sac : on ne porte qu'une arme à la fois.
+  const itemId = useInventoryStore.getState().equipped.hand
+  if (!itemId || BARE_HANDS_ITEMS.has(itemId)) return 'fists'
+
+  const item = ITEMS_BY_ID[itemId]
+  return item?.category === 'arme' || item?.category === 'arme_lancer' ? 'weapon' : 'fists'
 }

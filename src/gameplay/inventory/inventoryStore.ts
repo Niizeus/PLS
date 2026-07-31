@@ -1,12 +1,42 @@
 import { create } from 'zustand'
 import { ITEMS_BY_ID, type EquipmentSlot } from '../../data/items'
 import { useCharacterStatsStore } from '../stats/characterStatsStore'
-import { clampInventoryQuantity, getAddItemFailureMessage, getAddItemFailureReason } from './inventoryRules'
+import {
+  BACKPACK_SIZE,
+  canPlace,
+  createStackUid,
+  findFreeSpot,
+  findMergeTarget,
+  type PlacedStack,
+} from './backpackGrid'
+import { clampInventoryQuantity } from './inventoryRules'
 
-export interface InventoryEntry {
-  itemId: string
-  quantity: number
-}
+/**
+ * 🎒 L'INVENTAIRE — un sac à dos en grille.
+ *
+ * ── Ce qui a changé, et pourquoi ────────────────────────────────────────────
+ * Avant : une **liste** d'objets + un poids maximum. On ramassait, ça rentrait
+ * (ou pas), et il n'y avait aucune décision à prendre.
+ * Maintenant : chaque objet occupe une **place physique** dans une grille de
+ * 8×5. Le joueur choisit quoi emporter ET comment le ranger — c'est le petit
+ * jeu de gestion décrit dans `docs/05-OBJETS-EQUIPEMENTS.md`.
+ *
+ * Trois règles à connaître avant de toucher à ce fichier :
+ *
+ * 1. **Le ramassage ne range PAS tout seul.** `addItem` n'existe plus : on
+ *    utilise `placeItem(itemId, quantity, x, y, rotated)`, et c'est le joueur
+ *    qui choisit la case. Le rangement automatique (`findFreeSpot`) ne sert
+ *    qu'aux cas où le joueur n'a rien demandé : migration d'une sauvegarde,
+ *    objet qui revient d'un emplacement d'équipement.
+ * 2. **Un objet équipé n'est plus dans le sac.** Il quitte la grille et libère
+ *    sa place. Le retirer demande donc de la place — s'il n'y en a pas, on
+ *    refuse (et on le dit).
+ * 3. **Le poids ne bloque plus rien**, il ralentit (`inventoryWeight.ts`). La
+ *    seule vraie limite, c'est la place.
+ */
+
+/** Une pile posée dans le sac. Le type vit dans `backpackGrid.ts`. */
+export type InventoryStack = PlacedStack
 
 export type EquippedItems = Partial<Record<EquipmentSlot, string>>
 export type QuickSlotId = 'slot1' | 'slot2' | 'slot3' | 'slot4'
@@ -15,68 +45,138 @@ export type QuickSlots = Partial<Record<QuickSlotId, string>>
 export const QUICK_SLOT_IDS: QuickSlotId[] = ['slot1', 'slot2', 'slot3', 'slot4']
 
 interface InventoryData {
-  items: InventoryEntry[]
+  stacks: InventoryStack[]
   equipped: EquippedItems
   quickSlots: QuickSlots
-  selectedItemId: string | null
+  /** Pile mise en avant dans le panneau de détails (`uid`). */
+  selectedUid: string | null
   lastMessage: string | null
 }
 
 interface InventoryState extends InventoryData {
-  addItem: (itemId: string, quantity?: number) => boolean
-  removeItem: (itemId: string, quantity?: number) => void
-  useItem: (itemId: string) => void
-  equipItem: (itemId: string) => void
+  /** Pose une pile à un endroit précis. Renvoie `false` si ça ne rentre pas. */
+  placeItem: (itemId: string, quantity: number, x: number, y: number, rotated: boolean) => boolean
+  /** Déplace/pivote une pile déjà dans le sac. */
+  moveStack: (uid: string, x: number, y: number, rotated: boolean) => boolean
+  /** Range un objet à la première place libre. Renvoie `false` si le sac est plein. */
+  autoPlaceItem: (itemId: string, quantity?: number) => boolean
+  removeStack: (uid: string, quantity?: number) => void
+  useStack: (uid: string) => void
+  /** Équipe la pile : elle sort du sac et libère sa place. */
+  equipStack: (uid: string) => void
+  /** Retire l'équipement : il lui faut de la place dans le sac. */
   unequipSlot: (slot: EquipmentSlot) => void
   assignQuickSlot: (slot: QuickSlotId, itemId: string | null) => void
   activateQuickSlot: (slot: QuickSlotId) => void
-  selectItem: (itemId: string | null) => void
+  selectStack: (uid: string | null) => void
   clearMessage: () => void
 }
 
-const STORAGE_KEY = 'pls.inventory.v1'
+/** ⚠️ `v2` : la v1 était une liste sans coordonnées (voir `migrateFromV1`). */
+const STORAGE_KEY = 'pls.inventory.v2'
+const LEGACY_STORAGE_KEY = 'pls.inventory.v1'
 
-const STARTER_INVENTORY: InventoryData = {
-  items: [
-    { itemId: 'poing-basique', quantity: 1 },
-    { itemId: 'kebab-chef', quantity: 2 },
-    { itemId: 'doliprane', quantity: 1 },
-    { itemId: 'soda-market', quantity: 1 },
-    { itemId: 'chouffe-guerrier', quantity: 1 },
-    { itemId: 'casquette-envers', quantity: 1 },
-    { itemId: 'cendrier', quantity: 3 },
-  ],
-  equipped: { rightHand: 'poing-basique' },
-  quickSlots: { slot1: 'kebab-chef', slot2: 'soda-market', slot3: 'doliprane', slot4: 'chouffe-guerrier' },
-  selectedItemId: 'poing-basique',
-  lastMessage: 'Inventaire pret.',
+const STARTER_ITEMS: { itemId: string; quantity: number }[] = [
+  { itemId: 'poing-basique', quantity: 1 },
+  { itemId: 'kebab-chef', quantity: 2 },
+  { itemId: 'doliprane', quantity: 1 },
+  { itemId: 'soda-market', quantity: 1 },
+  { itemId: 'chouffe-guerrier', quantity: 1 },
+  { itemId: 'casquette-envers', quantity: 1 },
+  { itemId: 'cendrier', quantity: 3 },
+]
+
+/** Range une liste d'objets dans une grille vide. Sert au démarrage ET à la migration. */
+function packItems(entries: { itemId: string; quantity: number }[]): InventoryStack[] {
+  const stacks: InventoryStack[] = []
+
+  for (const entry of entries) {
+    if (!ITEMS_BY_ID[entry.itemId]) continue
+    const quantity = clampInventoryQuantity(entry.itemId, entry.quantity)
+    if (quantity <= 0) continue
+
+    const spot = findFreeSpot(stacks, entry.itemId)
+    // Sac plein : l'objet est simplement perdu. Ça ne peut arriver qu'avec une
+    // sauvegarde d'avant la grille, et mieux vaut ça qu'un inventaire cassé.
+    if (!spot) continue
+    stacks.push({ uid: createStackUid(), itemId: entry.itemId, quantity, ...spot })
+  }
+
+  return stacks
 }
 
-const hasItem = (items: InventoryEntry[], itemId: string) =>
-  items.some((entry) => entry.itemId === itemId && entry.quantity > 0)
+const starterData = (): InventoryData => ({
+  stacks: packItems(STARTER_ITEMS),
+  equipped: {},
+  quickSlots: { slot1: 'kebab-chef', slot2: 'soda-market', slot3: 'doliprane', slot4: 'chouffe-guerrier' },
+  selectedUid: null,
+  lastMessage: 'Sac pret.',
+})
 
+const hasItem = (stacks: InventoryStack[], itemId: string) =>
+  stacks.some((stack) => stack.itemId === itemId && stack.quantity > 0)
+
+/**
+ * Nettoie une sauvegarde : objets inconnus, quantités aberrantes, piles hors
+ * grille ou qui se chevauchent. On reconstruit en re-posant chaque pile : une
+ * pile qui ne rentre plus (grille réduite, objet agrandi) est reposée ailleurs.
+ */
 const sanitizeData = (data: InventoryData): InventoryData => {
-  const items = data.items
-    .filter((entry) => ITEMS_BY_ID[entry.itemId])
-    .map((entry) => ({ itemId: entry.itemId, quantity: clampInventoryQuantity(entry.itemId, entry.quantity) }))
-    .filter((entry) => entry.quantity > 0)
+  const stacks: InventoryStack[] = []
 
+  for (const stack of data.stacks ?? []) {
+    if (!ITEMS_BY_ID[stack.itemId]) continue
+    const quantity = clampInventoryQuantity(stack.itemId, stack.quantity)
+    if (quantity <= 0) continue
+
+    const rotated = Boolean(stack.rotated)
+    if (canPlace(stacks, stack.itemId, stack.x, stack.y, rotated, { size: BACKPACK_SIZE })) {
+      stacks.push({ uid: stack.uid || createStackUid(), itemId: stack.itemId, quantity, x: stack.x, y: stack.y, rotated })
+      continue
+    }
+
+    const spot = findFreeSpot(stacks, stack.itemId)
+    if (spot) stacks.push({ uid: stack.uid || createStackUid(), itemId: stack.itemId, quantity, ...spot })
+  }
+
+  // Un objet équipé n'est PAS dans le sac : on garde l'emplacement tel quel,
+  // on vérifie juste que l'objet existe et qu'il va bien dans cet emplacement.
   const equipped = Object.fromEntries(
-    Object.entries(data.equipped).filter(([, itemId]) => itemId && hasItem(items, itemId)),
+    Object.entries(data.equipped ?? {}).filter(([slot, itemId]) => itemId && ITEMS_BY_ID[itemId]?.equipSlot === slot),
   ) as EquippedItems
+
   const quickSlots = Object.fromEntries(
-    Object.entries(data.quickSlots ?? {}).filter(([, itemId]) => itemId && hasItem(items, itemId)),
+    Object.entries(data.quickSlots ?? {}).filter(
+      ([, itemId]) => itemId && (hasItem(stacks, itemId) || Object.values(equipped).includes(itemId)),
+    ),
   ) as QuickSlots
 
-  const selectedItemId =
-    data.selectedItemId && hasItem(items, data.selectedItemId) ? data.selectedItemId : items[0]?.itemId ?? null
+  const selectedUid = stacks.some((stack) => stack.uid === data.selectedUid) ? data.selectedUid : null
 
-  return {
-    items,
-    equipped,
-    quickSlots,
-    selectedItemId,
-    lastMessage: data.lastMessage ?? null,
+  return { stacks, equipped, quickSlots, selectedUid, lastMessage: data.lastMessage ?? null }
+}
+
+/** Ancienne sauvegarde (liste + poids) → grille. Rien n'est perdu tant que ça rentre. */
+function migrateFromV1(): InventoryData | null {
+  const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
+  if (!raw) return null
+
+  try {
+    const legacy = JSON.parse(raw) as {
+      items?: { itemId: string; quantity: number }[]
+      quickSlots?: QuickSlots
+    }
+    return {
+      stacks: packItems(legacy.items ?? []),
+      // Les anciens emplacements (rightHand, feet, accessory...) n'existent
+      // plus : on repart sans équipement plutôt que d'inventer une conversion.
+      equipped: {},
+      quickSlots: legacy.quickSlots ?? {},
+      selectedUid: null,
+      lastMessage: 'Sac reorganise apres la mise a jour.',
+    }
+  } catch {
+    return null
   }
 }
 
@@ -86,14 +186,21 @@ const saveInventory = (data: InventoryData) => {
 }
 
 const loadInventory = (): InventoryData => {
-  if (typeof localStorage === 'undefined') return STARTER_INVENTORY
+  if (typeof localStorage === 'undefined') return starterData()
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return STARTER_INVENTORY
-    return sanitizeData(JSON.parse(raw) as InventoryData)
+    if (raw) return sanitizeData(JSON.parse(raw) as InventoryData)
+
+    // Pas encore de sauvegarde v2 : on convertit l'ancienne (ou on démarre), et
+    // on écrit tout de suite — sinon la conversion serait refaite à chaque
+    // chargement tant que le joueur ne touche à rien.
+    const migrated = migrateFromV1()
+    const data = sanitizeData(migrated ?? starterData())
+    saveInventory(data)
+    return data
   } catch {
-    return STARTER_INVENTORY
+    return starterData()
   }
 }
 
@@ -106,157 +213,245 @@ const commit = (data: InventoryData) => {
 export const useInventoryStore = create<InventoryState>((set, get) => ({
   ...loadInventory(),
 
-  addItem: (itemId, quantity = 1) => {
+  placeItem: (itemId, quantity, x, y, rotated) => {
     const item = ITEMS_BY_ID[itemId]
-    if (!item) return false
+    if (!item || quantity <= 0) return false
 
-    const currentItems = get().items
-    const failureReason = getAddItemFailureReason(currentItems, itemId, quantity)
-    if (failureReason) {
-      set((state) =>
+    const state = get()
+
+    // Lâché sur une pile identique : on fusionne plutôt que de refuser.
+    const mergeTarget = findMergeTarget(state.stacks, itemId, x, y, quantity)
+    if (mergeTarget) {
+      set(
         commit({
-          items: state.items,
-          equipped: state.equipped,
-          quickSlots: state.quickSlots,
-          selectedItemId: state.selectedItemId,
-          lastMessage: getAddItemFailureMessage(itemId, failureReason),
+          ...state,
+          stacks: state.stacks.map((candidate) =>
+            candidate.uid === mergeTarget.uid
+              ? { ...candidate, quantity: clampInventoryQuantity(itemId, candidate.quantity + quantity) }
+              : candidate,
+          ),
+          lastMessage: `${item.name} ajoute a la pile.`,
         }),
       )
+      return true
+    }
+
+    if (!canPlace(state.stacks, itemId, x, y, rotated)) {
+      set(commit({ ...state, lastMessage: `Pas la place pour ${item.name}.` }))
       return false
     }
 
-    set((state) => {
-      const current = state.items.find((entry) => entry.itemId === itemId)
-      const nextItems = current
-        ? state.items.map((entry) =>
-            entry.itemId === itemId
-              ? { ...entry, quantity: clampInventoryQuantity(itemId, entry.quantity + quantity) }
-              : entry,
-          )
-        : [...state.items, { itemId, quantity: clampInventoryQuantity(itemId, quantity) }]
-
-      return commit({
-        items: nextItems,
-        equipped: state.equipped,
-        quickSlots: state.quickSlots,
-        selectedItemId: itemId,
-        lastMessage: `${item.name} ajoute a l inventaire.`,
-      })
-    })
+    set(
+      commit({
+        ...state,
+        stacks: [
+          ...state.stacks,
+          { uid: createStackUid(), itemId, quantity: clampInventoryQuantity(itemId, quantity), x, y, rotated },
+        ],
+        lastMessage: `${item.name} range.`,
+      }),
+    )
     return true
   },
 
-  removeItem: (itemId, quantity = 1) => {
-    set((state) => {
-      const nextItems = state.items
-        .map((entry) => (entry.itemId === itemId ? { ...entry, quantity: entry.quantity - quantity } : entry))
-        .filter((entry) => entry.quantity > 0)
-      const nextEquipped = Object.fromEntries(
-        Object.entries(state.equipped).filter(
-          ([, equippedItemId]) => equippedItemId !== itemId || hasItem(nextItems, itemId),
-        ),
-      ) as EquippedItems
+  moveStack: (uid, x, y, rotated) => {
+    const state = get()
+    const stack = state.stacks.find((candidate) => candidate.uid === uid)
+    if (!stack) return false
 
-      return commit({
-        items: nextItems,
-        equipped: nextEquipped,
-        quickSlots: state.quickSlots,
-        selectedItemId:
-          state.selectedItemId === itemId && !hasItem(nextItems, itemId) ? nextItems[0]?.itemId ?? null : state.selectedItemId,
-        lastMessage: state.lastMessage,
-      })
-    })
-  },
+    // Lâchée sur une pile identique et empilable : les deux fusionnent.
+    const mergeTarget = findMergeTarget(state.stacks, stack.itemId, x, y, stack.quantity, { ignoreUid: uid })
+    if (mergeTarget) {
+      set(
+        commit({
+          ...state,
+          stacks: state.stacks
+            .filter((candidate) => candidate.uid !== uid)
+            .map((candidate) =>
+              candidate.uid === mergeTarget.uid
+                ? { ...candidate, quantity: candidate.quantity + stack.quantity }
+                : candidate,
+            ),
+          selectedUid: mergeTarget.uid,
+        }),
+      )
+      return true
+    }
 
-  useItem: (itemId) => {
-    const item = ITEMS_BY_ID[itemId]
-    if (!item || !item.consumable || !hasItem(get().items, itemId)) return
-    if (item.effects) useCharacterStatsStore.getState().applyConsumableEffects(item.name, item.effects, item.effectDurationMs, item.id)
+    // `ignoreUid` : la pile doit pouvoir glisser sur ses propres cases.
+    if (!canPlace(state.stacks, stack.itemId, x, y, rotated, { ignoreUid: uid })) return false
 
-    set((state) => {
-      const nextItems = state.items
-        .map((entry) => (entry.itemId === itemId ? { ...entry, quantity: entry.quantity - 1 } : entry))
-        .filter((entry) => entry.quantity > 0)
-
-      return commit({
-        items: nextItems,
-        equipped: state.equipped,
-        quickSlots: state.quickSlots,
-        selectedItemId: hasItem(nextItems, itemId) ? itemId : nextItems[0]?.itemId ?? null,
-        lastMessage: `${item.name} consomme. Effets appliques.`,
-      })
-    })
-  },
-
-  equipItem: (itemId) => {
-    const item = ITEMS_BY_ID[itemId]
-    if (!item?.equipSlot || !hasItem(get().items, itemId)) return
-
-    set((state) =>
+    set(
       commit({
-        items: state.items,
-        equipped: { ...state.equipped, [item.equipSlot!]: itemId },
-        quickSlots: state.quickSlots,
-        selectedItemId: itemId,
+        ...state,
+        stacks: state.stacks.map((candidate) =>
+          candidate.uid === uid ? { ...candidate, x, y, rotated } : candidate,
+        ),
+      }),
+    )
+    return true
+  },
+
+  autoPlaceItem: (itemId, quantity = 1) => {
+    const item = ITEMS_BY_ID[itemId]
+    if (!item) return false
+
+    const state = get()
+    const spot = findFreeSpot(state.stacks, itemId)
+    if (!spot) {
+      set(commit({ ...state, lastMessage: `Sac plein : ${item.name} ne rentre pas.` }))
+      return false
+    }
+
+    set(
+      commit({
+        ...state,
+        stacks: [
+          ...state.stacks,
+          { uid: createStackUid(), itemId, quantity: clampInventoryQuantity(itemId, quantity), ...spot },
+        ],
+        lastMessage: `${item.name} range.`,
+      }),
+    )
+    return true
+  },
+
+  removeStack: (uid, quantity) => {
+    set((state) => {
+      const stack = state.stacks.find((candidate) => candidate.uid === uid)
+      if (!stack) return state
+
+      const left = quantity == null ? 0 : stack.quantity - quantity
+      const item = ITEMS_BY_ID[stack.itemId]
+
+      return commit({
+        ...state,
+        stacks:
+          left > 0
+            ? state.stacks.map((candidate) => (candidate.uid === uid ? { ...candidate, quantity: left } : candidate))
+            : state.stacks.filter((candidate) => candidate.uid !== uid),
+        selectedUid: left > 0 ? state.selectedUid : null,
+        lastMessage: item ? `${item.name} jete.` : state.lastMessage,
+      })
+    })
+  },
+
+  useStack: (uid) => {
+    const state = get()
+    const stack = state.stacks.find((candidate) => candidate.uid === uid)
+    const item = stack ? ITEMS_BY_ID[stack.itemId] : null
+    if (!stack || !item?.consumable) return
+
+    if (item.effects) {
+      useCharacterStatsStore.getState().applyConsumableEffects(item.name, item.effects, item.effectDurationMs, item.id)
+    }
+
+    const left = stack.quantity - 1
+    set(
+      commit({
+        ...state,
+        stacks:
+          left > 0
+            ? state.stacks.map((candidate) => (candidate.uid === uid ? { ...candidate, quantity: left } : candidate))
+            : state.stacks.filter((candidate) => candidate.uid !== uid),
+        selectedUid: left > 0 ? state.selectedUid : null,
+        lastMessage: `${item.name} consomme.`,
+      }),
+    )
+  },
+
+  equipStack: (uid) => {
+    const state = get()
+    const stack = state.stacks.find((candidate) => candidate.uid === uid)
+    const item = stack ? ITEMS_BY_ID[stack.itemId] : null
+    if (!stack || !item?.equipSlot) return
+
+    const slot = item.equipSlot
+    const previous = state.equipped[slot]
+
+    // L'objet déjà porté revient dans le sac — à la place que l'autre libère.
+    const withoutNew = state.stacks.filter((candidate) => candidate.uid !== uid)
+    const nextStacks = previous
+      ? [
+          ...withoutNew,
+          {
+            uid: createStackUid(),
+            itemId: previous,
+            quantity: 1,
+            ...(findFreeSpot(withoutNew, previous) ?? { x: stack.x, y: stack.y, rotated: stack.rotated }),
+          },
+        ]
+      : withoutNew
+
+    set(
+      commit({
+        ...state,
+        stacks: nextStacks,
+        equipped: { ...state.equipped, [slot]: stack.itemId },
+        selectedUid: null,
         lastMessage: `${item.name} equipe.`,
       }),
     )
   },
 
   unequipSlot: (slot) => {
-    set((state) => {
-      const { [slot]: removedItemId, ...nextEquipped } = state.equipped
-      const item = removedItemId ? ITEMS_BY_ID[removedItemId] : null
+    const state = get()
+    const itemId = state.equipped[slot]
+    const item = itemId ? ITEMS_BY_ID[itemId] : null
+    if (!itemId || !item) return
 
-      return commit({
-        items: state.items,
+    const spot = findFreeSpot(state.stacks, itemId)
+    if (!spot) {
+      // Refus explicite : sans ça, l'objet disparaîtrait purement et simplement.
+      set(commit({ ...state, lastMessage: `Pas de place dans le sac pour ranger ${item.name}.` }))
+      return
+    }
+
+    const { [slot]: _removed, ...nextEquipped } = state.equipped
+    set(
+      commit({
+        ...state,
+        stacks: [...state.stacks, { uid: createStackUid(), itemId, quantity: 1, ...spot }],
         equipped: nextEquipped,
-        quickSlots: state.quickSlots,
-        selectedItemId: state.selectedItemId,
-        lastMessage: item ? `${item.name} retire.` : null,
-      })
-    })
+        lastMessage: `${item.name} retire et range.`,
+      }),
+    )
   },
 
   assignQuickSlot: (slot, itemId) => {
     set((state) => {
       const nextQuickSlots = { ...state.quickSlots }
-      if (itemId && hasItem(state.items, itemId)) nextQuickSlots[slot] = itemId
+      if (itemId) nextQuickSlots[slot] = itemId
       else delete nextQuickSlots[slot]
 
       const item = itemId ? ITEMS_BY_ID[itemId] : null
       return commit({
-        items: state.items,
-        equipped: state.equipped,
+        ...state,
         quickSlots: nextQuickSlots,
-        selectedItemId: state.selectedItemId,
-        lastMessage: item ? `${item.name} assigne au raccourci ${slot.replace('slot', '')}.` : `Raccourci ${slot.replace('slot', '')} vide.`,
+        lastMessage: item
+          ? `${item.name} assigne au raccourci ${slot.replace('slot', '')}.`
+          : `Raccourci ${slot.replace('slot', '')} vide.`,
       })
     })
   },
 
   activateQuickSlot: (slot) => {
-    const itemId = get().quickSlots[slot]
+    const state = get()
+    const itemId = state.quickSlots[slot]
     const item = itemId ? ITEMS_BY_ID[itemId] : null
+    // On agit sur la PREMIÈRE pile de cet objet dans le sac.
+    const stack = itemId ? state.stacks.find((candidate) => candidate.itemId === itemId) : undefined
 
-    if (!itemId || !item || !hasItem(get().items, itemId)) {
-      set((state) =>
-        commit({
-          items: state.items,
-          equipped: state.equipped,
-          quickSlots: state.quickSlots,
-          selectedItemId: state.selectedItemId,
-          lastMessage: `Raccourci ${slot.replace('slot', '')} vide.`,
-        }),
-      )
+    if (!item || !stack) {
+      set(commit({ ...state, lastMessage: `Raccourci ${slot.replace('slot', '')} vide.` }))
       return
     }
 
-    if (item.consumable) get().useItem(itemId)
-    else if (item.equipSlot) get().equipItem(itemId)
-    else set((state) => commit({ ...state, selectedItemId: itemId, lastMessage: `${item.name} selectionne.` }))
+    if (item.consumable) get().useStack(stack.uid)
+    else if (item.equipSlot) get().equipStack(stack.uid)
+    else set(commit({ ...state, selectedUid: stack.uid, lastMessage: `${item.name} selectionne.` }))
   },
 
-  selectItem: (itemId) => set((state) => commit({ ...state, selectedItemId: itemId })),
-  clearMessage: () => set((state) => commit({ ...state, lastMessage: null })),
+  selectStack: (uid) => set((state) => ({ ...state, selectedUid: uid })),
+  clearMessage: () => set((state) => ({ ...state, lastMessage: null })),
 }))

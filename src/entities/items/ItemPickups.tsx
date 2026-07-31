@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { ITEMS_BY_ID, type ItemCategory } from '../../data/items'
 import { KEY } from '../../gameplay/input/keyMap'
-import { useInventoryStore } from '../../gameplay/inventory/inventoryStore'
+import { usePendingPlacementStore } from '../../gameplay/inventory/pendingPlacementStore'
 import { usePickupStore, type WorldPickup } from '../../gameplay/inventory/pickupStore'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { toonGradient } from '../../shaders/toonGradient'
@@ -47,9 +47,8 @@ const PICKUP_COLOR: Record<ItemCategory, string> = {
   alcool: '#facc15',
   armure_tete: '#fb7185',
   armure_torse: '#60a5fa',
+  armure_bras: '#e879f9',
   armure_jambes: '#818cf8',
-  armure_pieds: '#2dd4bf',
-  accessoire: '#e879f9',
   vehicule: '#ef4444',
 }
 
@@ -58,7 +57,6 @@ export default function ItemPickups() {
   const droppedPickups = usePickupStore((s) => s.droppedPickups)
   const setNearbyPickup = usePickupStore((s) => s.setNearbyPickup)
   const collectPickup = usePickupStore((s) => s.collectPickup)
-  const addItem = useInventoryStore((s) => s.addItem)
 
   const activePickups = useMemo(
     () => [
@@ -111,13 +109,19 @@ export default function ItemPickups() {
       const pickup = activePickups.find((candidate) => candidate.id === nearby.pickupId)
       if (!pickup || usePickupStore.getState().collectedIds.includes(pickup.id)) return
 
-      const added = addItem(pickup.itemId, pickup.quantity)
-      if (added) collectPickup(pickup.id)
+      // ⚠️ On ne RANGE pas l'objet ici : on le met « en main » et le sac s'ouvre.
+      // C'est le joueur qui lui trouve une place (voir pendingPlacementStore).
+      // L'objet reste donc dans le monde tant qu'il n'est pas posé.
+      usePendingPlacementStore.getState().startPlacement({
+        itemId: pickup.itemId,
+        quantity: pickup.quantity,
+        pickupId: pickup.id,
+      })
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [activePickups, addItem, collectPickup])
+  }, [activePickups, collectPickup])
 
   return (
     <>

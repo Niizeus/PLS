@@ -71,7 +71,7 @@ mètres monde) défini dans **`src/data/zones.json`** :
 |----------|-----------------|
 | Données (contours, couleur, nom) | `src/data/zones.json` |
 | Chargement + « dans quel quartier ce point ? » | `src/world/beauvais/zones.ts` (`ZONES`, `zoneAt(x, z)`) |
-| Affichage du quartier courant (HUD) | `usePlayerMovement` → `playerStore.zoneName` → `Hud.tsx` |
+| Annonce du quartier à l'entrée (HUD) | `usePlayerMovement` → `playerStore.zoneName` → `ui/ZoneToast.tsx` (s'affiche ~3 s puis s'efface ; consultable à tout moment dans le téléphone) |
 | Visualisation sur la grande carte (M) | `mapDraw.drawZones` |
 
 Structure gameplay validée : **4 grands quartiers rivaux + le centre-ville**.

@@ -91,7 +91,7 @@ export default function ControlsHint() {
       <Group title={riding ? 'Conduite' : 'Déplacement'} controls={riding ? DRIVE : MOVE} />
       <Group title="Interface" controls={INTERFACE} />
       <Group title="Actions" controls={ACTIONS} />
-      <div style={{ ...sectionLabel, color: HUD.accent, alignSelf: 'end' }}>F1 pour replier</div>
+      <div style={{ ...sectionLabel, color: HUD.ink, alignSelf: 'end' }}>F1 pour replier</div>
     </div>
   )
 }

@@ -5,6 +5,11 @@ import { HUD, panel } from './hudStyle'
  * Compteur de FPS (images/seconde), pour vérifier qu'on tient nos 60.
  * On mesure via requestAnimationFrame = le vrai rythme d'affichage du navigateur.
  * Vert = 55+, orange = 30-54, rouge = <30.
+ *
+ * ⚠️ **Outil de développement, invisible en jeu.** C'est une information qui ne
+ * concerne que nous : à l'écran, elle occupait autant de place qu'une jauge de
+ * vie. Elle n'est donc rendue qu'en `npm run dev` — la version jouable ne
+ * l'affiche pas du tout (le composant sort avant même de brancher sa boucle).
  */
 export default function FpsCounter() {
   const [fps, setFps] = useState(0)
@@ -12,6 +17,7 @@ export default function FpsCounter() {
   const last = useRef(performance.now())
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return undefined
     let raf = 0
     const loop = () => {
       frames.current++
@@ -29,17 +35,20 @@ export default function FpsCounter() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const color = fps >= 55 ? '#5cf07a' : fps >= 30 ? '#f0c04a' : '#f05c5c'
+  if (!import.meta.env.DEV) return null
+
+  const color = fps >= 55 ? '#2f7d32' : fps >= 30 ? '#a4680b' : '#b32217'
 
   return (
     // Position gérée par la colonne droite du HUD (`Hud.tsx`).
     <div
       style={{
         ...panel,
-        padding: '5px 10px',
+        padding: '3px 9px',
         color,
-        font: `600 13px ${HUD.mono}`,
-        letterSpacing: 0.5,
+        font: `800 11px ${HUD.mono}`,
+        letterSpacing: 0.4,
+        opacity: 0.85,
       }}
     >
       {fps} FPS

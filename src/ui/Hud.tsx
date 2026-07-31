@@ -1,4 +1,3 @@
-import { usePlayerStore, type PlayerAction } from '../gameplay/stats/playerStore'
 import ControlsHint from './ControlsHint'
 import FpsCounter from './FpsCounter'
 import GameClock from './GameClock'
@@ -10,22 +9,9 @@ import QuickBar from './QuickBar'
 import StatsPanel from './StatsPanel'
 import VehicleDashboard from './VehicleDashboard'
 import WorldMap from './WorldMap'
+import ZoneToast from './ZoneToast'
 import PhoneOverlay from './phone/PhoneOverlay'
-import { HUD, column, panel } from './hudStyle'
-
-// Libellés lisibles pour l'état affiché en haut à gauche.
-const ACTION_LABEL: Record<PlayerAction, string> = {
-  idle: 'À l’arrêt',
-  walk: 'Marche',
-  sadWalk: 'Marche triste',
-  run: 'Course',
-  attack: 'Attaque !',
-  defense: 'Défense',
-  interact: 'Interaction',
-  jump: 'Saut',
-  crouch: 'Accroupi',
-  hurt: 'Touché !',
-}
+import { column } from './hudStyle'
 
 /**
  * Interface 2D superposée à la 3D.
@@ -33,49 +19,50 @@ const ACTION_LABEL: Record<PlayerAction, string> = {
  * gauche/droit aille bien au jeu (attaque/défense).
  *
  * ── Mise en page ────────────────────────────────────────────────────────────
- * L'écran est organisé en QUATRE zones, et c'est ce fichier qui décide de tout :
+ * L'écran est organisé en TROIS zones, et c'est ce fichier qui décide de tout :
  *
- *   ┌─ colonne gauche ──────────────── colonne droite ─┐
- *   │  identité + stats                minimap, heure  │
- *   │                                  FPS             │
+ *   ┌──────────────────────────────────────────────────┐
+ *   │                  [quartier]        minimap+heure │
+ *   │  vitaux                                          │
  *   │                                                  │
  *   │  touches (F1)      raccourcis      tableau bord  │
  *   └──────────────────────────────────────────────────┘
  *
- * Les deux colonnes s'empilent toutes seules (`display: grid`). Avant, chaque
- * bloc portait son propre `position: fixed` avec un `top` écrit en dur (88, 184,
- * 224...) : ajouter une ligne quelque part obligeait à recalculer les suivants à
- * la main, et le moindre oubli faisait se chevaucher deux panneaux.
- * Les composants ne connaissent plus leur position — seulement leur contenu.
+ * Les colonnes s'empilent toutes seules (`display: grid`) : les composants ne
+ * connaissent pas leur position, seulement leur contenu. Avant, chaque bloc
+ * portait son `top` écrit en dur et ajouter une ligne obligeait à recalculer
+ * les suivants à la main.
+ *
+ * ── Ce qui a été RETIRÉ (et où c'est parti) ─────────────────────────────────
+ * • Le titre « PLS — Prototype jouable » : il ira sur un écran-titre.
+ * • L'action en cours (« Marche », « Course »...) : c'était du debug pur, ça se
+ *   lit dans le panneau dev `F2`.
+ * • Les six caractéristiques RPG affichées en permanence : elles sont dans
+ *   l'app Santé du téléphone, et ne réapparaissent ici qu'en cas de bonus actif.
+ * • Le nom du quartier collé en permanence : il s'annonce maintenant à l'entrée
+ *   dans le quartier (`ZoneToast`), puis s'efface.
+ * • Le compteur FPS : visible uniquement en développement.
+ *
+ * Principe directeur : **si une information ne change pas, elle n'a rien à
+ * faire à l'écran en permanence** — elle est consultable dans le téléphone.
  */
 export default function Hud() {
-  const action = usePlayerStore((s) => s.action)
-  const zoneName = usePlayerStore((s) => s.zoneName)
-
   return (
     <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}>
       <div style={column('left')}>
-        {/* Carte d'identité : qui on est, ce qu'on fait, où on est. */}
-        <div style={{ ...panel, padding: '10px 14px' }}>
-          <div style={{ font: `700 15px ${HUD.font}`, letterSpacing: 0.4 }}>
-            PLS — Prototype jouable
-          </div>
-          <div style={{ marginTop: 4, font: `13px ${HUD.font}`, color: HUD.text, opacity: 0.9 }}>
-            Chibrux : <strong>{ACTION_LABEL[action]}</strong>
-          </div>
-          <div style={{ marginTop: 2, font: `12px ${HUD.font}`, color: HUD.textDim }}>
-            📍 {zoneName ?? 'Beauvais'}
-          </div>
-        </div>
         <StatsPanel />
       </div>
 
       <div style={column('right')}>
-        <Minimap />
-        <GameClock />
+        {/* La minimap et l'heure forment un seul bloc (l'heure se colle dessous). */}
+        <div style={{ display: 'grid', justifyItems: 'end' }}>
+          <Minimap />
+          <GameClock />
+        </div>
         <FpsCounter />
       </div>
 
+      <ZoneToast />
       <ControlsHint />
       <PickupPrompt />
       <MapMarkerPrompt />

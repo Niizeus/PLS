@@ -2,6 +2,7 @@ import { useEffect, type CSSProperties } from 'react'
 import { ITEMS_BY_ID } from '../data/items'
 import { KEY } from '../gameplay/input/keyMap'
 import { QUICK_SLOT_IDS, type QuickSlotId, useInventoryStore } from '../gameplay/inventory/inventoryStore'
+import { HUD, hardShadow, outline, outlineThin } from './hudStyle'
 
 const KEY_TO_SLOT: Record<string, QuickSlotId> = {
   [KEY.QUICK_1]: 'slot1',
@@ -70,35 +71,41 @@ const slotStyle: CSSProperties = {
   height: 52,
   padding: '6px 8px',
   display: 'grid',
-  gridTemplateColumns: '20px 1fr',
+  gridTemplateColumns: '22px 1fr',
   gridTemplateRows: '1fr auto',
   alignItems: 'center',
-  gap: '1px 6px',
-  borderRadius: 7,
-  border: '1px solid rgba(148, 163, 184, 0.34)',
-  background: 'rgba(13, 18, 32, 0.84)',
-  color: '#ecf2ff',
+  gap: '1px 7px',
+  borderRadius: 12,
+  border: outline,
+  background: HUD.paper,
+  color: HUD.ink,
   cursor: 'pointer',
-  boxShadow: '0 8px 24px rgba(0,0,0,0.26)',
+  boxShadow: hardShadow,
 }
 
+/**
+ * L'objet équipé n'est pas signalé par une bordure d'une autre couleur (trop
+ * discret quand tous les contours sont déjà noirs) mais par un fond JAUNE et un
+ * décalage vers le haut : il sort littéralement de la rangée.
+ */
 const equippedSlotStyle: CSSProperties = {
   ...slotStyle,
-  border: '1px solid rgba(56, 189, 248, 0.7)',
-  background: 'rgba(21, 45, 69, 0.9)',
+  background: '#ffd83d',
+  transform: 'translateY(-4px)',
+  boxShadow: `4px 8px 0 ${HUD.ink}`,
 }
 
 const numberStyle: CSSProperties = {
   gridRow: '1 / span 2',
-  width: 20,
-  height: 28,
+  width: 22,
+  height: 30,
   display: 'grid',
   placeItems: 'center',
-  borderRadius: 5,
-  background: '#2b3550',
-  border: '1px solid #45557f',
-  color: '#dbeafe',
-  font: '800 12px ui-monospace, monospace',
+  borderRadius: 7,
+  background: HUD.ink,
+  border: outlineThin,
+  color: HUD.paper,
+  font: `800 12px ${HUD.mono}`,
 }
 
 const nameStyle: CSSProperties = {
@@ -107,12 +114,12 @@ const nameStyle: CSSProperties = {
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
   textAlign: 'left',
-  font: '800 12px system-ui',
+  font: `800 12px ${HUD.font}`,
 }
 
 const qtyStyle: CSSProperties = {
   minHeight: 14,
-  color: '#aeb8c8',
+  color: HUD.textDim,
   textAlign: 'left',
-  font: '700 11px system-ui',
+  font: `800 11px ${HUD.font}`,
 }

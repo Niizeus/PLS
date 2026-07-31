@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { usePickupStore } from '../gameplay/inventory/pickupStore'
 import { useMapMarkerStore } from '../gameplay/map/mapMarkerStore'
+import { HUD, hardShadow, kbd, outline } from './hudStyle'
 
 export default function MapMarkerPrompt() {
   const nearbyMarker = useMapMarkerStore((state) => state.nearbyMarker)
@@ -32,30 +33,20 @@ export default function MapMarkerPrompt() {
         transform: 'translateX(-50%) scale(var(--pls-poi-pulse, 1))',
         minWidth: 260,
         maxWidth: 'min(520px, calc(100vw - 28px))',
-        padding: '9px 13px',
-        borderRadius: 7,
-        background: blocked ? 'rgba(64, 39, 18, 0.92)' : 'rgba(13, 18, 32, 0.88)',
-        border: blocked ? '1px solid rgba(251, 191, 36, 0.48)' : '1px solid rgba(148, 163, 184, 0.36)',
-        color: '#ecf2ff',
-        font: '750 14px system-ui, sans-serif',
+        padding: '8px 14px',
+        borderRadius: 12,
+        // Fermé = jaune franc (« attention »), ouvert = papier.
+        background: blocked ? '#ffd83d' : HUD.paper,
+        border: outline,
+        color: HUD.ink,
+        font: `800 14px ${HUD.font}`,
         pointerEvents: 'none',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+        boxShadow: hardShadow,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
         {nearbyMarker && (
-          <kbd
-            style={{
-              flex: '0 0 auto',
-              padding: '2px 7px',
-              borderRadius: 5,
-              background: blocked ? '#713f12' : '#2b3550',
-              border: blocked ? '1px solid #f59e0b' : '1px solid #45557f',
-              font: '800 12px ui-monospace, monospace',
-            }}
-          >
-            E
-          </kbd>
+          <kbd style={{ ...kbd, flex: '0 0 auto' }}>E</kbd>
         )}
         <span style={{ minWidth: 0 }}>
           <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -69,8 +60,8 @@ export default function MapMarkerPrompt() {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: blocked ? '#fde68a' : '#bfdbfe',
-                font: '800 12px system-ui, sans-serif',
+                color: blocked ? '#7a4a06' : HUD.textDim,
+                font: `800 12px ${HUD.font}`,
               }}
             >
               {subtitle}

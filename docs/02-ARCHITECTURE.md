@@ -184,6 +184,38 @@ changer le feeling véhicule, profiler en priorité le nombre de colliders actif
 
 ---
 
+## 🖍️ La règle du HUD
+
+**Le style.** Le HUD parle la même langue que la 3D : **papier crème, contour d'encre épais
+(3 px), ombre portée DURE (sans flou), aplats de couleur francs**. Tout part de
+[`src/ui/hudStyle.ts`](../src/ui/hudStyle.ts) — `panel`, `outline`, `hardShadow`, `kbd`,
+`HUD.vitals`. On ne réinvente jamais un fond ni une bordure dans un composant : si un besoin
+manque, on l'ajoute **dans `hudStyle.ts`**, pour tout le monde.
+
+> Une ombre floue n'existe pas dans une case de BD. C'est le détail qui fait basculer
+> l'ensemble du côté « dessiné » — ne pas le « corriger ».
+
+La police du jeu est `PLS Comic` (voir [`public/fonts/README.md`](../public/fonts/README.md)).
+Elle est déclarée à un seul endroit (`HUD.font`) et retombe proprement sur une police système
+tant que le fichier n'est pas installé.
+
+**Ce qu'on affiche.** Règle simple :
+
+> **Si une information ne change pas, elle n'a rien à faire à l'écran en permanence.**
+
+- Ce qui **change et compte** (vie, faim, soif, mental, raccourcis, minimap) reste affiché.
+- Ce qui **ne change presque jamais** (caractéristiques RPG, argent, réputation) est
+  **consultable dans le téléphone** (touche `P`) — pas collé à l'écran.
+- Ce qui **n'a d'intérêt qu'au moment où ça arrive** (entrer dans un quartier, ramasser un
+  objet) est un **passager** : ça s'affiche quelques secondes, puis ça s'efface (`ZoneToast`).
+- Ce qui ne concerne **que les développeurs** (FPS, action en cours, réglages) est
+  **`import.meta.env.DEV`** ou dans le panneau `F2`. Jamais dans le jeu du joueur.
+
+Avant d'ajouter un bloc permanent, se demander où il va **plutôt** aller : téléphone, passager,
+ou `F2`. Un HUD, ça ne fait que grossir si personne ne défend cette règle.
+
+---
+
 ## 🗂️ Où je mets... ?
 
 | Je veux ajouter... | Je vais dans... |
@@ -192,7 +224,7 @@ changer le feeling véhicule, profiler en priorité le nombre de colliders actif
 | Une nouvelle quête / mission | `data/quests.json` (+ logique dans `gameplay/`) |
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
-| Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. |
+| Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. **Avant d'ajouter quoi que ce soit à l'écran, lire la règle du HUD ci-dessous.** |
 | Un paramètre de gameplay à régler en live | `src/devtools/schema/` (le fichier de la famille concernée : `vehicleFields.ts`, `playerFields.ts`, `worldFields.ts`), puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/importe un JSON d'overrides. ⚠️ Chaque entrée doit porter un **nom clair en français**, une description, l'effet d'une valeur plus basse/plus haute, et son niveau (`simple` / `advanced`). |
 | Un probleme de performance a diagnostiquer | `F9` en DEV lance/arrete une capture perf. Le rapport JSON est ecrit dans `public/dev/perf-reports/` via `vite/perfReportPlugin.ts`. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |

@@ -1,6 +1,7 @@
 import { useInventoryStore } from '../gameplay/inventory/inventoryStore'
 import { getAddItemFailureReason, getPickupHint } from '../gameplay/inventory/inventoryRules'
 import { usePickupStore } from '../gameplay/inventory/pickupStore'
+import { HUD, hardShadow, kbd, outline } from './hudStyle'
 
 export default function PickupPrompt() {
   const nearbyPickup = usePickupStore((s) => s.nearbyPickup)
@@ -19,35 +20,25 @@ export default function PickupPrompt() {
         left: '50%',
         bottom: 102,
         transform: 'translateX(-50%) scale(var(--pls-pickup-pulse, 1))',
-        padding: '9px 13px',
-        borderRadius: 7,
-        background: blocked ? 'rgba(58, 19, 29, 0.9)' : 'rgba(13, 18, 32, 0.86)',
-        border: blocked ? '1px solid rgba(248, 113, 113, 0.52)' : '1px solid rgba(148, 163, 184, 0.36)',
-        color: '#ecf2ff',
-        font: '750 14px system-ui, sans-serif',
+        padding: '8px 14px',
+        borderRadius: 12,
+        // Bloqué = fond rouge franc, pas juste une bordure rougeâtre : ça se voit
+        // du coin de l'œil, sans avoir à lire.
+        background: blocked ? '#e63946' : HUD.paper,
+        border: outline,
+        color: blocked ? HUD.paper : HUD.ink,
+        font: `800 14px ${HUD.font}`,
         pointerEvents: 'none',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+        boxShadow: hardShadow,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <kbd
-          style={{
-            padding: '2px 7px',
-            borderRadius: 5,
-            background: blocked ? '#7f1d1d' : '#2b3550',
-            border: blocked ? '1px solid #ef4444' : '1px solid #45557f',
-            font: '800 12px ui-monospace, monospace',
-          }}
-        >
-          E
-        </kbd>
+        <kbd style={{ ...kbd, background: blocked ? '#7f1d1d' : HUD.ink }}>E</kbd>
         <span>
           {blocked ? 'Impossible' : 'Ramasser'} {nearbyPickup.itemName}
           {nearbyPickup.quantity > 1 ? ` x${nearbyPickup.quantity}` : ''}
         </span>
-        <span style={{ color: blocked ? '#fecaca' : '#bfdbfe', font: '800 12px system-ui, sans-serif' }}>
-          {hint}
-        </span>
+        <span style={{ color: blocked ? '#fee2e2' : HUD.textDim, font: `800 12px ${HUD.font}` }}>{hint}</span>
       </div>
     </div>
   )

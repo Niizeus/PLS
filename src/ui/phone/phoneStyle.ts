@@ -22,7 +22,13 @@ export const PHONE = {
   radiusShell: 36,
   radiusScreen: 28,
 
-  font: HUD.font,
+  /**
+   * ⚠️ Le téléphone garde une police NEUTRE, volontairement différente de celle
+   * du HUD. Le HUD est dessiné à la main dans l'univers du jeu ; le téléphone,
+   * lui, est un objet réel de cet univers — un smartphone avec son interface de
+   * smartphone. Lui coller la police BD casserait l'illusion.
+   */
+  font: 'system-ui, sans-serif',
   mono: HUD.mono,
 
   /** Couleurs de l'écran (l'intérieur du téléphone). */

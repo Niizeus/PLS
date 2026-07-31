@@ -3,7 +3,7 @@ import { useVehicleTelemetryStore } from '../entities/vehicles/vehicleTelemetryS
 import { useCarStore } from '../entities/vehicles/carStore'
 import { getRadioStation } from '../audio/radioCatalog'
 import { useRadioStore } from '../audio/radioStore'
-import { HUD, kbd, panel } from './hudStyle'
+import { HUD, hardShadow, kbd, outline } from './hudStyle'
 
 const NEEDLE_MIN = -118
 const NEEDLE_MAX = 118
@@ -102,11 +102,23 @@ export default function VehicleDashboard() {
   )
 }
 
+/**
+ * ⚠️ Seul panneau du HUD à rester SOMBRE, et c'est volontaire : ce n'est pas une
+ * étiquette posée sur l'écran, c'est le **tableau de bord du véhicule** — un
+ * objet rétroéclairé, avec des témoins lumineux. Il adopte quand même le contour
+ * d'encre et l'ombre dure du reste du HUD pour rester de la même famille.
+ */
 const panelStyle: CSSProperties = {
-  ...panel,
   position: 'fixed',
   right: HUD.edge,
   bottom: 82,
+  padding: '9px 12px',
+  borderRadius: HUD.radius,
+  background: '#171c28',
+  border: outline,
+  boxShadow: hardShadow,
+  color: '#f1f5f9',
+  font: `700 13px ${HUD.font}`,
   width: 238,
   minHeight: 150,
   display: 'grid',

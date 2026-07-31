@@ -6,7 +6,7 @@ import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { SPAWN } from '../world/beauvais/cityData'
 import { buildingsNear } from '../world/beauvais/collision'
 import { drawBuildings, drawMapMarkers, drawPlayer, type MapView } from './mapDraw'
-import { HUD } from './hudStyle'
+import { HUD, hardShadow, outline } from './hudStyle'
 
 /**
  * Minimap ronde en haut à droite : vue du dessus centrée sur le joueur, nord en haut.
@@ -143,10 +143,11 @@ export default function Minimap() {
         position: 'relative',
         width: SIZE,
         height: SIZE,
+        // Le disque : un vrai rond cerclé d'encre, comme un médaillon dessiné.
         borderRadius: '50%',
         overflow: 'hidden',
-        border: `3px solid ${HUD.bg}`,
-        boxShadow: HUD.shadow,
+        border: outline,
+        boxShadow: hardShadow,
         pointerEvents: 'none',
       }}
     >
@@ -155,12 +156,13 @@ export default function Minimap() {
       <div
         style={{
           position: 'absolute',
-          top: 4,
+          top: 3,
           left: '50%',
           transform: 'translateX(-50%)',
-          font: '700 11px system-ui, sans-serif',
-          color: '#fff',
-          textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+          font: `900 12px ${HUD.font}`,
+          color: HUD.paper,
+          WebkitTextStroke: `3px ${HUD.ink}`,
+          paintOrder: 'stroke fill',
         }}
       >
         N

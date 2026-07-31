@@ -169,7 +169,8 @@ Les fichiers :
 | `src/world/beauvais/collision.ts` | Grille spatiale + `isBlocked(x,z)` : empêche d'entrer dans les bâtiments. |
 | `src/world/beauvais/debug-road-geometry.mjs` | Outil hors-jeu : genere `public/debug/road-geometry.html` et `data/road-surface-test.json`. La V2 compare les rubans actuels a une surface de chaussee fusionnee par polygones (`polygon-clipping`) et exporte les surfaces de toute la ville en tuiles streamables, avec un panneau de diagnostic prioritaire sur le centre-ville. Commande : `npm run debug:roads`. |
 | `src/world/Ground.tsx` | Le **sol avec son vrai relief**, affiché en dalles de 256 m autour du joueur. |
-| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement**, POI de `mapMarkers.json` et **points de passage** locaux (texte + icône), via `src/ui/mapDraw.ts`. |
+| `src/ui/Minimap.tsx` + `src/ui/WorldMap.tsx` | Minimap ronde (suivi joueur) et **carte plein écran** (M) avec **zoom molette**, **déplacement**, POI de `mapMarkers.json` et **points de passage** locaux (texte + icône), via `src/ui/mapDraw.ts`. Le type et la sauvegarde des points de passage vivent dans `gameplay/map/waypoints.ts` (partagés avec l'app GPS du téléphone). |
+| `src/gameplay/map/destinationStore.ts` | La **destination** choisie depuis le GPS du téléphone. La minimap l'affiche : un losange doré si elle est dans le champ, une **flèche sur le bord** sinon, avec la distance restante. Le téléphone pose, la minimap montre — les deux ne se connaissent pas. |
 | `src/entities/map/MapMarkerEntities.tsx` | Marqueurs 3D des points d'interet visibles en jeu, detection de proximite, prompt `E` et interaction placeholder avec prise en compte des horaires. |
 | `src/gameplay/map/` | Runtime des points d'interet : filtrage dev/prod, calcul ouvert/ferme selon l'heure du jeu, store du POI proche et message d'interaction. |
 

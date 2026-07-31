@@ -216,20 +216,23 @@ La vision complète du smartphone (hub diégétique, liste des applications vis�
 
 **Ce qui existe aujourd'hui** (résultat d'une première passe, à re-vérifier avant de coder) :
 
-- HUD monté en colonnes par `src/ui/Hud.tsx`, avec un style de fond partagé `ui/hudStyle.ts` ;
-- blocs existants : `StatsPanel`, `InventoryPanel`, `QuickBar`, `GameClock`, `Minimap`, `WorldMap`,
-  `VehicleDashboard`, `ControlsHint` ;
+- HUD monté en colonnes par `src/ui/Hud.tsx`, avec le style commun `ui/hudStyle.ts` ;
+- blocs restants à l'écran : `Minimap` + `GameClock`, `QuickBar`, `ControlsHint`,
+  `VehicleDashboard`, `ZoneToast`, les invites, et les écrans qui s'ouvrent (`InventoryPanel`,
+  `WorldMap`, le téléphone). **`StatsPanel` a été supprimé** : les vitaux vivent dans l'app Santé
+  du téléphone (voir la règle du HUD dans [02](02-ARCHITECTURE.md)) ;
 - stores lisibles : joueur, inventaire (`gameplay/inventory/`), stats (`gameplay/stats/`), temps
-  (`gameplay/time/gameTimeStore.ts`), radio (`audio/radioStore.ts`), télémétrie véhicule ;
-- ❗ **il n'existe aucun système de paramètres joueur** (ni volumes, ni luminosité, ni remap de
-  touches). Le seul panneau de réglages est l'outil **DEV `F2`** (`src/devtools/`), qui est
-  volontairement dev-only et ne doit pas devenir le menu options du jeu.
+  (`gameplay/time/gameTimeStore.ts`), radio (`audio/radioStore.ts`), télémétrie véhicule,
+  réglages joueur (`gameplay/settings/`) ;
+- ✅ le **système de paramètres joueur existe** désormais (`gameplay/settings/settingsStore.ts`).
+  Il ne remplace pas l'outil **DEV `F2`** (`src/devtools/`), qui reste réservé à l'équilibrage et
+  au développement.
 
 ### 2.1 Informations accessibles depuis le téléphone
 
-Le téléphone pourrait progressivement récupérer des informations du HUD principal : vie, argent,
-statistiques, besoins, réputation, progression, missions, inventaire résumé, autres données
-existantes.
+Le téléphone est devenu **le seul endroit** où consulter l'état du personnage : vie, argent,
+statistiques, besoins, réputation, progression, missions, inventaire résumé. Ce n'est plus un
+doublon du HUD — le HUD n'affiche plus rien de tout ça.
 
 > **Règle de conception** : ne **jamais dupliquer** la donnée. Le téléphone **consulte** les
 > systèmes déjà présents (les stores), il n'en tient pas une deuxième copie.

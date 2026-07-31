@@ -1,0 +1,20 @@
+{
+  "_doc": [
+    "Corrections manuelles des routes, appliquées APRÈS l'import IGN BD TOPO.",
+    "Ce fichier n'est JAMAIS réécrit par build-beauvais.mjs : chaque correction est",
+    "acquise définitivement, même après une régénération complète de la ville.",
+    "",
+    "Clé = `cleabs`, l'identifiant IGN du tronçon (ex. TRONROUT0000000039439620).",
+    "Pour le trouver : il est copié tel quel dans le champ `id` de chaque route de",
+    "data/beauvais.json — cherche la rue par son `name`, relève son `id`.",
+    "",
+    "Valeurs possibles, toutes optionnelles :",
+    "  w    : largeur du bitume en mètres (remplace la mesure IGN)",
+    "  cls  : 'drivable' | 'pedestrian' | 'service' | 'track'",
+    "  name : nom affiché",
+    "  skip : true → le tronçon n'est pas posé au sol du tout",
+    "",
+    "Exemple :",
+    "  \"TRONROUT0000000039439620\": { \"w\": 8, \"cls\": \"pedestrian\" }"
+  ]
+}

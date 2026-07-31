@@ -573,6 +573,18 @@ if (target) {
   const json = {
     generatedAt: new Date().toISOString(),
     label: 'Beauvais complet tuiles',
+    /**
+     * Empreinte de la ville qui a servi à fabriquer cette surface.
+     *
+     * ⚠️ Ce fichier est DÉRIVÉ de `beauvais-buildings.json`. Si on régénère la
+     * ville sans relancer `npm run debug:roads`, la dalle de bitume reste celle
+     * des ANCIENNES routes pendant que les rubans suivent les nouvelles : on
+     * obtient des bouts de route qui dépassent partout. C'est arrivé une fois,
+     * en passant les routes d'OSM à l'IGN (84,5 % d'axes encore sur la dalle au
+     * lieu de 99,5 %). `roadway.ts` compare cette empreinte au démarrage et
+     * hurle dans la console si elle ne correspond plus.
+     */
+    sourceCity: { generatedAt: data.generatedAt ?? null, roadCount: data.roads.length },
     center: { x: Number(target.x.toFixed(3)), z: Number(target.z.toFixed(3)) },
     radius: target.radius ?? VIEW_RADIUS,
     mask: target.mask?.map(([x, z]) => [Number(x.toFixed(3)), Number(z.toFixed(3))]) ?? null,

@@ -144,7 +144,9 @@ Les fichiers :
 
 | Fichier | Rôle |
 |---------|------|
-| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : recupere OSM et exporte batiments, routes, eau, verdure, murs, arbres, lampadaires. Les routes gardent aussi `highway`, `name`, `ref`, `lanes`, `oneway`, `service`, `bridge`, `tunnel`, `layer` pour les fusions de chaussee. Tourne hors-jeu. La grille Open-Meteo produite n'est plus lue : le relief vient de l'IGN. |
+| `src/world/beauvais/build-beauvais.mjs` | **Temps 1+2** : recupere OSM et exporte batiments, eau, verdure, murs, arbres, lampadaires — puis **remplace les routes OSM par celles de l'IGN** (voir `bdtopoRoads.mjs`). Tourne hors-jeu. La grille Open-Meteo produite n'est plus lue : le relief vient de l'IGN. |
+| `src/world/beauvais/bdtopoRoads.mjs` | Télécharge les **routes mesurées de la BD TOPO IGN** (`troncon_de_route`) et les traduit en `Road`. Donne la **largeur réelle** de chaque chaussée, la **classe d'usage** (`drivable` / `pedestrian` / `service` / `track`) et les noms de rues. Tourne hors-jeu. Voir [« Les routes »](#-les-routes-viennent-de-lign-pas-dosm). |
+| `src/world/beauvais/data/road-overrides.json` | **Retouches manuelles** des routes, indexées par `cleabs` IGN. Jamais réécrit par le build : les corrections survivent à une régénération complète. |
 | `src/world/beauvais/geo.mjs` | L'**origine du monde** (la cathédrale), l'emprise `BBOX` et la projection GPS → mètres. Partagé par tous les scripts hors-jeu : une seule définition, sinon tout se décale. |
 | `src/world/beauvais/bdtopo.mjs` | Télécharge les **hauteurs réelles de la BD TOPO IGN** et les greffe sur les contours OSM. Contient les garde-fous anti-donnée-aberrante. Tourne hors-jeu. |
 | `src/world/beauvais/roofs.mjs` | Calcule l'**orientation du faîtage** de chaque toit (détection des murs mitoyens) et plafonne les pentes. Tourne hors-jeu. |
@@ -200,8 +202,8 @@ Ce qu'on récupère par bâtiment (couverture réelle sur la commune) :
 
 ⚠️ **`h` garde exactement le même sens qu'avant** (haut des murs) : les collisions,
 la minimap et la carte ne sont donc pas affectées. On n'a pas non plus remplacé les
-**contours**, qui restent ceux d'OSM — les routes sont calées dessus, et les deux jeux
-de données se recouvrent à 98,7 %.
+**contours**, qui restent ceux d'OSM — et les deux jeux de données se recouvrent à 98,7 %.
+(Les **routes**, elles, ne viennent plus d'OSM du tout : voir la section suivante.)
 
 **Les trois garde-fous** (sans eux, ça casse) :
 1. **~2,5 % des bâtiments** n'ont aucune correspondance IGN → ils gardent l'ancienne
@@ -252,6 +254,142 @@ côté mettrait le faîtage en travers de la rue, l'inverse de la réalité.
   `node src/world/beauvais/update-heights-ign.mjs`
 - Tout le monde (change `BBOX` / `ORIGIN` dans `geo.mjs` d'abord) :
   `node src/world/beauvais/build-beauvais.mjs` — retélécharge OSM **et** l'IGN.
+
+### 🛣️ Les routes viennent de l'IGN, pas d'OSM
+
+**Le problème.** Les routes venaient d'OSM et leur largeur était **devinée** par une table
+`highway → mètres` (« une résidentielle, ça fait 5 m en général »). Deux défauts, et le
+second est le pire :
+
+1. La largeur était un stéréotype. Une venelle du centre et une rue de lotissement
+   sortaient toutes les deux à 5 m.
+2. **Routes et bâtiments ne venaient pas du même référentiel.** Les bâtiments sont levés
+   par l'IGN, les routes étaient tracées à la main sur fond d'ortho par les contributeurs
+   OSM → un décalage courant de 1 à 5 m. Une rue de 8 m dont l'axe est décalé de 3 m
+   devient 1 m d'un côté et 7 de l'autre. C'est ça qui donnait la sensation de rues
+   étranglées, bien plus que la largeur du bitume elle-même.
+
+**La correction.** Les routes viennent maintenant de la couche `troncon_de_route` de la
+BD TOPO — **même serveur WFS et même référentiel que les bâtiments**. Sur les 7 892
+tronçons de la commune, 7 091 sont retenus :
+
+| Ce que l'IGN donne | Ce que ça règle |
+|---|---|
+| `largeur_de_chaussee` | La largeur **mesurée** du bitume (88,1 % des tronçons retenus ; le reste, surtout des chemins, retombe sur une largeur type). |
+| `nature` | Écarte franchement **776 sentiers, 353 chemins et 11 escaliers** au lieu de deviner « trop étroit, donc pas une route ». |
+| `acces_vehicule_leger` | Sépare les dessertes privées des vraies rues — et voir ci-dessous. |
+| `nom_collaboratif_gauche` | **923 noms de rues réels**, remis en forme lisible (`R D'ALSACE` → `Rue d'Alsace`). |
+
+**La trouvaille.** 174 tronçons sont de *nature* « Route » (donc une vraie chaussée) mais
+avec `acces_vehicule_leger = Physiquement impossible` : ce sont exactement les **rues
+piétonnisées** (bornes, potelets, plots). Les zones piétonnes du centre sortent donc de la
+donnée elle-même — aucune n'a été dessinée à la main.
+
+**La classe d'usage** (`road.cls`) est la nouveauté qui compte : `drivable` (5 329),
+`service` (901), `track` (687), `pedestrian` (174). Une rue piétonne et une rue de quartier
+ont souvent la **même largeur** — ce qui les distingue est l'accès, pas les mètres. Le
+revêtement est choisi là-dessus dans `Roads.tsx` (pavé clair, terre, bitume).
+
+⚠️ **Ce que ça ne règle PAS.** `largeur_de_chaussee` est quantifiée au demi-mètre et vaut
+5 m dans 48 % des cas : **l'IGN confirme que les rues de Beauvais font réellement ~5 m de
+bitume**. Ce changement rend les largeurs *justes*, il ne les rend pas plus *grandes*.
+L'impression d'étroitesse restante se joue dans l'espace **entre le bitume et la façade**
+(le trottoir), qui est encore une constante `SHOULDER_W` dans `roadway.ts`.
+
+**Corrections manuelles.** `data/road-overrides.json` permet de retoucher un tronçon
+(`w`, `cls`, `name`, `skip`) par son `cleabs` IGN. Ce fichier n'est **jamais réécrit** par
+le build : sans lui, chaque régénération effacerait le travail fait à la main et le
+chantier tournerait en rond.
+
+#### 🚶 Les trottoirs sont mesurés jusqu'à la façade
+
+**Le problème.** La seule partie PLATE au bord de la chaussée était le dessus de la bordure :
+**35 cm**. Les 80 cm de `SHOULDER_W` sont une pente en terre qui rattrape le terrain, pas un
+trottoir. Beauvais n'avait donc pratiquement pas de trottoir — et comme la sensation d'une
+ville tient au rapport largeur de rue / hauteur de façade, les rues paraissaient étranglées
+même avec un bitume à la bonne largeur.
+
+**La méthode.** En chaque point de chaque voie, `roadway.ts` lance une **droite
+perpendiculaire** et cherche la première façade de chaque côté (`facadeDistances`). Le
+résultat est lissé le long de la rue pour qu'un simple porche ne fasse pas de dents de scie.
+
+> ⚠️ **Un trottoir a une largeur VOULUE, il ne remplit pas l'espace disponible.**
+> Première version : « on prend tout jusqu'à 4 m ». Dès qu'une façade était un peu loin
+> (carrefour, place, recul d'immeuble), chaque voie posait 4 m de chaque côté et les voies
+> convergentes fusionnaient en **grandes plaques grises informes**. Une vraie ville fait
+> l'inverse : la largeur est un choix de projet, et elle ne RÉTRÉCIT que si la façade est
+> trop proche.
+
+La largeur voulue suit le rang de la voie (`WALK_TARGET_RATIO` × la demi-chaussée, borné
+par `WALK_TARGET_MIN` 1,2 m et `WALK_TARGET_MAX` 3 m) : une avenue a de vrais trottoirs,
+une ruelle non. Résultat : **1,64 m de moyenne**, 83 % entre 1 et 2 m.
+
+> ⚠️ **Ça ne marche QUE parce que routes et bâtiments viennent du même référentiel IGN.**
+> Avec les routes OSM décalées de 1 à 5 m, la mesure aurait donné 6 m d'un côté et 0 de
+> l'autre. C'est la contrepartie directe du changement décrit juste au-dessus.
+
+**Aucune donnée nouvelle n'est téléchargée** : on réutilise les 33 958 emprises de
+bâtiments déjà en mémoire, via la grille de `collision.ts`.
+
+**Le sol suit le trottoir.** `groundHeight()` applique le **même** profil que `section()`
+dans `Roads.tsx` (`segLeftWalk` / `segRightWalk`) : sans ça le joueur marcherait dans le
+vide au-delà de 35 cm du bitume. Vérifié sur 80 579 points hors carrefour : **94,7 %**
+concordent à moins de 2 cm. Les écarts restants vont de 2 cm à 0,49 m et viennent du
+recouvrement de deux voies d'altitudes différentes, où c'est la plus haute qui gagne —
+comportement d'origine, mais **0,49 m est une marche bien réelle** : c'est le prochain
+défaut à traiter si tu sens des accrochages en voiture.
+
+**Les carrefours : `||`, pas `&&`.** `roadway.ts` marque un segment comme carrefour dès
+qu'UN de ses bouts l'est (`segJunction[s + i] = flags[i] || flags[i + 1]`). Le rendu
+exigeait les DEUX. Un segment à cheval sur l'entrée d'un carrefour dessinait donc bordure
+et trottoir là où le sol était déjà rabattu au ras du bitume — **un biseau qui montait dans
+le vide**. Invisible avec 35 cm de bordure, spectaculaire avec un vrai trottoir. Les deux
+côtés utilisent maintenant la même règle.
+
+**Coût.** Le sondage ajoute ~0,4 s à la construction des routes, faite **une seule fois**
+au premier affichage (~2,0 s au total sur toute la commune).
+
+**⚠️ Le masque de la dalle ne doit cacher QUE le bitume.** `Roads.tsx` teste
+`inExperimentalSurfaceZone()` sur l'**axe** de la voie — qui est forcément dans la dalle,
+puisque celle-ci est construite à partir de ces mêmes routes. Le test est donc vrai sur
+**99,3 %** des segments, et il servait à sauter la coupe **entière** : bitume, bordure et
+trottoir. Comme la dalle ne dessine que le bitume, la ville n'avait aucun bord : 4 930
+bandes de profil émises sur toute la commune, au lieu de 568 465 aujourd'hui.
+
+Le symptôme était trompeur — `groundHeight()` ignore ce masque, donc **la voiture sentait
+des trottoirs invisibles**. Si ça se reproduit (bordures ou trottoirs absents alors que la
+physique les a), c'est ici qu'il faut regarder : on ne saute que la bande 3 (la chaussée),
+plus les bandes latérales devenues du bitume par fusion de voies parallèles.
+
+⚙️ Réglages dans `ROADWAY` : `WALK_MIN`, `WALK_TARGET_RATIO`, `WALK_TARGET_MIN`,
+`WALK_TARGET_MAX`, `WALK_GAP`, `WALK_PROBE`. Trottoirs trop larges ou trop étroits à ton
+goût ? C'est `WALK_TARGET_MAX` (3 m) et `WALK_TARGET_RATIO` (0,7) qu'il faut bouger, pas
+la mesure. Réduire `WALK_PROBE` à la stricte largeur utile a été testé : **aucun gain
+de temps**, et 18 % de repli au centre au lieu de 11 %. Le coût est dans le balayage des
+murs, pas dans le rayon.
+
+#### ⚠️ Le piège : `road-surface-test.json` est DÉRIVÉ des routes
+
+La grande dalle de bitume fusionnée (`road-surface-test.json`) est fabriquée **à partir
+de** `beauvais-buildings.json`. Les rubans de `Roads.tsx` ne sont masqués que **sous** cette
+dalle, pour garder une route visible là où la fusion rate.
+
+> **Régénérer la ville sans relancer `npm run debug:roads` casse tout visuellement.**
+
+La dalle reste sur les anciennes routes pendant que les rubans suivent les nouvelles :
+chaque ruban dépasse de son côté et la ville se couvre de bouts de bitume en travers.
+C'est arrivé au passage d'OSM à l'IGN — les deux jeux sont décalés de 1 à 5 m, et il ne
+restait que **84,5 % des axes sur la dalle** (99,5 % après régénération).
+
+**La règle : toute modification des routes = deux commandes, dans cet ordre.**
+
+```bash
+node src/world/beauvais/build-beauvais.mjs && npm run debug:roads
+```
+
+Un garde-fou est en place : la dalle stocke l'empreinte de la ville qui l'a produite
+(`sourceCity`), et `roadway.ts` gueule en `console.error` au démarrage si elle ne
+correspond plus. Le symptôme est spectaculaire mais la cause était invisible dans le code.
 
 ### ⛪ La cathédrale Saint-Pierre (le seul bâtiment fait main)
 

@@ -1,5 +1,5 @@
-import { ROADS, terrainHeight, type Road } from './cityData'
-import { isBlocked } from './collision'
+import { ROADS, CITY_GENERATED_AT, terrainHeight, type Road, type RoadClass } from './cityData'
+import { isBlocked, forEachWallNear } from './collision'
 import { isTerrainReady } from './terrain'
 import roadSurfaceTest from './data/road-surface-test.json'
 
@@ -47,15 +47,18 @@ import roadSurfaceTest from './data/road-surface-test.json'
 /** Les cotes de l'ouvrage, en mètres. Tout le reste en découle. */
 export const ROADWAY = {
   /**
-   * En dessous de cette largeur, ce n'est pas une voie mais un trottoir, un
-   * escalier ou un sentier (`footway` 2 m, `cycleway` 2 m, `path` 1,8 m,
-   * `steps` 1,6 m). OSM en cartographie 1 671 rien qu'à Beauvais, et ils vont
-   * jusqu'aux PORTES des immeubles : peints en bitume, ils donnaient l'impression
-   * de routes qui s'arrêtent au pied des bâtiments. Les rues piétonnes du centre,
-   * elles, sont des `pedestrian` de 5 m → elles passent le filtre et restent.
+   * Seuil hérité : en dessous de cette largeur, on supposait que ce n'était pas
+   * une voie mais un trottoir, un escalier ou un sentier.
+   *
+   * ⚠️ Ce seuil est une DEVINETTE, et il se trompait dans les deux sens : il
+   * gardait les sentiers larges et jetait les ruelles étroites bien réelles.
+   * Depuis que les routes viennent de l'IGN, chaque voie porte une classe
+   * explicite (`road.cls`) et les sentiers/escaliers sont déjà écartés à la
+   * génération. Le seuil ne sert donc plus que de repli si `beauvais.json` a été
+   * produit sans l'IGN — voir `isSurfaced()`.
    */
   MIN_DRIVABLE_WIDTH: 2.5,
-  /** Largeur mini d'une voie : OSM laisse parfois 0. */
+  /** Largeur mini d'une voie : la donnée laisse parfois 0. */
   MIN_WIDTH: 3,
   /** Épaisseur de la chaussée au-dessus du point de terrain le plus haut. */
   THICKNESS: 0.16,
@@ -71,6 +74,56 @@ export const ROADWAY = {
   PARALLEL_MERGE_MAX_EXTRA: 3.4,
   /** Largeur de l'accotement en pente qui rattrape le terrain naturel. */
   SHOULDER_W: 0.8,
+  /**
+   * ── LE TROTTOIR ────────────────────────────────────────────────────────────
+   *
+   * Jusqu'ici la seule partie PLATE au bord de la chaussée était le dessus de la
+   * bordure : 35 cm. Les 80 cm de `SHOULDER_W` sont une pente en terre qui
+   * rattrape le terrain, pas un trottoir. Autrement dit, Beauvais n'avait
+   * pratiquement pas de trottoir — et comme la sensation d'une ville tient au
+   * rapport largeur de rue / hauteur de façade, les rues paraissaient étranglées
+   * même quand leur bitume était à la bonne largeur.
+   *
+   * On mesure donc, en chaque point et de chaque côté, la distance réelle
+   * jusqu'à la façade la plus proche, et on remplit l'espace disponible.
+   *
+   * ⚠️ Ça ne marche QUE parce que routes et bâtiments viennent maintenant du
+   * même référentiel IGN. Avec les routes OSM décalées de 1 à 5 m, cette mesure
+   * aurait donné des trottoirs de 6 m d'un côté et 0 de l'autre.
+   */
+  /** En dessous, on ne pose pas de trottoir : juste la bordure, comme avant. */
+  WALK_MIN: 0.35,
+  /**
+   * ⚠️ Un trottoir a une largeur VOULUE, il ne remplit pas l'espace disponible.
+   *
+   * Première version : « on prend tout jusqu'à 4 m ». Résultat, dès qu'une
+   * façade était un peu loin (carrefour, place, recul d'immeuble) chaque voie
+   * posait 4 m de chaque côté, et les voies convergentes fusionnaient en grandes
+   * plaques grises informes. Une vraie ville fait l'inverse : le trottoir a une
+   * largeur de projet, et il ne RÉTRÉCIT que si la façade est trop proche.
+   *
+   * La largeur voulue suit le rang de la voie — une avenue a de vrais trottoirs,
+   * une ruelle non.
+   */
+  WALK_TARGET_RATIO: 0.7, // × la demi-chaussée
+  WALK_TARGET_MIN: 1.2,
+  WALK_TARGET_MAX: 3,
+  /**
+   * Portée du sondage de façade (m).
+   *
+   * Volontairement plus large que le trottoir maximal : au-delà de
+   * `WALK_TARGET_MAX` la largeur est plafonnée de toute façon, mais TOUCHER une
+   * façade reste l'information utile — ça distingue « rue large » de « pas de
+   * rue du tout ».
+   *
+   * Testé : réduire cette portée à la stricte largeur utile (~8 m) ne gagne rien
+   * en temps de construction et fait retomber 18 % du centre-ville sur la valeur
+   * par défaut au lieu de 11 %. Le coût est ailleurs (le balayage des murs), pas
+   * dans le rayon.
+   */
+  WALK_PROBE: 16,
+  /** Espace laissé libre au pied de la façade : on ne colle pas au mur. */
+  WALK_GAP: 0.4,
   /** De combien l'accotement s'enfonce sous le terrain (pour ne pas laisser de jour). */
   EMBED: 0.3,
 } as const
@@ -116,9 +169,44 @@ type RoadSurfaceTest = {
   preview?: { polygons?: number[][][][] }
   tileSize?: number
   tiles?: Record<string, RoadSurfaceTile>
+  sourceCity?: { generatedAt: string | null; roadCount: number }
 }
 
 const ROAD_SURFACE_TEST = roadSurfaceTest as RoadSurfaceTest
+
+/**
+ * ⚠️ Garde-fou : la dalle de bitume est-elle bien celle des routes actuelles ?
+ *
+ * `road-surface-test.json` est DÉRIVÉ de `beauvais-buildings.json`. Régénérer la
+ * ville sans relancer `npm run debug:roads` laisse la grande surface fusionnée
+ * sur les ANCIENNES routes pendant que les rubans suivent les nouvelles. Comme
+ * les rubans ne sont masqués que sous la surface réelle, chacun dépasse de son
+ * côté : la ville se couvre de bouts de bitume en travers.
+ *
+ * C'est exactement ce qui est arrivé au passage des routes d'OSM à l'IGN — les
+ * deux jeux sont décalés de 1 à 5 m, et seuls 84,5 % des axes tombaient encore
+ * sur la dalle (99,5 % une fois régénérée). Le symptôme est spectaculaire mais
+ * la cause est invisible dans le code : d'où cette alerte.
+ */
+function warnIfSurfaceStale() {
+  const src = ROAD_SURFACE_TEST.sourceCity
+  if (!src) {
+    console.warn(
+      "[roadway] road-surface-test.json a été généré avant l'ajout de l'empreinte ville. " +
+        'Relance `npm run debug:roads` pour pouvoir vérifier sa fraîcheur.',
+    )
+    return
+  }
+  if (src.generatedAt === CITY_GENERATED_AT && src.roadCount === ROADS.length) return
+
+  console.error(
+    '[roadway] ⚠️ SURFACE DE ROUTE PÉRIMÉE — la dalle de bitume vient d’une autre version ' +
+      `de la ville (${src.roadCount} routes, ${src.generatedAt}) que les rubans ` +
+      `(${ROADS.length} routes, ${CITY_GENERATED_AT}). Des bouts de route vont dépasser ` +
+      'partout. Corrige avec : npm run debug:roads',
+  )
+}
+warnIfSurfaceStale()
 const EXPERIMENTAL_SURFACE_HEIGHT_SAMPLE_RADIUS = 1.6
 const EXPERIMENTAL_SURFACE_TILE_SIZE = ROAD_SURFACE_TEST.tileSize ?? ROADWAY_TILE
 const EXPERIMENTAL_SURFACE_TILES = ROAD_SURFACE_TEST.tiles ?? null
@@ -141,6 +229,12 @@ export interface RoadChunk {
   leftMerge: Float32Array
   /** Extension de bitume sur le cote droit quand une voie parallele est fusionnee. */
   rightMerge: Float32Array
+  /** Largeur du trottoir gauche (m), mesurée jusqu'à la façade. */
+  leftWalk: Float32Array
+  /** Largeur du trottoir droit (m), mesurée jusqu'à la façade. */
+  rightWalk: Float32Array
+  /** Classe d'usage IGN → décide du revêtement dans `Roads.tsx`. */
+  cls?: RoadClass
 }
 
 
@@ -157,6 +251,13 @@ let segB = new Float32Array(0) // arrivée : x, z, y
 let segHalf = new Float32Array(0)
 let segLeftMerge = new Float32Array(0)
 let segRightMerge = new Float32Array(0)
+/**
+ * Largeur de trottoir par segment — la contrepartie PHYSIQUE de ce que dessine
+ * `Roads.tsx`. Sans elle, le joueur marcherait dans le vide au-delà de 35 cm du
+ * bitume : c'est la règle « ce qu'on voit = ce qu'on touche » de ce module.
+ */
+let segLeftWalk = new Float32Array(0)
+let segRightWalk = new Float32Array(0)
 let segRun = new Int32Array(0)
 let segRoad = new Int32Array(0)
 let segJunction = new Uint8Array(0)
@@ -347,6 +448,143 @@ function smoothRoadTops(pts: number[][], half: number): number[] {
   return smooth
 }
 
+/**
+ * Distance aux façades de part et d'autre de (x, z), le long de la normale.
+ *
+ * On lance une vraie DROITE perpendiculaire plutôt que de chercher le bâtiment
+ * le plus proche : ce qu'on veut est la largeur du COULOIR de rue en travers,
+ * pas la distance à un pignon situé derrière nous.
+ *
+ * Les deux côtés sont résolus en UNE seule passe : c'est la même droite, seul le
+ * signe de `t` change. Balayer deux fois les murs voisins doublait le temps de
+ * construction pour rien (2,2 s → 1,1 s sur toute la commune).
+ *
+ * `out` reçoit [gauche, droite], `Infinity` si rien n'est touché dans la portée
+ * — cas normal en périphérie, où l'appelant pose alors la largeur voulue sans
+ * contrainte.
+ */
+function facadeDistances(
+  x: number,
+  z: number,
+  dx: number,
+  dz: number,
+  probe: number,
+  out: [number, number],
+): void {
+  // (`probe` reste un paramètre : c'est le seul réglage qu'on ait eu besoin de
+  // faire varier pour arbitrer qualité/temps, et le garder explicite évite de
+  // refaire l'expérience à l'aveugle.)
+  let pos = Infinity
+  let neg = Infinity
+
+  forEachWallNear(x, z, probe, (ax, az, bx, bz) => {
+    // Intersection droite / segment, résolue par déterminant. `denom` nul = mur
+    // parallèle à la droite : il ne borne aucun des deux côtés.
+    const ex = bx - ax
+    const ez = bz - az
+    const denom = dx * ez - dz * ex
+    if (denom === 0) return
+
+    const px = ax - x
+    const pz = az - z
+    const t = (px * ez - pz * ex) / denom // distance signée le long de la droite
+    const abs = t < 0 ? -t : t
+    if (abs >= (t >= 0 ? pos : neg)) return
+
+    const u = (px * dz - pz * dx) / -denom // position sur le mur, 0..1
+    if (u < 0 || u > 1) return
+
+    if (t >= 0) pos = abs
+    else neg = abs
+  })
+
+  out[0] = pos
+  out[1] = neg
+}
+
+/**
+ * Largeur de trottoir VOULUE pour une voie, avant contrainte par les façades.
+ *
+ * Proportionnelle au rang de la voie : une avenue mérite de vrais trottoirs, une
+ * ruelle non. C'est cette largeur qu'on obtient partout où la place existe.
+ */
+function walkTarget(half: number): number {
+  const wanted = half * ROADWAY.WALK_TARGET_RATIO
+  if (wanted < ROADWAY.WALK_TARGET_MIN) return ROADWAY.WALK_TARGET_MIN
+  if (wanted > ROADWAY.WALK_TARGET_MAX) return ROADWAY.WALK_TARGET_MAX
+  return wanted
+}
+
+/**
+ * Largeur de trottoir retenue : la largeur voulue, rabotée si la façade est trop
+ * proche.
+ *
+ * `reachOut` = demi-chaussée + bordure : c'est là que commence le trottoir.
+ * `hit` infini = aucune façade en vue → rien ne contraint, on pose la largeur
+ * voulue.
+ */
+function walkWidthFrom(hit: number, reachOut: number, target: number): number {
+  if (!Number.isFinite(hit)) return target
+
+  const free = hit - reachOut - ROADWAY.WALK_GAP
+  if (free <= ROADWAY.WALK_MIN) return ROADWAY.WALK_MIN
+  return Math.min(free, target)
+}
+
+/**
+ * Lisse les largeurs de trottoir le long de la voie.
+ *
+ * Sans ça, un simple décrochement de façade (un porche, un recul d'immeuble)
+ * ferait un trottoir en dents de scie. Une vraie ville a des trottoirs qui
+ * s'élargissent progressivement.
+ */
+function smoothWalk(values: Float32Array, passes = 2): void {
+  if (values.length < 3) return
+  const tmp = new Float32Array(values.length)
+  for (let p = 0; p < passes; p++) {
+    tmp[0] = values[0]
+    tmp[values.length - 1] = values[values.length - 1]
+    for (let i = 1; i < values.length - 1; i++) {
+      tmp[i] = (values[i - 1] + values[i] * 2 + values[i + 1]) / 4
+    }
+    values.set(tmp)
+  }
+}
+
+/**
+ * Mesure le trottoir de chaque côté, tout le long d'un axe densifié.
+ *
+ * La normale est prise sur le segment courant : deux points voisins suffisent à
+ * l'orienter, et on la réutilise pour les deux côtés (gauche = +, droite = −).
+ */
+function measureWalks(dense: number[][], half: number): { leftWalk: Float32Array; rightWalk: Float32Array } {
+  const n = dense.length
+  const leftWalk = new Float32Array(n)
+  const rightWalk = new Float32Array(n)
+  const reachOut = half + ROADWAY.KERB_W
+  const target = walkTarget(half)
+  const hits: [number, number] = [0, 0]
+
+  for (let i = 0; i < n; i++) {
+    const a = dense[Math.max(0, i - 1)]
+    const b = dense[Math.min(n - 1, i + 1)]
+    let dx = b[0] - a[0]
+    let dz = b[1] - a[1]
+    const len = Math.hypot(dx, dz) || 1
+    dx /= len
+    dz /= len
+
+    const [x, z] = dense[i]
+    facadeDistances(x, z, -dz, dx, ROADWAY.WALK_PROBE, hits)
+    leftWalk[i] = walkWidthFrom(hits[0], reachOut, target)
+    rightWalk[i] = walkWidthFrom(hits[1], reachOut, target)
+  }
+
+  smoothWalk(leftWalk)
+  smoothWalk(rightWalk)
+  return { leftWalk, rightWalk }
+}
+
 /** Un axe de voie prêt à l'emploi (entre deux bâtiments), pendant la construction. */
 interface Run {
   half: number
@@ -360,6 +598,9 @@ interface Run {
   leftMerge: Float32Array
   /** Bitume ajoute cote droit pour fondre les voies paralleles proches. */
   rightMerge: Float32Array
+  /** Largeur du trottoir de chaque cote (m). Rempli juste apres la densification. */
+  leftWalk: Float32Array
+  rightWalk: Float32Array
   source: Road
 }
 
@@ -370,7 +611,7 @@ function build() {
   const runs: Run[] = []
   for (let r = 0; r < ROADS.length; r++) {
     const road = ROADS[r]
-    if (road.w <= ROADWAY.MIN_DRIVABLE_WIDTH) continue
+    if (!isSurfaced(road)) continue
     const half = Math.max(ROADWAY.MIN_WIDTH, road.w) / 2
     for (const run of clipToOutside(road.pts)) {
       const dense = densify(run)
@@ -388,6 +629,7 @@ function build() {
         flags: new Uint8Array(dense.length),
         leftMerge: new Float32Array(dense.length),
         rightMerge: new Float32Array(dense.length),
+        ...measureWalks(dense, half),
         source: road,
       })
     }
@@ -402,6 +644,8 @@ function build() {
   segHalf = new Float32Array(total)
   segLeftMerge = new Float32Array(total)
   segRightMerge = new Float32Array(total)
+  segLeftWalk = new Float32Array(total)
+  segRightWalk = new Float32Array(total)
   segRun = new Int32Array(total)
   segRoad = new Int32Array(total)
   segJunction = new Uint8Array(total)
@@ -471,6 +715,10 @@ function build() {
       segJunction[s + i] = run.flags[i] || run.flags[i + 1]
       segLeftMerge[s + i] = Math.max(run.leftMerge[i], run.leftMerge[i + 1])
       segRightMerge[s + i] = Math.max(run.rightMerge[i], run.rightMerge[i + 1])
+      // Moyenne des deux extrémités : le trottoir varie continûment le long du
+      // segment, alors que la fusion de chaussée est un « au moins l'un des deux ».
+      segLeftWalk[s + i] = (run.leftWalk[i] + run.leftWalk[i + 1]) / 2
+      segRightWalk[s + i] = (run.rightWalk[i] + run.rightWalk[i + 1]) / 2
     }
     s += n - 1
   }
@@ -511,6 +759,9 @@ function pushChunk(tile: string, run: Run, from: number, to: number) {
     junction: run.flags.slice(from, to + 1),
     leftMerge: run.leftMerge.slice(from, to + 1),
     rightMerge: run.rightMerge.slice(from, to + 1),
+    leftWalk: run.leftWalk.slice(from, to + 1),
+    rightWalk: run.rightWalk.slice(from, to + 1),
+    cls: run.source.cls,
   }
   let list = tiles!.get(tile)
   if (!list) tiles!.set(tile, (list = []))
@@ -565,6 +816,22 @@ function sameKnownRoad(a: Road, b: Road): boolean {
 
 function roadLayer(road: Road): number {
   return (road.layer ?? 0) + (road.bridge ? 10 : 0) - (road.tunnel ? 10 : 0)
+}
+
+/**
+ * Cette voie mérite-t-elle une vraie surface au sol ?
+ *
+ * Avec les données IGN, la réponse est portée par la donnée : une ruelle de 3 m
+ * est une rue et reçoit son bitume, un sentier n'existe déjà plus dans le
+ * fichier. On accepte donc TOUTES les classes — y compris `pedestrian` et
+ * `track`, qui sont de vraies surfaces, simplement pas en enrobé (le matériau
+ * est choisi dans `Roads.tsx`).
+ *
+ * Le repli sur la largeur ne concerne qu'un `beauvais.json` généré sans l'IGN.
+ */
+function isSurfaced(road: Road): boolean {
+  if (road.cls) return true
+  return road.w > ROADWAY.MIN_DRIVABLE_WIDTH
 }
 
 function isLinkRoad(road: Road): boolean {
@@ -728,7 +995,8 @@ export function roadwayHeightAt(x: number, z: number): number {
 
     const half = segHalf[i]
     const maxMergedReach = half + Math.max(segLeftMerge[i], segRightMerge[i])
-    if (d > Math.max(reach(half), maxMergedReach)) continue
+    const maxWalkReach = reach(half) + Math.max(segLeftWalk[i], segRightWalk[i])
+    if (d > Math.max(maxWalkReach, maxMergedReach)) continue
 
     // Altitude du dessus du bitume, interpolée le long du segment.
     const top = segA[i * 3 + 2] + (segB[i * 3 + 2] - segA[i * 3 + 2]) * t
@@ -743,12 +1011,20 @@ export function roadwayHeightAt(x: number, z: number): number {
       y = top
     } else if (segJunction[i]) {
       continue // carrefour : ni bordure ni accotement, c'est la voie d'en face qui décide
-    } else if (d <= half + ROADWAY.KERB_W) {
-      y = top + ROADWAY.KERB_H // on est sur la bordure
     } else {
-      // Accotement : on redescend en pente vers le terrain naturel.
-      const u = (d - half - ROADWAY.KERB_W) / ROADWAY.SHOULDER_W
-      y = (top + ROADWAY.KERB_H) * (1 - u) + terrainHeight(x, z) * u
+      // Le trottoir est PLAT, à la hauteur de la bordure : bordure + la largeur
+      // mesurée jusqu'à la façade. Ces deux lignes doivent rester le miroir
+      // exact de `section()` dans `Roads.tsx`, sinon on remarche dans le vide.
+      const walk = signedSide >= 0 ? segLeftWalk[i] : segRightWalk[i]
+      const walkOut = half + ROADWAY.KERB_W + walk
+
+      if (d <= walkOut) {
+        y = top + ROADWAY.KERB_H // bordure ou trottoir : même niveau
+      } else {
+        // Accotement : on redescend en pente vers le terrain naturel.
+        const u = Math.min(1, (d - walkOut) / ROADWAY.SHOULDER_W)
+        y = (top + ROADWAY.KERB_H) * (1 - u) + terrainHeight(x, z) * u
+      }
     }
     if (y > best) best = y
   }

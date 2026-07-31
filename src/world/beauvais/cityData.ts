@@ -49,11 +49,24 @@ export interface Green {
   wood?: number
 }
 
-/** Une route : largeur (m), polyligne [x, z] et metadonnees OSM utiles au rendu. */
+/**
+ * Classe d'usage d'une voie — l'information qu'une largeur seule ne porte pas.
+ *
+ * Une rue piétonne et une rue de quartier peuvent faire la même largeur : ce qui
+ * les sépare, c'est l'accès, pas les mètres. Le champ vient directement de
+ * `acces_vehicule_leger` / `nature` de l'IGN (voir `bdtopoRoads.mjs`).
+ */
+export type RoadClass = 'drivable' | 'pedestrian' | 'service' | 'track'
+
+/** Une route : largeur (m), polyligne [x, z] et metadonnees utiles au rendu. */
 export interface Road {
   w: number
   pts: number[][]
-  id?: number
+  /** `cleabs` IGN (chaîne) — ou identifiant OSM (nombre) sur les données de repli. */
+  id?: string | number
+  cls?: RoadClass
+  /** `true` en tissu urbain → trottoir plutôt qu'accotement. */
+  urban?: boolean
   highway?: string
   name?: string
   ref?: string
@@ -80,6 +93,8 @@ export interface Bounds {
 }
 
 interface RawCity {
+  /** Horodatage du build : sert d'empreinte aux fichiers dérivés de celui-ci. */
+  generatedAt?: string
   origin: { lat: number; lon: number }
   bounds: Bounds
   buildings: {
@@ -103,6 +118,8 @@ const data = rawData as unknown as RawCity
 export const ORIGIN = data.origin
 export const BOUNDS: Bounds = data.bounds
 export const ROADS: Road[] = data.roads ?? []
+/** Horodatage du build de la ville — sert à repérer une donnée dérivée périmée. */
+export const CITY_GENERATED_AT: string | null = data.generatedAt ?? null
 export const WATERS: Water[] = data.waters ?? []
 export const GREENS: Green[] = data.greens ?? []
 export const TREES: number[][] = data.trees ?? []

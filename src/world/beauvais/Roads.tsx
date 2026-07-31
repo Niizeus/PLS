@@ -28,6 +28,27 @@ const SURFACE_PREPARE_DELAY_MS = 12
 const BAND_COLORS = [SHOULDER, KERB, KERB, ASPHALT, KERB, KERB, SHOULDER].map(
   (c) => new THREE.Color(c),
 )
+
+/**
+ * Revêtement selon la classe d'usage IGN.
+ *
+ * C'est ici que le travail de `bdtopoRoads.mjs` devient visible : une rue
+ * piétonne et une rue de quartier ont souvent la MÊME largeur, donc rien ne les
+ * distinguait à l'écran. Maintenant, le pavé clair du centre-ville se lit d'un
+ * coup d'œil, et les chemins de terre ne sont plus goudronnés.
+ *
+ * Les 174 rues piétonnes de Beauvais sortent du champ `acces_vehicule_leger` de
+ * l'IGN — aucune n'a été dessinée à la main.
+ */
+const SURFACE_COLORS: Record<string, THREE.Color> = {
+  pedestrian: new THREE.Color('#9a8f7e'), // pavé clair
+  track: new THREE.Color('#7d6f57'), // terre / empierré
+}
+
+/** Couleur du bitume d'un tronçon, pavé ou terre selon sa classe. */
+function surfaceColor(chunk: RoadChunk): THREE.Color {
+  return (chunk.cls && SURFACE_COLORS[chunk.cls]) || BAND_COLORS[3]
+}
 const ROAD_TILE_MATERIAL = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient })
 const SURFACE_MATERIAL = new THREE.MeshToonMaterial({
   color: ASPHALT,
@@ -152,10 +173,17 @@ function section(
   }
 
   const kerbY = top + ROADWAY.KERB_H
-  const outer = half + ROADWAY.KERB_W + ROADWAY.SHOULDER_W
-  const kerbOut = half + ROADWAY.KERB_W
   const leftMerge = chunk.leftMerge[i]
   const rightMerge = chunk.rightMerge[i]
+
+  // Bord extérieur du TROTTOIR : bordure + la largeur mesurée jusqu'à la façade.
+  // C'est la seule partie plate où le joueur marche — avant, elle valait
+  // `KERB_W` (35 cm) et il n'y avait donc pas vraiment de trottoir.
+  const walkOutL = half + ROADWAY.KERB_W + chunk.leftWalk[i]
+  const walkOutR = half + ROADWAY.KERB_W + chunk.rightWalk[i]
+  // Puis l'accotement en pente rattrape le terrain naturel, comme avant.
+  const outerL = walkOutL + ROADWAY.SHOULDER_W
+  const outerR = walkOutR + ROADWAY.SHOULDER_W
 
   const footY = (offset: number) =>
     Math.min(terrainHeight(x + nx * offset, z + nz * offset) - ROADWAY.EMBED, kerbY)
@@ -165,8 +193,8 @@ function section(
     put(1, half + leftMerge * 0.66, top)
     put(2, half + leftMerge * 0.33, top)
   } else {
-    put(0, outer, footY(outer))
-    put(1, kerbOut, kerbY)
+    put(0, outerL, footY(outerL))
+    put(1, walkOutL, kerbY)
     put(2, half, kerbY)
   }
 
@@ -179,16 +207,18 @@ function section(
     put(7, -(half + rightMerge), top)
   } else {
     put(5, -half, kerbY)
-    put(6, -kerbOut, kerbY)
-    put(7, -outer, footY(-outer))
+    put(6, -walkOutR, kerbY)
+    put(7, -outerR, footY(-outerR))
   }
 }
 
 function bandColor(chunk: RoadChunk, i: number, band: number): THREE.Color {
   const leftMerged = chunk.leftMerge[i] > 0 || chunk.leftMerge[i + 1] > 0
   const rightMerged = chunk.rightMerge[i] > 0 || chunk.rightMerge[i + 1] > 0
-  if ((leftMerged && band <= 2) || (rightMerged && band >= 4)) return BAND_COLORS[3]
-  return BAND_COLORS[band]
+  if ((leftMerged && band <= 2) || (rightMerged && band >= 4)) return surfaceColor(chunk)
+  // Bande 3 = la chaussée elle-même ; les autres (bordure, accotement) gardent
+  // leur teinte quelle que soit la classe.
+  return band === 3 ? surfaceColor(chunk) : BAND_COLORS[band]
 }
 
 function addChunk(chunk: RoadChunk, positions: number[], colors: number[]) {
@@ -205,17 +235,50 @@ function addChunk(chunk: RoadChunk, positions: number[], colors: number[]) {
     const az = chunk.pts[i * 3 + 1]
     const bx = chunk.pts[(i + 1) * 3]
     const bz = chunk.pts[(i + 1) * 3 + 1]
-    if (
+    /**
+     * La dalle fusionnée remplace-t-elle le bitume ici ?
+     *
+     * ⚠️ Le test porte sur l'AXE de la voie, qui est forcément à l'intérieur de
+     * la dalle — celle-ci est construite à partir de ces mêmes routes. Il est
+     * donc vrai presque partout, et il servait à sauter TOUTE la coupe : bitume,
+     * bordure ET trottoir. Comme la dalle ne dessine que le bitume, la ville se
+     * retrouvait en plaques de goudron nues, sans le moindre bord — alors que
+     * `groundHeight()`, qui ignore ce masque, avait bien ses trottoirs. D'où le
+     * symptôme « la voiture les sent mais on ne les voit pas ».
+     *
+     * On ne saute donc que ce que la dalle sait réellement dessiner : le bitume.
+     */
+    const paved =
       inExperimentalSurfaceZone(ax, az) ||
       inExperimentalSurfaceZone(bx, bz) ||
       inExperimentalSurfaceZone((ax + bx) * 0.5, (az + bz) * 0.5)
-    ) {
-      continue
-    }
 
-    const junction = chunk.junction[i] === 1 && chunk.junction[i + 1] === 1
+    /**
+     * ⚠️ `||`, pas `&&` — et c'est la PHYSIQUE qui fixe la règle : `roadway.ts`
+     * marque un segment comme carrefour dès qu'UN de ses bouts l'est
+     * (`segJunction[s + i] = flags[i] || flags[i + 1]`).
+     *
+     * Le rendu exigeait les deux. Un segment à cheval sur l'entrée d'un carrefour
+     * dessinait donc bordure et trottoir là où le sol, lui, était déjà rabattu au
+     * ras du bitume — un biseau qui montait dans le vide. Avec 35 cm de bordure
+     * ça ne se voyait pas ; avec un vrai trottoir, ça saute aux yeux.
+     */
+    const junction = chunk.junction[i] === 1 || chunk.junction[i + 1] === 1
+    if (paved && junction) continue // le carrefour n'est QUE du bitume
+
+    const leftPaved = chunk.leftMerge[i] > 0 || chunk.leftMerge[i + 1] > 0
+    const rightPaved = chunk.rightMerge[i] > 0 || chunk.rightMerge[i + 1] > 0
+
     for (let band = 0; band < PROFILE - 1; band++) {
       if (junction && band !== 3) continue
+
+      if (paved) {
+        // Bande 3 = la chaussée. Les bandes 0-2 / 4-6 deviennent elles aussi du
+        // bitume quand une voie parallèle a été fusionnée de ce côté.
+        if (band === 3) continue
+        if (leftPaved && band < 3) continue
+        if (rightPaved && band > 3) continue
+      }
 
       const c = bandColor(chunk, i, band)
       const l = i * PROFILE + band

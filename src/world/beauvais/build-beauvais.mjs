@@ -26,6 +26,7 @@ import { writeFileSync, readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { fetchBdTopo, joinBdTopo } from './bdtopo.mjs'
+import { fetchBdTopoRoads, buildRoadsFromBdTopo, applyRoadOverrides } from './bdtopoRoads.mjs'
 import { computeRidgeAngles } from './roofs.mjs'
 import { ORIGIN, BBOX, project, unproject } from './geo.mjs'
 
@@ -40,6 +41,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OUT_FILE = join(__dirname, 'data', 'beauvais-buildings.json')
+
+/**
+ * Retouches manuelles des routes, indexées par `cleabs` IGN.
+ *
+ * Lu ici, jamais réécrit : c'est ce qui permet de corriger une rue à la main
+ * sans que la prochaine régénération de la ville n'efface le travail.
+ */
+const OVERRIDES_FILE = join(__dirname, 'data', 'road-overrides.json')
+const roadOverrides = JSON.parse(readFileSync(OVERRIDES_FILE, 'utf8'))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RELIEF : on échantillonne l'altitude réelle de Beauvais (API Open-Meteo,
@@ -241,7 +251,13 @@ function estimateHeight(tags, area, id) {
 const round1 = (n) => Math.round(n * 10) / 10 // 0,1 m suffit → fichier plus léger
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROUTES : largeur (mètres) selon le type de voie OSM (highway=...)
+// ROUTES (FILET) : largeur (mètres) devinée selon le type de voie OSM.
+//
+// ⚠️ Ce n'est plus la source des routes du jeu : elles viennent maintenant des
+// largeurs MESURÉES de l'IGN (`bdtopoRoads.mjs`), qui écrasent ce qui est
+// produit ici. On garde ce chemin comme filet, pour que la ville reste jouable
+// si le WFS de l'IGN est injoignable — exactement comme `estimateHeight()` sert
+// de filet aux hauteurs de bâtiments.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ROAD_WIDTH = {
@@ -510,6 +526,38 @@ async function main() {
     console.warn('⚠️  BD TOPO indisponible, on garde les hauteurs estimées :', err.message)
   }
 
+  // ── ROUTES MESURÉES (IGN BD TOPO) ─────────────────────────────────────────
+  // Les routes OSM chargées plus haut ne servent plus que de FILET : elles sont
+  // tracées à la main sur fond d'ortho, donc décalées de 1 à 5 m par rapport aux
+  // bâtiments IGN, et leur largeur est un stéréotype par type de voie. On les
+  // remplace par les tronçons mesurés de l'IGN — même référentiel que les
+  // façades, donc plus de rues décentrées dans leur propre couloir.
+  // Voir `bdtopoRoads.mjs` pour le détail de la traduction.
+  let roadReport = null
+  try {
+    const { features } = await fetchBdTopoRoads(BBOX)
+    const { roads: ignRoads, report } = buildRoadsFromBdTopo(features, project)
+    if (!ignRoads.length) throw new Error('0 tronçon exploitable')
+
+    const { roads: fixed, applied, unknown } = applyRoadOverrides(ignRoads, roadOverrides)
+    roads.length = 0
+    roads.push(...fixed)
+    for (const r of roads) for (const [x, z] of r.pts) grow(x, z)
+
+    roadReport = { ...report, kept: fixed.length, overrides: applied }
+    const pc = (n) => ((n / fixed.length) * 100).toFixed(1) + ' %'
+    console.log(`   routes IGN : ${fixed.length} tronçons retenus, ${report.skipped} écartés (sentiers, escaliers, fictifs)`)
+    console.log(
+      `   largeurs : ${pc(report.measured)} mesurées par l'IGN, ` +
+        `${pc(report.reconstructed)} déduites du nombre de voies, ${pc(report.fallback)} par défaut`,
+    )
+    console.log(`   classes : ${Object.entries(report.byClass).map(([k, v]) => `${k} ${v}`).join(', ')}`)
+    if (applied) console.log(`   ${applied} correction(s) manuelle(s) appliquée(s)`)
+    if (unknown.length) console.warn(`   ⚠️  ${unknown.length} correction(s) sans tronçon correspondant : ${unknown.join(', ')}`)
+  } catch (err) {
+    console.warn('⚠️  Routes IGN indisponibles, on garde les routes OSM :', err.message)
+  }
+
   // Petit récap des hauteurs, utile pour vérifier le réalisme d'un coup d'œil.
   const heights = buildings.map((b) => b.h).sort((a, b) => a - b)
   const q = (p) => heights[Math.floor(p * heights.length)]
@@ -521,8 +569,10 @@ async function main() {
       minX: round1(bounds.minX), maxX: round1(bounds.maxX),
       minZ: round1(bounds.minZ), maxZ: round1(bounds.maxZ),
     },
-    source: 'OpenStreetMap contributors (ODbL) — hauteurs et toits : IGN BD TOPO (Licence Ouverte)',
+    source:
+      'OpenStreetMap contributors (ODbL) — routes, hauteurs et toits : IGN BD TOPO (Licence Ouverte)',
     ign: ignReport,
+    ignRoads: roadReport,
     generatedAt: new Date().toISOString(),
     count: buildings.length,
     roadCount: roads.length,

@@ -3,6 +3,7 @@ import { getRadioStation, getStationPlayableTracks, type RadioStationId, type Ra
 import { getBroadcast, skipCurrent } from './radioBroadcast'
 import { createRadioPlayout, type RadioPlayout } from './radioPlayout'
 import { useRadioStore } from './radioStore'
+import { useSettingsStore } from '../gameplay/settings/settingsStore'
 import { useGameTimeStore } from '../gameplay/time/gameTimeStore'
 
 type StationAvailability = Partial<Record<RadioStationId, RadioTrack[]>>
@@ -41,6 +42,7 @@ export default function RadioAudioSystem() {
   const stationId = useRadioStore((state) => state.currentStationId)
   const activeSource = useRadioStore((state) => state.activeSource)
   const volume = useRadioStore((state) => state.volume)
+  const masterVolume = useSettingsStore((state) => state.masterVolume)
   const radioFilterEnabled = useRadioStore((state) => state.radioFilterEnabled)
 
   const playoutRef = useRef<RadioPlayout | null>(null)
@@ -57,9 +59,12 @@ export default function RadioAudioSystem() {
     }
   }, [])
 
+  // Volume réellement envoyé au poste = volume de la radio × volume général du
+  // joueur. Les deux vivent à des endroits différents exprès : l'un est un état
+  // de la radio (mémorisé avec elle), l'autre une préférence de confort.
   useEffect(() => {
-    playoutRef.current?.setVolume(volume)
-  }, [volume])
+    playoutRef.current?.setVolume(volume * masterVolume)
+  }, [volume, masterVolume])
 
   useEffect(() => {
     playoutRef.current?.setFilterEnabled(radioFilterEnabled)

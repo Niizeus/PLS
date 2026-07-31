@@ -192,6 +192,16 @@ changer le feeling véhicule, profiler en priorité le nombre de colliders actif
 `HUD.vitals`. On ne réinvente jamais un fond ni une bordure dans un composant : si un besoin
 manque, on l'ajoute **dans `hudStyle.ts`**, pour tout le monde.
 
+Ça vaut pour **toutes** les interfaces du jeu : HUD, inventaire, grande carte, tableau de bord,
+invites, écran de chargement. Deux exceptions, toutes deux volontaires :
+- le **téléphone** (`ui/phone/phoneStyle.ts`) garde son propre style et une police neutre —
+  c'est un smartphone dans le monde du jeu, pas un élément dessiné ;
+- le **panneau dev `F2`** (`devtools/panel/devPanelStyles.ts`) reste un outil : il n'a pas à
+  être joli, et le confondre avec le jeu serait une mauvaise idée.
+
+Deux codes couleur sont fixés pour toute l'interface : **jaune = « c'est celui-là »** (objet
+équipé, objet sélectionné, action principale) et **rouge = « impossible / danger »**.
+
 > Une ombre floue n'existe pas dans une case de BD. C'est le détail qui fait basculer
 > l'ensemble du côté « dessiné » — ne pas le « corriger ».
 
@@ -203,9 +213,14 @@ tant que le fichier n'est pas installé.
 
 > **Si une information ne change pas, elle n'a rien à faire à l'écran en permanence.**
 
-- Ce qui **change et compte** (vie, faim, soif, mental, raccourcis, minimap) reste affiché.
-- Ce qui **ne change presque jamais** (caractéristiques RPG, argent, réputation) est
-  **consultable dans le téléphone** (touche `P`) — pas collé à l'écran.
+- Ce qui sert **à jouer dans l'instant** (raccourcis, minimap, heure, tableau de bord) reste
+  affiché.
+- **L'état du personnage** (vie, faim, soif, mental, caractéristiques, argent, réputation) est
+  **dans le téléphone** (touche `P`), pas à l'écran. Le téléphone est le tableau de bord de
+  Chibrux ; l'écran, lui, montre le monde.
+  > ⚠️ Conséquence assumée : plus rien ne prévient quand un vital devient critique. Si ça
+  > manque en jouant, la réponse n'est **pas** de remettre un panneau permanent, mais une
+  > alerte **passagère** au moment où ça devient grave.
 - Ce qui **n'a d'intérêt qu'au moment où ça arrive** (entrer dans un quartier, ramasser un
   objet) est un **passager** : ça s'affiche quelques secondes, puis ça s'efface (`ZoneToast`).
 - Ce qui ne concerne **que les développeurs** (FPS, action en cours, réglages) est
@@ -225,6 +240,7 @@ ou `F2`. Un HUD, ça ne fait que grossir si personne ne défend cette règle.
 | Une "action mauvaise" jouable | `gameplay/actions/` |
 | Un menu ou un écran | `ui/` |
 | Un bloc du HUD | `ui/`, puis je le monte dans une **colonne** de `ui/Hud.tsx`. ⚠️ Le composant ne fixe **jamais** sa propre position : il décrit son contenu, `Hud.tsx` décide où il va. Et il part de `panel` (`ui/hudStyle.ts`) au lieu de réinventer un fond. **Avant d'ajouter quoi que ce soit à l'écran, lire la règle du HUD ci-dessous.** |
+| Un **réglage joueur** (son, image, souris) | `src/gameplay/settings/settingsStore.ts` (sauvegardé), puis un curseur dans l'app **Réglages** du téléphone. ⚠️ **Un réglage n'existe que s'il agit vraiment** : pas de curseur décoratif. Et rien d'équilibrage ici — ça, c'est `devtools/`. |
 | Un paramètre de gameplay à régler en live | `src/devtools/schema/` (le fichier de la famille concernée : `vehicleFields.ts`, `playerFields.ts`, `worldFields.ts`), puis lire la valeur via `getPlayerTuning()` ou `getVehicleTuning(...)`. Le panneau s'ouvre avec `F2` en DEV et exporte/importe un JSON d'overrides. ⚠️ Chaque entrée doit porter un **nom clair en français**, une description, l'effet d'une valeur plus basse/plus haute, et son niveau (`simple` / `advanced`). |
 | Un probleme de performance a diagnostiquer | `F9` en DEV lance/arrete une capture perf. Le rapport JSON est ecrit dans `public/dev/perf-reports/` via `vite/perfReportPlugin.ts`. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |

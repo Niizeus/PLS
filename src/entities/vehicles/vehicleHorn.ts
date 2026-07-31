@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { getSfxVolume } from '../../gameplay/settings/settingsStore'
 
 /**
  * 📯 KLAXON (touche F).
@@ -95,9 +96,13 @@ export function playHorn(voice: HornVoice, position: THREE.Vector3, held: boolea
   }
 
   const spec = VOICES[voice]
+  // Volume des bruitages choisi par le joueur (`gameplay/settings/`).
+  const sfx = getSfxVolume()
+  if (sfx <= 0) return
+
   const gain = ctx.createGain()
   gain.gain.setValueAtTime(0.0001, now)
-  gain.gain.exponentialRampToValueAtTime(spec.gain, now + ATTACK)
+  gain.gain.exponentialRampToValueAtTime(spec.gain * sfx, now + ATTACK)
 
   const panner = ctx.createPanner()
   panner.panningModel = 'HRTF'

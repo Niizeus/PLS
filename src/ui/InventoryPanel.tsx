@@ -7,6 +7,7 @@ import { usePickupStore } from '../gameplay/inventory/pickupStore'
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { isBlocked } from '../world/beauvais/collision'
 import { SPAWN } from '../world/beauvais/cityData'
+import { HUD, hardShadow, hardShadowSmall, outline, outlineThin, sectionLabel } from './hudStyle'
 
 const CATEGORY_LABEL: Record<ItemCategory, string> = {
   arme: 'Armes',
@@ -400,6 +401,11 @@ function useCompactLayout() {
   return compact
 }
 
+/**
+ * 🎨 L'inventaire suit le même langage que le HUD (`ui/hudStyle.ts`) : papier
+ * crème, contour d'encre épais, ombre dure, aplats francs. Il ne réinvente ni
+ * fond ni bordure — quand le style du jeu bougera, il suivra tout seul.
+ */
 const overlayStyle: CSSProperties = {
   position: 'fixed',
   inset: 0,
@@ -407,8 +413,9 @@ const overlayStyle: CSSProperties = {
   pointerEvents: 'auto',
   display: 'grid',
   placeItems: 'center',
-  background: 'rgba(7, 10, 18, 0.56)',
-  color: '#ecf2ff',
+  // Le voile est ENCRE, pas gris-bleu : on assombrit la page, on ne la teinte pas.
+  background: 'rgba(22, 26, 36, 0.62)',
+  color: HUD.text,
 }
 
 const panelStyle: CSSProperties = {
@@ -416,12 +423,12 @@ const panelStyle: CSSProperties = {
   height: 'min(680px, calc(100vh - 32px))',
   display: 'grid',
   gridTemplateRows: 'auto 1fr auto',
-  borderRadius: 8,
-  border: '1px solid rgba(148, 163, 184, 0.34)',
-  background: 'rgba(13, 18, 32, 0.96)',
-  boxShadow: '0 18px 60px rgba(0,0,0,0.42)',
+  borderRadius: HUD.radius + 4,
+  border: outline,
+  background: HUD.paper,
+  boxShadow: `8px 8px 0 ${HUD.ink}`,
   overflow: 'hidden',
-  font: '14px system-ui, sans-serif',
+  font: `700 14px ${HUD.font}`,
 }
 
 const compactPanelStyle: CSSProperties = {
@@ -435,61 +442,63 @@ const headerStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '18px 20px',
-  borderBottom: '1px solid rgba(148, 163, 184, 0.22)',
-  background: '#111827',
+  padding: '16px 20px',
+  borderBottom: outline,
+  background: '#ffd83d',
+  color: HUD.ink,
 }
 
 const weightBoxStyle: CSSProperties = {
   width: 220,
   display: 'grid',
   gap: 4,
-  color: '#dbeafe',
-  font: '800 12px system-ui',
+  color: HUD.ink,
+  font: `800 12px ${HUD.font}`,
 }
 
 const weightLabelStyle: CSSProperties = {
-  color: '#9ca3af',
-  textTransform: 'uppercase',
+  ...sectionLabel,
+  color: HUD.ink,
 }
 
 const weightTrackStyle: CSSProperties = {
-  height: 7,
+  height: 11,
   borderRadius: 999,
   overflow: 'hidden',
-  background: 'rgba(148, 163, 184, 0.22)',
+  background: HUD.paper,
+  border: outlineThin,
 }
 
 const weightFillStyle: CSSProperties = {
   display: 'block',
   height: '100%',
   borderRadius: 999,
-  background: '#38bdf8',
+  background: HUD.ink,
 }
 
 const eyebrowStyle: CSSProperties = {
-  color: '#9ca3af',
-  fontSize: 12,
-  fontWeight: 700,
-  textTransform: 'uppercase',
+  ...sectionLabel,
+  color: HUD.ink,
+  opacity: 0.72,
 }
 
 const titleStyle: CSSProperties = {
   margin: '2px 0 0',
-  fontSize: 24,
-  lineHeight: 1.1,
-  letterSpacing: 0,
+  font: `900 26px ${HUD.font}`,
+  lineHeight: 1.05,
+  letterSpacing: 0.5,
 }
 
 const closeButtonStyle: CSSProperties = {
-  width: 36,
-  height: 36,
-  borderRadius: 6,
-  border: '1px solid rgba(148, 163, 184, 0.36)',
-  background: '#1f2937',
-  color: '#ecf2ff',
+  width: 38,
+  height: 38,
+  borderRadius: 10,
+  border: outline,
+  background: HUD.paper,
+  color: HUD.ink,
   cursor: 'pointer',
-  font: '700 14px system-ui',
+  font: `900 15px ${HUD.font}`,
+  boxShadow: hardShadowSmall,
 }
 
 const contentStyle: CSSProperties = {
@@ -510,7 +519,8 @@ const sidebarStyle: CSSProperties = {
   display: 'grid',
   alignContent: 'start',
   gap: 6,
-  borderRight: '1px solid rgba(148, 163, 184, 0.18)',
+  borderRight: outline,
+  background: HUD.paperShade,
   overflow: 'auto',
 }
 
@@ -519,7 +529,7 @@ const compactSidebarStyle: CSSProperties = {
   gridAutoFlow: 'column',
   gridAutoColumns: 'max-content',
   borderRight: 'none',
-  borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+  borderBottom: outline,
   overflowX: 'auto',
   overflowY: 'hidden',
 }
@@ -531,30 +541,31 @@ const categoryStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 8,
-  borderRadius: 6,
-  border: '1px solid transparent',
+  borderRadius: 9,
+  border: '2px solid transparent',
   background: 'transparent',
-  color: '#cbd5e1',
+  color: HUD.textDim,
   cursor: 'pointer',
-  font: '650 13px system-ui',
+  font: `800 13px ${HUD.font}`,
   textAlign: 'left',
 }
 
+/** La catégorie ouverte est un onglet PLEIN, pas une nuance de gris. */
 const activeCategoryStyle: CSSProperties = {
   ...categoryStyle,
-  background: '#263247',
-  border: '1px solid rgba(125, 211, 252, 0.36)',
-  color: '#f8fafc',
+  background: HUD.ink,
+  border: outlineThin,
+  color: HUD.paper,
 }
 
 const countStyle: CSSProperties = {
   minWidth: 24,
   textAlign: 'center',
-  padding: '2px 7px',
+  padding: '1px 7px',
   borderRadius: 999,
-  background: 'rgba(148, 163, 184, 0.18)',
-  color: '#cbd5e1',
-  font: '700 12px system-ui',
+  background: 'rgba(22, 26, 36, 0.14)',
+  color: 'inherit',
+  font: `800 12px ${HUD.mono}`,
 }
 
 const listStyle: CSSProperties = {
@@ -575,19 +586,18 @@ const sortBarStyle: CSSProperties = {
 const sortButtonStyle: CSSProperties = {
   minWidth: 0,
   height: 30,
-  borderRadius: 6,
-  border: '1px solid rgba(148, 163, 184, 0.18)',
-  background: '#111827',
-  color: '#aeb8c8',
+  borderRadius: 9,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.textDim,
   cursor: 'pointer',
-  font: '800 12px system-ui',
+  font: `800 12px ${HUD.font}`,
 }
 
 const activeSortButtonStyle: CSSProperties = {
   ...sortButtonStyle,
-  border: '1px solid rgba(56, 189, 248, 0.48)',
-  background: '#20324c',
-  color: '#f8fafc',
+  background: HUD.ink,
+  color: HUD.paper,
 }
 
 const itemStyle: CSSProperties = {
@@ -595,30 +605,35 @@ const itemStyle: CSSProperties = {
   padding: '10px 12px',
   display: 'grid',
   gap: 4,
-  borderRadius: 7,
-  border: '1px solid rgba(148, 163, 184, 0.2)',
-  background: '#172033',
-  color: '#ecf2ff',
+  borderRadius: 11,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.text,
   cursor: 'pointer',
   textAlign: 'left',
 }
 
+/**
+ * L'objet sélectionné est JAUNE et décalé, comme l'objet équipé de la barre de
+ * raccourcis : même code visuel pour « c'est celui-là », partout dans le jeu.
+ */
 const selectedItemStyle: CSSProperties = {
   ...itemStyle,
-  border: '1px solid rgba(56, 189, 248, 0.72)',
-  background: '#20324c',
+  border: outline,
+  background: '#ffd83d',
+  boxShadow: hardShadowSmall,
 }
 
 const itemNameStyle: CSSProperties = {
-  font: '750 15px system-ui',
+  font: `800 15px ${HUD.font}`,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 }
 
 const metaStyle: CSSProperties = {
-  color: '#aeb8c8',
-  font: '12px system-ui',
+  color: HUD.textDim,
+  font: `700 12px ${HUD.font}`,
 }
 
 const detailsStyle: CSSProperties = {
@@ -626,15 +641,15 @@ const detailsStyle: CSSProperties = {
   display: 'grid',
   gridTemplateRows: 'auto auto auto auto 1fr',
   gap: 14,
-  borderLeft: '1px solid rgba(148, 163, 184, 0.18)',
-  background: '#0f1728',
+  borderLeft: outline,
+  background: HUD.paperShade,
   overflow: 'auto',
 }
 
 const compactDetailsStyle: CSSProperties = {
   ...detailsStyle,
   borderLeft: 'none',
-  borderTop: '1px solid rgba(148, 163, 184, 0.18)',
+  borderTop: outline,
 }
 
 const detailTopStyle: CSSProperties = {
@@ -646,18 +661,19 @@ const detailTopStyle: CSSProperties = {
 
 const detailTitleStyle: CSSProperties = {
   margin: '2px 0 0',
-  fontSize: 22,
-  lineHeight: 1.16,
-  letterSpacing: 0,
+  font: `900 22px ${HUD.font}`,
+  lineHeight: 1.14,
+  letterSpacing: 0.3,
 }
 
 const priceStyle: CSSProperties = {
   flex: '0 0 auto',
-  padding: '5px 9px',
-  borderRadius: 6,
-  background: '#193528',
-  color: '#bbf7d0',
-  font: '800 13px system-ui',
+  padding: '4px 9px',
+  borderRadius: 999,
+  border: outlineThin,
+  background: '#5aa832',
+  color: HUD.paper,
+  font: `800 13px ${HUD.font}`,
 }
 
 const priceStackStyle: CSSProperties = {
@@ -667,21 +683,22 @@ const priceStackStyle: CSSProperties = {
 }
 
 const weightPillStyle: CSSProperties = {
-  padding: '4px 8px',
-  borderRadius: 6,
-  background: '#273244',
-  color: '#dbeafe',
-  font: '800 12px system-ui',
+  padding: '3px 8px',
+  borderRadius: 999,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.text,
+  font: `800 12px ${HUD.font}`,
 }
 
 const stackPillStyle: CSSProperties = {
   ...weightPillStyle,
-  background: '#312e52',
-  color: '#ddd6fe',
+  background: '#c9b6ef',
 }
 
 const descriptionStyle: CSSProperties = {
-  color: '#d5deec',
+  color: HUD.text,
+  font: `700 13px ${HUD.font}`,
   lineHeight: 1.45,
 }
 
@@ -692,17 +709,17 @@ const effectsStyle: CSSProperties = {
 }
 
 const effectPillStyle: CSSProperties = {
-  padding: '5px 8px',
-  borderRadius: 6,
-  background: '#233044',
-  color: '#dbeafe',
-  font: '700 12px system-ui',
+  padding: '4px 8px',
+  borderRadius: 999,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.text,
+  font: `800 12px ${HUD.font}`,
 }
 
 const durationPillStyle: CSSProperties = {
   ...effectPillStyle,
-  background: '#173241',
-  color: '#bae6fd',
+  background: '#9ed3ef',
 }
 
 const actionsStyle: CSSProperties = {
@@ -725,44 +742,43 @@ const quickAssignButtonsStyle: CSSProperties = {
 const quickAssignButtonStyle: CSSProperties = {
   width: 36,
   height: 34,
-  borderRadius: 6,
-  border: '1px solid rgba(148, 163, 184, 0.28)',
-  background: '#283446',
-  color: '#e5e7eb',
+  borderRadius: 9,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.text,
   cursor: 'pointer',
-  font: '800 13px ui-monospace, monospace',
+  font: `800 13px ${HUD.mono}`,
 }
 
 const activeQuickAssignButtonStyle: CSSProperties = {
   ...quickAssignButtonStyle,
-  border: '1px solid rgba(56, 189, 248, 0.72)',
-  background: '#0e7490',
-  color: '#ecfeff',
+  background: '#ffd83d',
+  border: outline,
 }
 
+/** L'action principale : jaune, contour épais, ombre — le bouton qu'on voit. */
 const primaryButtonStyle: CSSProperties = {
   minHeight: 36,
-  padding: '0 13px',
-  borderRadius: 6,
-  border: '1px solid rgba(125, 211, 252, 0.42)',
-  background: '#0e7490',
-  color: '#ecfeff',
+  padding: '0 14px',
+  borderRadius: 10,
+  border: outline,
+  background: '#ffd83d',
+  color: HUD.ink,
   cursor: 'pointer',
-  font: '800 13px system-ui',
+  font: `800 13px ${HUD.font}`,
+  boxShadow: hardShadowSmall,
 }
 
 const secondaryButtonStyle: CSSProperties = {
   ...primaryButtonStyle,
-  border: '1px solid rgba(148, 163, 184, 0.28)',
-  background: '#283446',
-  color: '#e5e7eb',
+  background: HUD.paper,
+  boxShadow: 'none',
 }
 
 const dangerButtonStyle: CSSProperties = {
   ...primaryButtonStyle,
-  border: '1px solid rgba(248, 113, 113, 0.42)',
-  background: '#7f1d1d',
-  color: '#fee2e2',
+  background: '#e63946',
+  color: HUD.paper,
 }
 
 const equipmentStyle: CSSProperties = {
@@ -770,32 +786,31 @@ const equipmentStyle: CSSProperties = {
   display: 'grid',
   gap: 7,
   paddingTop: 12,
-  borderTop: '1px solid rgba(148, 163, 184, 0.18)',
+  borderTop: `2px dashed ${HUD.ink}`,
 }
 
 const sectionTitleStyle: CSSProperties = {
-  font: '800 13px system-ui',
-  color: '#cbd5e1',
+  ...sectionLabel,
 }
 
 const slotStyle: CSSProperties = {
   minHeight: 36,
-  padding: '7px 9px',
+  padding: '6px 9px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 10,
-  borderRadius: 6,
-  border: '1px solid rgba(148, 163, 184, 0.16)',
-  background: '#172033',
-  color: '#ecf2ff',
+  borderRadius: 9,
+  border: outlineThin,
+  background: HUD.paper,
+  color: HUD.text,
   cursor: 'pointer',
   textAlign: 'left',
 }
 
 const slotLabelStyle: CSSProperties = {
-  color: '#aeb8c8',
-  font: '650 12px system-ui',
+  color: HUD.textDim,
+  font: `800 12px ${HUD.font}`,
 }
 
 const slotItemStyle: CSSProperties = {
@@ -803,25 +818,26 @@ const slotItemStyle: CSSProperties = {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
-  font: '750 12px system-ui',
+  font: `800 12px ${HUD.font}`,
 }
 
 const emptyStyle: CSSProperties = {
   minHeight: 140,
   display: 'grid',
   placeItems: 'center',
-  color: '#9ca3af',
-  border: '1px dashed rgba(148, 163, 184, 0.26)',
-  borderRadius: 7,
+  color: HUD.textDim,
+  border: `2px dashed ${HUD.ink}`,
+  borderRadius: 11,
+  font: `800 13px ${HUD.font}`,
 }
 
 const messageStyle: CSSProperties = {
   minHeight: 36,
   padding: '9px 16px',
-  color: '#dbeafe',
-  borderTop: '1px solid rgba(148, 163, 184, 0.18)',
-  background: '#111827',
-  font: '650 13px system-ui',
+  color: HUD.ink,
+  borderTop: outline,
+  background: '#ffd83d',
+  font: `800 13px ${HUD.font}`,
 }
 
 const toastStyle: CSSProperties = {
@@ -830,11 +846,12 @@ const toastStyle: CSSProperties = {
   bottom: 14,
   zIndex: 70,
   maxWidth: 360,
-  padding: '10px 12px',
-  borderRadius: 7,
+  padding: '9px 12px',
+  borderRadius: 11,
   pointerEvents: 'none',
-  background: 'rgba(13, 18, 32, 0.9)',
-  border: '1px solid rgba(148, 163, 184, 0.28)',
-  color: '#ecf2ff',
-  font: '700 13px system-ui',
+  background: HUD.paper,
+  border: outline,
+  boxShadow: hardShadow,
+  color: HUD.ink,
+  font: `800 13px ${HUD.font}`,
 }

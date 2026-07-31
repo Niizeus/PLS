@@ -5,6 +5,7 @@ import RadioControls from './audio/RadioControls'
 import GameTimeTicker from './gameplay/time/GameTimeTicker'
 import TimeDevControls from './gameplay/time/TimeDevControls'
 import NeedsTicker from './gameplay/stats/NeedsTicker'
+import ApplyDisplaySettings from './gameplay/settings/ApplyDisplaySettings'
 import Hud from './ui/Hud'
 import DevToolsControls from './devtools/DevToolsControls'
 import DevToolsPanel from './devtools/DevToolsPanel'
@@ -47,6 +48,8 @@ export default function App() {
       {ready ? (
         <>
           <GameCanvas />
+          {/* Applique les réglages d'image du joueur au canvas qui vient d'être monté. */}
+          <ApplyDisplaySettings />
           <Hud />
         </>
       ) : (

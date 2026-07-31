@@ -267,8 +267,10 @@ systèmes existants, il ne duplique jamais les données ».
     mémoire), agrandissement et suppression. Le HUD n'apparaît pas sur la photo.
   - `Contacts` — répertoire et conversations. Les messages sont **figés**
     (`src/data/phoneContacts.ts`) : répondre et appeler attendent les PNJ et les dialogues.
-  - `Réglages` — uniquement ce qui existe vraiment : volume de la radio et filtre « vieux poste »
-    (`audio/radioStore.ts`). Le reste est listé comme « pas encore branché ».
+  - `Réglages` — le **menu d'options du jeu** : volume général, bruitages, volume radio et grain
+    radio, luminosité, sensibilité souris et inversion de l'axe vertical. Tout est sauvegardé
+    (`gameplay/settings/settingsStore.ts`). Seule la **configuration des touches** manque encore
+    (`keyMap.ts` est une constante figée : la rendre remappable est un chantier à part).
 - **Applications prévues mais pas encore développées** (Banque, Boutiques, Réseaux) : icônes
   grisées qui ouvrent un écran **« pas encore branché »** expliquant ce qui manque. Le téléphone ne
   fait jamais semblant et n'invente aucun chiffre.
@@ -886,6 +888,7 @@ skydome et les particules rares sans retirer soleil, lune, étoiles, nuages ou b
 | Stats RPG | `src/gameplay/stats/` |
 | Inventaire sac à dos / items | `src/gameplay/inventory/` + `src/data/items.*` |
 | Smartphone | `src/gameplay/phone/` + `src/ui/phone/` |
+| Réglages du joueur (son, image, souris) | `src/gameplay/settings/` + l'app Réglages du téléphone |
 | Actions illégales | `src/gameplay/actions/` |
 | Police / niveau de recherche | `src/gameplay/police/` |
 | Quartiers, gangs et tensions | `src/data/zones.json` + `src/gameplay/factions/` |

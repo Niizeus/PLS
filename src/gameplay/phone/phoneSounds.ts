@@ -14,6 +14,8 @@
  * ouvrir un avant une interaction du joueur) et reste ensuite en place.
  */
 
+import { getSfxVolume } from '../settings/settingsStore'
+
 export type PhoneSound =
   /** Le téléphone sort de la poche. */
   | 'open'
@@ -84,6 +86,11 @@ function ensureContext(): AudioContext | null {
 }
 
 export function playPhoneSound(sound: PhoneSound): void {
+  // Volume des bruitages choisi par le joueur (`gameplay/settings/`). Lu au
+  // moment de jouer le son : le curseur peut bouger entre deux clics.
+  const volume = getSfxVolume()
+  if (volume <= 0) return
+
   const ctx = ensureContext()
   if (!ctx) return
   // Le navigateur suspend le contexte tant qu'il n'y a pas eu d'interaction.
@@ -102,7 +109,7 @@ export function playPhoneSound(sound: PhoneSound): void {
     // Attaque très courte puis extinction : sans enveloppe, chaque note ferait
     // un « clac » parasite au début et à la fin.
     gain.gain.setValueAtTime(0, start)
-    gain.gain.linearRampToValueAtTime(note.gain, start + 0.008)
+    gain.gain.linearRampToValueAtTime(note.gain * volume, start + 0.008)
     gain.gain.exponentialRampToValueAtTime(0.0001, end)
 
     oscillator.connect(gain)

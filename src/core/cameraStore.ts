@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getCameraTuning } from '../devtools/devTuningStore'
+import { useSettingsStore } from '../gameplay/settings/settingsStore'
 
 /**
  * Orientation de la caméra 3e personne, pilotée à la souris.
@@ -75,13 +76,17 @@ export const useCameraStore = create<CameraState>((set) => ({
     pendingX = 0
     pendingY = 0
     const tuning = getCameraTuning()
+    // Deux réglages se superposent, et il ne faut pas les confondre :
+    //  • `tuning` = la valeur d'ORIGINE du jeu (réglable en DEV avec F2) ;
+    //  • `settings` = la préférence du JOUEUR, un multiplicateur par-dessus.
+    // L'inversion, elle, est un choix du joueur qui inverse celui d'origine.
+    const settings = useSettingsStore.getState()
+    const sensitivity = tuning.SENSITIVITY * settings.mouseSensitivity
+    const inverted = (tuning.INVERT_Y >= 0.5) !== settings.invertY
+
     set((s) => ({
-      yaw: s.yaw - dx * tuning.SENSITIVITY, // souris à droite → la vue tourne à droite
-      pitch: clamp(
-        s.pitch + (tuning.INVERT_Y >= 0.5 ? 1 : -1) * dy * tuning.SENSITIVITY,
-        tuning.PITCH_MIN,
-        tuning.PITCH_MAX,
-      ),
+      yaw: s.yaw - dx * sensitivity, // souris à droite → la vue tourne à droite
+      pitch: clamp(s.pitch + (inverted ? 1 : -1) * dy * sensitivity, tuning.PITCH_MIN, tuning.PITCH_MAX),
     }))
   },
 }))

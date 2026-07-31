@@ -6,7 +6,6 @@ import MapMarkerPrompt from './MapMarkerPrompt'
 import Minimap from './Minimap'
 import PickupPrompt from './PickupPrompt'
 import QuickBar from './QuickBar'
-import StatsPanel from './StatsPanel'
 import VehicleDashboard from './VehicleDashboard'
 import WorldMap from './WorldMap'
 import ZoneToast from './ZoneToast'
@@ -19,11 +18,12 @@ import { column } from './hudStyle'
  * gauche/droit aille bien au jeu (attaque/défense).
  *
  * ── Mise en page ────────────────────────────────────────────────────────────
- * L'écran est organisé en TROIS zones, et c'est ce fichier qui décide de tout :
+ * L'écran est volontairement PRESQUE VIDE. Il ne reste que ce qui sert à jouer
+ * dans l'instant :
  *
  *   ┌──────────────────────────────────────────────────┐
  *   │                  [quartier]        minimap+heure │
- *   │  vitaux                                          │
+ *   │                                                  │
  *   │                                                  │
  *   │  touches (F1)      raccourcis      tableau bord  │
  *   └──────────────────────────────────────────────────┘
@@ -37,22 +37,24 @@ import { column } from './hudStyle'
  * • Le titre « PLS — Prototype jouable » : il ira sur un écran-titre.
  * • L'action en cours (« Marche », « Course »...) : c'était du debug pur, ça se
  *   lit dans le panneau dev `F2`.
- * • Les six caractéristiques RPG affichées en permanence : elles sont dans
- *   l'app Santé du téléphone, et ne réapparaissent ici qu'en cas de bonus actif.
+ * • **Les vitaux et les caractéristiques** (vie, faim, soif, mental, ATQ...) :
+ *   ils vivent dans l'app **Santé du téléphone** (touche `P`). Le téléphone est
+ *   le tableau de bord du personnage ; l'écran, lui, montre le monde.
  * • Le nom du quartier collé en permanence : il s'annonce maintenant à l'entrée
  *   dans le quartier (`ZoneToast`), puis s'efface.
  * • Le compteur FPS : visible uniquement en développement.
  *
- * Principe directeur : **si une information ne change pas, elle n'a rien à
- * faire à l'écran en permanence** — elle est consultable dans le téléphone.
+ * Principe directeur : **si une information ne change pas, ou si elle est
+ * consultable dans le téléphone, elle n'a rien à faire à l'écran en permanence.**
+ *
+ * ⚠️ Conséquence à garder en tête : plus rien ne prévient quand la vie ou la
+ * faim devient critique. Si ça manque en jouant, la réponse n'est PAS de
+ * remettre le panneau : c'est une alerte passagère (comme `ZoneToast`) qui
+ * n'apparaît qu'au moment où ça devient grave.
  */
 export default function Hud() {
   return (
     <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}>
-      <div style={column('left')}>
-        <StatsPanel />
-      </div>
-
       <div style={column('right')}>
         {/* La minimap et l'heure forment un seul bloc (l'heure se colle dessous). */}
         <div style={{ display: 'grid', justifyItems: 'end' }}>

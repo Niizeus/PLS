@@ -252,10 +252,14 @@ touches, sensibilité, options d'affichage.
   réel de cette idée, et il concerne aussi le menu options du jeu en général. La configuration des
   touches dépend en plus de `keyMap.ts`, aujourd'hui une constante figée : le rendre remappable est
   un chantier à part entière (voir aussi le rappel des touches `ControlsHint.tsx`).
-- **⚠️ Partiellement fait** : l'app `Réglages` existe mais n'expose QUE les réglages réels
-  d'aujourd'hui (volume radio + filtre « vieux poste », dans `audio/radioStore.ts`). Les autres y
-  sont listés en « pas encore branché ». **Ne pas** y bricoler des réglages au cas par cas : c'est
-  le système de paramètres qu'il faut construire, l'app n'en sera que la façade.
+- **✅ Fait** : le système de paramètres joueur existe — `src/gameplay/settings/settingsStore.ts`
+  (sauvegardé) : volume général, bruitages, luminosité, sensibilité souris, inversion de l'axe.
+  Le volume et le grain de la radio restent dans `audio/radioStore.ts` (le volume général
+  s'applique par-dessus). L'app Réglages du téléphone n'en est que la **façade** : un futur menu
+  pause lira le même store.
+- **Reste à faire** : la **configuration des touches**. `keyMap.ts` est une constante figée ;
+  la rendre remappable touche `useKeyboard`, `useMouse`, `ControlsHint` et la sauvegarde —
+  c'est un chantier à part entière, pas un curseur de plus.
 - **Étiquettes** : Priorité importante (comme préalable) · Horizon moyen terme · Nature architecture + interface · État spec à rédiger
 
 ### 2.3 Structure du prototype — ✅ fait

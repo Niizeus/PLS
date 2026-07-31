@@ -6,6 +6,7 @@ import { loadWaypoints, saveWaypoints, type Waypoint } from '../gameplay/map/way
 import { usePlayerStore } from '../gameplay/stats/playerStore'
 import { BOUNDS, SPAWN } from '../world/beauvais/cityData'
 import { drawBuildings, drawMapMarkers, drawPlayer, drawRoads, drawWater, drawZones, type MapView } from './mapDraw'
+import { HUD, hardShadow, outline, outlineThin } from './hudStyle'
 
 /**
  * Grande carte de la ville (touche M) : plein écran, avec ZOOM (molette),
@@ -221,7 +222,7 @@ export default function WorldMap() {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,14,26,0.9)', zIndex: 50, pointerEvents: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: HUD.ink, zIndex: 50, pointerEvents: 'auto' }}>
       <canvas
         ref={canvasRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'grab' }}
@@ -231,8 +232,9 @@ export default function WorldMap() {
       <div
         style={{
           position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-          padding: '6px 14px', borderRadius: 10, background: 'rgba(15,20,34,0.8)',
-          color: '#e6ecf5', font: '600 13px system-ui', whiteSpace: 'nowrap',
+          padding: '7px 16px', borderRadius: 999, background: HUD.paper,
+          border: outline, boxShadow: hardShadow,
+          color: HUD.ink, font: `800 13px ${HUD.font}`, whiteSpace: 'nowrap',
         }}
       >
         Beauvais — molette : zoom · glisser : déplacer · double-clic : point de passage · M/Échap : fermer
@@ -245,9 +247,9 @@ export default function WorldMap() {
             position: 'absolute',
             left: Math.min(form.sx, window.innerWidth - 240),
             top: Math.min(form.sy, window.innerHeight - 170),
-            width: 220, padding: 12, borderRadius: 10,
-            background: '#141a2a', border: '1px solid #2b3550', color: '#e6ecf5',
-            font: '13px system-ui', boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            width: 220, padding: 12, borderRadius: HUD.radius,
+            background: HUD.paper, border: outline, color: HUD.ink,
+            font: `700 13px ${HUD.font}`, boxShadow: hardShadow,
           }}
         >
           <div style={{ marginBottom: 8, fontWeight: 700 }}>
@@ -260,8 +262,9 @@ export default function WorldMap() {
             onKeyDown={(e) => e.key === 'Enter' && saveForm()}
             placeholder="Petit texte…"
             style={{
-              width: '100%', padding: '6px 8px', marginBottom: 8, borderRadius: 6,
-              border: '1px solid #45557f', background: '#0d1220', color: '#e6ecf5',
+              width: '100%', padding: '6px 8px', marginBottom: 8, borderRadius: 8,
+              border: outlineThin, background: '#fff', color: HUD.ink,
+              font: `700 13px ${HUD.font}`,
             }}
           />
           <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -270,9 +273,9 @@ export default function WorldMap() {
                 key={ic}
                 onClick={() => setForm({ ...form, icon: ic })}
                 style={{
-                  fontSize: 20, width: 34, height: 34, borderRadius: 6, cursor: 'pointer',
-                  background: form.icon === ic ? '#2b3550' : '#0d1220',
-                  border: form.icon === ic ? '2px solid #6d8cff' : '1px solid #45557f',
+                  fontSize: 20, width: 34, height: 34, borderRadius: 9, cursor: 'pointer',
+                  background: form.icon === ic ? '#ffd83d' : HUD.paper,
+                  border: form.icon === ic ? outline : outlineThin,
                 }}
               >
                 {ic}
@@ -280,9 +283,9 @@ export default function WorldMap() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={saveForm} style={btn('#3a6ea5')}>Enregistrer</button>
-            {form.editId != null && <button onClick={deleteForm} style={btn('#8a3b3b')}>Supprimer</button>}
-            <button onClick={() => setForm(null)} style={btn('#2b3550')}>Annuler</button>
+            <button onClick={saveForm} style={btn('#ffd83d', HUD.ink)}>Enregistrer</button>
+            {form.editId != null && <button onClick={deleteForm} style={btn('#e63946', HUD.paper)}>Supprimer</button>}
+            <button onClick={() => setForm(null)} style={btn(HUD.paper, HUD.ink)}>Annuler</button>
           </div>
         </div>
       )}
@@ -290,7 +293,7 @@ export default function WorldMap() {
   )
 }
 
-const btn = (bg: string): CSSProperties => ({
-  flex: 1, padding: '6px 4px', borderRadius: 6, cursor: 'pointer',
-  background: bg, border: 'none', color: '#fff', font: '600 12px system-ui',
+const btn = (bg: string, color: string): CSSProperties => ({
+  flex: 1, padding: '6px 4px', borderRadius: 9, cursor: 'pointer',
+  background: bg, border: outlineThin, color, font: `800 12px ${HUD.font}`,
 })

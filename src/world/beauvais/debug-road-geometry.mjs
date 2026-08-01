@@ -408,8 +408,18 @@ function drivableSurfaceSegment(seg) {
   return true
 }
 
-function mergeSegmentSurface(local, label) {
-  const polygons = local.map((seg) => segmentCapsule(seg, 0.15))
+/**
+ * Débord du bitume au-delà de la demi-chaussée, en mètres.
+ *
+ * ⚠️ Cette valeur est le JOINT entre la dalle de bitume et le trottoir : le
+ * trottoir est fabriqué en RETIRANT exactement ce polygone-là. Les deux partagent
+ * donc la même arête au micromètre près — ni jour, ni recouvrement, ni z-fighting.
+ * Si tu la changes, les deux bougent ensemble. Ne la duplique pas.
+ */
+const ROAD_PAD = 0.15
+
+function mergeSegmentSurface(local, label, extra = ROAD_PAD) {
+  const polygons = local.map((seg) => segmentCapsule(seg, extra))
   const mergedChunks = []
   for (let i = 0; i < polygons.length; i += 36) {
     const chunk = polygons.slice(i, i + 36)
@@ -429,7 +439,8 @@ function mergedSurface(center) {
   return { local, polygons: mergeSegmentSurface(local, 'preview') }
 }
 
-function buildSurfaceTiles() {
+/** Range les segments de chaussée par tuile, d'après leur milieu. */
+function bucketSegmentsByTile() {
   const buckets = new Map()
   for (const seg of segments) {
     if (!drivableSurfaceSegment(seg)) continue
@@ -438,24 +449,528 @@ function buildSurfaceTiles() {
     if (!list) buckets.set(key, (list = []))
     list.push(seg)
   }
+  return buckets
+}
 
+/**
+ * Arrondit et nettoie un multipolygone avant de l'écrire dans le JSON.
+ *
+ * `digits` est un compromis de POIDS : ce fichier part dans le bundle du jeu. Le
+ * centimètre (2 décimales) est déjà en dessous de ce qu'on peut voir sur un
+ * trottoir, et il économise ~15 % du fichier par rapport au millimètre.
+ */
+function tidyPolygons(multi, minArea = 4, digits = 3, eps = SIMPLIFY_EPS) {
+  return multi
+    .map((poly) =>
+      poly
+        .map((ring) =>
+          simplifyRing(ring, eps).map(([x, z]) => [
+            Number(x.toFixed(digits)),
+            Number(z.toFixed(digits)),
+          ]),
+        )
+        .filter((ring) => ring.length >= 3 && polygonArea(ring) >= minArea),
+    )
+    .filter((poly) => poly.length > 0)
+}
+
+function buildSurfaceTiles(buckets) {
   const tiles = {}
+  /**
+   * Les contours de bitume TELS QU'ILS SERONT AFFICHÉS — c'est d'eux qu'on
+   * soustrait le trottoir.
+   *
+   * ⚠️ Surtout pas l'union avant nettoyage. Le trottoir est le complément du
+   * bitume : si on le découpe sur un contour puis qu'on en dessine un autre,
+   * légèrement simplifié, les deux ne coïncident plus et le trottoir déborde dans
+   * la rue. Mesuré sur la version qui soustrayait l'union brute : 0,6 % des points
+   * de trottoir tombaient sur le bitume.
+   */
+  const drawn = new Map()
   const entries = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b))
   let surfaceSegmentCount = 0
   for (const [key, local] of entries) {
-    const polygons = mergeSegmentSurface(local, 'tile-' + key)
-      .map((poly) =>
-        poly
-          .map((ring) => simplifyRing(ring, SIMPLIFY_EPS).map(([x, z]) => [Number(x.toFixed(3)), Number(z.toFixed(3))]))
-          .filter((ring) => ring.length >= 3 && polygonArea(ring) >= 4),
-      )
-      .filter((poly) => poly.length > 0)
+    const polygons = tidyPolygons(mergeSegmentSurface(local, 'tile-' + key))
     if (polygons.length === 0) continue
+    drawn.set(key, polygons)
     tiles[key] = { polygons }
     surfaceSegmentCount += local.length
   }
 
-  return { tiles, surfaceSegmentCount }
+  return { tiles, drawn, surfaceSegmentCount }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🚶 LES TROTTOIRS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Un trottoir est une propriété du RÉSEAU, pas d'une rue prise isolément.
+ *
+ * ── Ce qui ne marchait pas ──────────────────────────────────────────────────
+ * La version précédente extrudait un ruban à 7 bandes par rue, trottoir compris.
+ * Deux rues qui se croisent produisaient donc deux rubans qui se chevauchent, et
+ * le seul moyen de s'en sortir était de SUPPRIMER le trottoir dans les carrefours.
+ * Résultat en jeu : un trou à chaque intersection, des planches grises qui
+ * s'arrêtent en l'air, et deux voies voisines qui ne tombaient pas d'accord sur
+ * l'emplacement du bord.
+ *
+ * ── La méthode ──────────────────────────────────────────────────────────────
+ * On ne dessine plus le trottoir : on le DÉDUIT, par une soustraction.
+ *
+ *     trottoir = (réseau élargi de la largeur du trottoir)
+ *                − (la chaussée)
+ *                − (les emprises des bâtiments)
+ *
+ * Les trois termes sont des polygones fusionnés, donc :
+ *  - les carrefours sont justes PAR CONSTRUCTION — l'union de deux rues élargies
+ *    couvre le coin, et la soustraction de la chaussée ouvre le passage. Il n'y a
+ *    plus de cas particulier « carrefour » à écrire, donc plus de trou ;
+ *  - deux rues voisines partagent forcément le même bord, puisqu'il n'y a qu'un
+ *    seul polygone ;
+ *  - le trottoir s'arrête NET au pied des murs, au lieu d'y rentrer.
+ *
+ * ⚠️ La contrepartie physique vit dans `roadway.ts` (`roadwayHeightAt`). Elle
+ * exprime exactement la même règle, mais en requête de distance : au-delà de la
+ * dalle de bitume et en deçà de `half + KERB_W + walkTarget(half)`, on est sur le
+ * trottoir. Les deux DOIVENT rester d'accord — sinon on marche dans le vide. Les
+ * constantes ci-dessous sont donc le miroir de `ROADWAY` ; toute modification se
+ * fait des deux côtés, dans le même commit.
+ */
+const WALK_KERB_W = 0.35 // ROADWAY.KERB_W
+const WALK_TARGET_RATIO = 0.7 // ROADWAY.WALK_TARGET_RATIO
+const WALK_TARGET_MIN = 1.2 // ROADWAY.WALK_TARGET_MIN
+const WALK_TARGET_MAX = 3 // ROADWAY.WALK_TARGET_MAX
+
+/** Largeur de trottoir voulue pour une voie : une avenue en mérite un vrai, pas une ruelle. */
+function walkTarget(half) {
+  const wanted = half * WALK_TARGET_RATIO
+  if (wanted < WALK_TARGET_MIN) return WALK_TARGET_MIN
+  if (wanted > WALK_TARGET_MAX) return WALK_TARGET_MAX
+  return wanted
+}
+
+/** Bord extérieur du trottoir — miroir de `walkOuterReach()` dans `roadway.ts`. */
+function walkOuterReach(half) {
+  return half + WALK_KERB_W + walkTarget(half)
+}
+
+// ── Les deux vetos ───────────────────────────────────────────────────────────
+//
+// Un trottoir « géométriquement possible » n'est pas pour autant un trottoir
+// réel. Deux situations produisaient des rubans gris absurdes, et toutes deux se
+// règlent en INTERDISANT un côté plutôt qu'en rabotant une largeur.
+
+/**
+ * Veto n°1 — **entre deux voies parallèles proches, jamais de trottoir.**
+ *
+ * Le trottoir est le complément du bitume : le terre-plein qui sépare les deux
+ * chaussées d'un boulevard n'est pas du bitume, il devenait donc du trottoir. On
+ * se retrouvait avec une bande grise en plein milieu de la route. C'est le défaut
+ * le plus visible du premier jet — 20 % des segments de Beauvais ont une voie
+ * parallèle à moins de 8 m, écart médian 3 m.
+ *
+ * Seuil : on interdit tant que l'écart entre les deux bitumes est plus petit que
+ * ce que les deux trottoirs occuperaient. En dessous, il n'y a pas de place pour
+ * un trottoir de chaque côté — donc ce n'en est pas un, c'est un terre-plein.
+ */
+const PARALLEL_DOT = 0.9 // |cos| au-delà duquel deux voies sont « parallèles »
+const PARALLEL_VETO_MARGIN = 1.0
+
+/**
+ * Veto n°2 — **pas de bâti, pas de trottoir.**
+ *
+ * Une route de campagne, une bretelle, un chemin d'exploitation n'ont pas de
+ * trottoir. La géométrie seule ne peut pas le savoir : pour elle, une départementale
+ * au milieu des champs ressemble à une rue. Le signal qui fait la différence est le
+ * BÂTI — un trottoir existe là où il y a des portes à desservir.
+ *
+ * ⚠️ Le critère porte sur la RUE, pas sur le côté. Compter les bâtiments côté par
+ * côté paraissait plus fin, mais c'est faux dans la ville réelle : une rue bâtie qui
+ * longe un parc, une place, une rivière ou un parking a bien un trottoir du côté
+ * dégagé. Mesuré au centre-ville, le critère par côté supprimait le trottoir de
+ * **40 %** des côtés de rue — beaucoup trop.
+ *
+ * Réglage retenu : 4 bâtiments distincts dans 25 m d'un segment (≤ 38 m de long).
+ * C'est le meilleur contraste mesuré entre le centre-ville (70,6 % des côtés
+ * équipés) et la commune entière (29,2 %), qui est pleine de routes rurales et de
+ * zones d'activité. Une ferme et ses dépendances atteignent rarement quatre.
+ */
+const URBAN_PROBE = 25
+const URBAN_MIN_BUILDINGS = 4
+
+/** Les chemins de terre n'ont pas de trottoir, quelle que soit la densité autour. */
+function walkableStreet(seg) {
+  return seg.road.cls !== 'track'
+}
+
+// ── Grilles de recherche, construites une fois ───────────────────────────────
+
+const PROBE_CELL = 32
+const probeKey = (x, z) => Math.floor(x / PROBE_CELL) + ':' + Math.floor(z / PROBE_CELL)
+
+function buildProbeGrid(items, boundsOf, pad) {
+  const map = new Map()
+  items.forEach((item, index) => {
+    const [x0, z0, x1, z1] = boundsOf(item)
+    for (let cx = Math.floor((x0 - pad) / PROBE_CELL); cx <= Math.floor((x1 + pad) / PROBE_CELL); cx++) {
+      for (let cz = Math.floor((z0 - pad) / PROBE_CELL); cz <= Math.floor((z1 + pad) / PROBE_CELL); cz++) {
+        const key = cx + ':' + cz
+        let list = map.get(key)
+        if (!list) map.set(key, (list = []))
+        list.push(index)
+      }
+    }
+  })
+  return map
+}
+
+function queryProbeGrid(map, x0, z0, x1, z1) {
+  const out = new Set()
+  for (let cx = Math.floor(x0 / PROBE_CELL); cx <= Math.floor(x1 / PROBE_CELL); cx++) {
+    for (let cz = Math.floor(z0 / PROBE_CELL); cz <= Math.floor(z1 / PROBE_CELL); cz++) {
+      for (const i of map.get(cx + ':' + cz) ?? []) out.add(i)
+    }
+  }
+  return out
+}
+
+const segBounds = (s) => [
+  Math.min(s.ax, s.bx),
+  Math.min(s.az, s.bz),
+  Math.max(s.ax, s.bx),
+  Math.max(s.az, s.bz),
+]
+
+let segProbeGrid = null
+let buildingPoints = null
+let buildingProbeGrid = null
+
+function ensureProbeGrids() {
+  if (segProbeGrid) return
+  segProbeGrid = buildProbeGrid(segments, segBounds, 24)
+
+  // Un point par sommet de bâtiment, étiqueté par bâtiment : il suffit de savoir
+  // COMBIEN de bâtiments distincts bordent un côté, pas où précisément.
+  buildingPoints = []
+  data.buildings.forEach((b, id) => {
+    if (!b.pts || b.pts.length < 3) return
+    for (const [x, z] of b.pts) buildingPoints.push({ x, z, id })
+  })
+  buildingProbeGrid = buildProbeGrid(buildingPoints, (p) => [p.x, p.z, p.x, p.z], 0)
+}
+
+/**
+ * Les deux côtés d'un segment sont-ils autorisés à porter un trottoir ?
+ *
+ * Renvoie `[gauche, droite]`, « gauche » étant le côté de la normale (−uz, ux).
+ */
+function walkSidesAllowed(seg) {
+  ensureProbeGrids()
+  const nx = -seg.uz
+  const nz = seg.ux
+  const mx = (seg.ax + seg.bx) * 0.5
+  const mz = (seg.az + seg.bz) * 0.5
+  const half = seg.w / 2
+
+  if (!walkableStreet(seg)) return [false, false]
+
+  // ── Veto n°1 : voie parallèle proche.
+  const vetoParallel = [false, false]
+  const reach = walkOuterReach(half) + PARALLEL_VETO_MARGIN
+  const [sx0, sz0, sx1, sz1] = segBounds(seg)
+  for (const j of queryProbeGrid(segProbeGrid, sx0 - 24, sz0 - 24, sx1 + 24, sz1 + 24)) {
+    const other = segments[j]
+    if (other.roadIndex === seg.roadIndex) continue
+    if (Math.abs(seg.ux * other.ux + seg.uz * other.uz) < PARALLEL_DOT) continue
+
+    const ox = (other.ax + other.bx) * 0.5
+    const oz = (other.az + other.bz) * 0.5
+    // Les deux voies doivent réellement se longer, pas seulement se croiser au loin.
+    const along = (ox - mx) * seg.ux + (oz - mz) * seg.uz
+    if (Math.abs(along) > seg.len / 2 + other.len / 2) continue
+
+    const perp = (ox - mx) * nx + (oz - mz) * nz
+    const otherHalf = other.w / 2
+    const gap = Math.abs(perp) - half - otherHalf
+
+    /**
+     * ⚠️ Écarter les tronçons COLINÉAIRES, qui ne sont pas des voies parallèles.
+     *
+     * L'IGN découpe une rue en tronçons successifs, chacun avec son propre index de
+     * route. Deux tronçons qui se suivent sont donc « une autre route », colinéaire
+     * (|cos| ≈ 1) et à écart négatif — le veto les prenait pour un boulevard à deux
+     * chaussées et supprimait le trottoir des DEUX côtés de la rue. Mesuré avant
+     * correction : **54,5 % des déclenchements du veto au centre-ville** étaient ce
+     * faux positif, et le centre tombait à 46,7 % de côtés équipés.
+     *
+     * Un vrai couple de chaussées parallèles est décalé LATÉRALEMENT ; une
+     * continuation ne l'est pas. Il suffit donc d'exiger que les deux axes soient
+     * réellement à côté l'un de l'autre.
+     */
+    if (gap <= -Math.min(half, otherHalf)) continue
+    /**
+     * Le seuil : la place que prendraient les DEUX trottoirs, plus une marge.
+     *
+     * ⚠️ On compare des largeurs de trottoir, pas des portées depuis l'axe —
+     * `walkOuterReach()` inclut la demi-chaussée, qu'il faut retirer ici. Avec elle,
+     * le seuil montait à 7,7 m pour deux rues de 5 m au lieu de 5,2, et le veto
+     * supprimait des trottoirs parfaitement légitimes de part et d'autre d'une rue
+     * voisine.
+     *
+     * En dessous du seuil, il n'y a pas la place pour un trottoir de chaque côté :
+     * ce n'est pas un trottoir, c'est un terre-plein.
+     */
+    const seuil = reach - half + (walkOuterReach(otherHalf) - otherHalf)
+    if (gap >= seuil) continue
+    vetoParallel[perp >= 0 ? 0 : 1] = true
+  }
+
+  // ── Veto n°2 : la rue est-elle bâtie ? (les deux côtés confondus, voir plus haut)
+  const built = new Set()
+  const pad = URBAN_PROBE
+  for (const j of queryProbeGrid(buildingProbeGrid, sx0 - pad, sz0 - pad, sx1 + pad, sz1 + pad)) {
+    const p = buildingPoints[j]
+    const dx = p.x - seg.ax
+    const dz = p.z - seg.az
+    const along = dx * seg.ux + dz * seg.uz
+    if (along < -URBAN_PROBE || along > seg.len + URBAN_PROBE) continue
+    if (Math.abs(dx * nx + dz * nz) > URBAN_PROBE) continue
+    built.add(p.id)
+    if (built.size >= URBAN_MIN_BUILDINGS) break
+  }
+  if (built.size < URBAN_MIN_BUILDINGS) return [false, false]
+
+  return [!vetoParallel[0], !vetoParallel[1]]
+}
+
+/**
+ * Le quadrilatère à RETIRER quand un côté n'a pas droit au trottoir.
+ *
+ * Volontairement borné au bord extérieur du trottoir : un veto qui s'étendrait
+ * loin sur le côté raboterait aussi le trottoir des rues perpendiculaires qui
+ * débouchent ici.
+ */
+function sideVetoQuad(seg, side) {
+  const nx = -seg.uz * side
+  const nz = seg.ux * side
+  const half = seg.w / 2
+  const out = walkOuterReach(half) + 0.2
+  // Léger débord en longueur, sinon un cheveu de trottoir subsiste au raccord
+  // entre deux segments consécutifs qui portent le même veto.
+  const ex = seg.ux * 0.3
+  const ez = seg.uz * 0.3
+  const ring = [
+    [seg.ax + nx * half - ex, seg.az + nz * half - ez],
+    [seg.bx + nx * half + ex, seg.bz + nz * half + ez],
+    [seg.bx + nx * out + ex, seg.bz + nz * out + ez],
+    [seg.ax + nx * out - ex, seg.az + nz * out - ez],
+  ]
+  ring.push([ring[0][0], ring[0][1]])
+  return [ring]
+}
+
+/** Emprises des bâtiments rangées par tuile, pour ne soustraire que le voisinage utile. */
+function bucketBuildingsByTile() {
+  const buckets = new Map()
+  for (const b of data.buildings) {
+    const pts = b.pts
+    if (!pts || pts.length < 3) continue
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of pts) {
+      cx += x
+      cz += z
+    }
+    cx /= pts.length
+    cz /= pts.length
+    const ring = pts.map(([x, z]) => [x, z])
+    // polygon-clipping veut des anneaux fermés.
+    if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+      ring.push([ring[0][0], ring[0][1]])
+    }
+    const key = tileKeyOf(cx, cz)
+    let list = buckets.get(key)
+    if (!list) buckets.set(key, (list = []))
+    list.push([ring])
+  }
+  return buckets
+}
+
+/** Les valeurs des 9 tuiles autour de `key` (la tuile elle-même comprise), aplaties. */
+function neighbourhood(map, key) {
+  const [tx, tz] = key.split(':').map(Number)
+  const out = []
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      const value = map.get(tx + dx + ':' + (tz + dz))
+      if (value) out.push(...value)
+    }
+  }
+  return out
+}
+
+/**
+ * Ramène tous les sommets sur une grille du millimètre.
+ *
+ * ⚠️ Ce n'est pas de la cosmétique, c'est ce qui fait TENIR la soustraction.
+ * `polygon-clipping` travaille en flottants et échoue (« Unable to complete output
+ * ring ») quand deux sommets sont séparés de 1e-13 — exactement ce que produit
+ * l'union de capsules dont les arrondis se touchent presque. En quantifiant entre
+ * chaque opération, ces sommets fusionnent et la topologie redevient saine.
+ */
+function quantize(multi, precision = 1000) {
+  const snap = (v) => Math.round(v * precision) / precision
+  const out = []
+  for (const poly of multi) {
+    const rings = []
+    for (const ring of poly) {
+      const snapped = []
+      for (const [x, z] of ring) {
+        const p = [snap(x), snap(z)]
+        const last = snapped[snapped.length - 1]
+        if (last && last[0] === p[0] && last[1] === p[1]) continue // doublon né de l'arrondi
+        snapped.push(p)
+      }
+      if (snapped.length >= 3) rings.push(snapped)
+    }
+    if (rings.length > 0) out.push(rings)
+  }
+  return out
+}
+
+/**
+ * Soustraction tolérante aux pannes.
+ *
+ * `polygon-clipping` lève sur certaines configurations dégénérées (anneau
+ * auto-intersecté d'un bâtiment OSM, sommets confondus). Sur 1 953 tuiles ça
+ * arrive ; laisser planter le build entier pour un bâtiment tordu serait absurde.
+ * On retombe donc sur une soustraction terme à terme, et on saute le fautif.
+ */
+let differenceFailures = 0
+
+function safeDifference(subject, clips, label) {
+  if (subject.length === 0 || clips.length === 0) return subject
+  const clean = quantize(clips)
+  try {
+    return quantize(polygonClipping.difference(quantize(subject), ...clean))
+  } catch {
+    // Un seul contour tordu ne doit pas faire perdre toute la tuile : on retire les
+    // autres un par un et on saute le fautif.
+    let current = quantize(subject)
+    for (const clip of clean) {
+      if (current.length === 0) break
+      try {
+        current = quantize(polygonClipping.difference(current, clip))
+      } catch {
+        // Deuxième chance au centimètre : l'échec vient presque toujours de
+        // sommets trop proches, et une grille plus grossière les fusionne.
+        try {
+          current = quantize(polygonClipping.difference(quantize(current, 100), quantize([clip], 100)))
+        } catch (error) {
+          differenceFailures++
+          if (differenceFailures <= 5) {
+            console.warn('[debug:roads] difference ignoree ' + label + ': ' + error.message)
+          }
+        }
+      }
+    }
+    return current
+  }
+}
+
+function buildWalkTiles(segmentBuckets, roadUnions, centreOf) {
+  const buildingBuckets = bucketBuildingsByTile()
+  const tiles = {}
+  const entries = [...segmentBuckets.entries()].sort(([a], [b]) => a.localeCompare(b))
+  let walkSegmentCount = 0
+  let allowedSides = 0
+  let totalSides = 0
+  let allowedCentre = 0
+  let totalCentre = 0
+
+  /**
+   * Les vetos, calculés d'abord pour TOUTES les tuiles.
+   *
+   * Ils doivent être appliqués par voisinage de 9 tuiles, comme la chaussée : le
+   * trottoir d'une tuile déborde sur sa voisine, et c'est là que se trouve parfois
+   * la voie parallèle qui le disqualifie.
+   */
+  const vetoTiles = new Map()
+  for (const [key, local] of entries) {
+    const vetos = []
+    for (const seg of local) {
+      const [gauche, droite] = walkSidesAllowed(seg)
+      if (!gauche) vetos.push(...quantize([sideVetoQuad(seg, 1)]))
+      if (!droite) vetos.push(...quantize([sideVetoQuad(seg, -1)]))
+      if (gauche) allowedSides++
+      if (droite) allowedSides++
+      totalSides += 2
+      // Statistique séparée pour le CENTRE-VILLE : c'est là qu'un trottoir manquant
+      // se remarque, et une moyenne sur toute la commune (pleine de chemins et de
+      // routes de campagne) ne dit rien de ce qui se passe en ville.
+      if (centreOf && Math.hypot((seg.ax + seg.bx) / 2 - centreOf.x, (seg.az + seg.bz) / 2 - centreOf.z) < 600) {
+        if (gauche) allowedCentre++
+        if (droite) allowedCentre++
+        totalCentre += 2
+      }
+    }
+    if (vetos.length > 0) vetoTiles.set(key, vetos)
+  }
+
+  for (const [key, local] of entries) {
+    // 1. Le réseau ÉLARGI : chaque voie, plus sa bordure, plus son trottoir.
+    // Capsules quantifiées AVANT l'union : deux arrondis de capsules voisines se
+    // frôlent à 1e-13 près, et c'est précisément ce qui fait échouer l'union.
+    const wide = []
+    for (const seg of local) {
+      const half = Math.max(1.5, seg.w / 2)
+      wide.push(...quantize([segmentCapsule(seg, WALK_KERB_W + walkTarget(half))]))
+    }
+    let poly = []
+    for (let i = 0; i < wide.length; i += 36) {
+      const chunk = wide.slice(i, i + 36)
+      if (chunk.length === 0) continue
+      poly.push(...quantize(safeUnionMany(chunk, 'walk-' + key + '/chunk-' + i)))
+    }
+    poly = safeUnionMany(poly, 'walk-' + key + '/final')
+    if (poly.length === 0) continue
+
+    // 2. Moins la chaussée — celle des 9 tuiles, sinon un trottoir qui déborde sur
+    //    la tuile voisine ne serait pas percé par la rue qui s'y trouve.
+    poly = safeDifference(poly, neighbourhood(roadUnions, key), 'walk-' + key + '/road')
+    if (poly.length === 0) continue
+
+    // 3. Moins les bâtiments : le trottoir s'arrête au pied du mur.
+    poly = safeDifference(poly, neighbourhood(buildingBuckets, key), 'walk-' + key + '/build')
+    if (poly.length === 0) continue
+
+    // 4. Moins les côtés interdits : terre-plein entre deux voies parallèles,
+    //    et bords sans bâti (voir les deux vetos plus haut).
+    poly = safeDifference(poly, neighbourhood(vetoTiles, key), 'walk-' + key + '/veto')
+    if (poly.length === 0) continue
+
+    /**
+     * ⚠️ Simplification quasi nulle (5 cm), là où le bitume tolère 55 cm.
+     *
+     * Le trottoir est le RÉSULTAT d'une soustraction : son bord intérieur EST le
+     * bord du bitume. Le simplifier à 55 cm déplace ce bord d'autant, et il repasse
+     * par-dessus la chaussée — mesuré : 2,3 % des points de trottoir retombaient
+     * sur le bitume, soit un débord de bordure jusqu'à un demi-mètre dans la rue.
+     * Les contours entrants sont déjà simplifiés, il ne reste ici qu'à retirer les
+     * sommets rigoureusement alignés.
+     *
+     * Le seuil d'aire, lui, est plus HAUT que pour le bitume : la soustraction
+     * laisse des échardes de quelques centimètres carrés le long des murs, qui ne
+     * produiraient que du z-fighting.
+     */
+    const polygons = tidyPolygons(poly, 0.8, 2, 0.05)
+    if (polygons.length === 0) continue
+    tiles[key] = { polygons }
+    walkSegmentCount += local.length
+  }
+
+  return { tiles, walkSegmentCount, allowedSides, totalSides, allowedCentre, totalCentre }
 }
 
 function makePaths(polygons, tx, ty) {
@@ -569,7 +1084,9 @@ fs.writeFileSync(outPath, html, 'utf8')
 
 if (target) {
   const surface = mergedSurface(target)
-  const citySurface = buildSurfaceTiles()
+  const segmentBuckets = bucketSegmentsByTile()
+  const citySurface = buildSurfaceTiles(segmentBuckets)
+  const cityWalks = buildWalkTiles(segmentBuckets, citySurface.drawn, target)
   const json = {
     generatedAt: new Date().toISOString(),
     label: 'Beauvais complet tuiles',
@@ -600,10 +1117,50 @@ if (target) {
       ).filter((poly) => poly.length > 0),
     },
     tiles: citySurface.tiles,
+    /**
+     * Les trottoirs, déduits par soustraction (voir `buildWalkTiles`).
+     *
+     * Même découpage en tuiles que `tiles`, même convention de contours. Un
+     * fichier produit AVANT ce lot n'a pas ce champ : `Roads.tsx` le traite alors
+     * comme « pas de trottoir » plutôt que de planter.
+     */
+    walkTiles: cityWalks.tiles,
   }
-  fs.writeFileSync(surfaceOutPath, JSON.stringify(json, null, 2) + '\n', 'utf8')
+  /**
+   * Écrit COMPACT, pas indenté.
+   *
+   * Ce fichier part dans le bundle du jeu. Indenté, l'ajout des trottoirs le
+   * faisait passer de 6,7 à 18 Mo — l'essentiel n'étant que des espaces autour de
+   * couples de nombres. Il n'y perd rien : c'est un fichier généré, jamais relu ni
+   * fusionné à la main (`npm run debug:roads` le refait entièrement).
+   */
+  fs.writeFileSync(surfaceOutPath, JSON.stringify(json) + '\n', 'utf8')
   console.log('Surface test generee: ' + surfaceOutPath)
   console.log(Object.keys(citySurface.tiles).length + ' tuiles de surface, ' + citySurface.surfaceSegmentCount + ' segments de surface.')
+  console.log(
+    Object.keys(cityWalks.tiles).length +
+      ' tuiles de trottoir, ' +
+      differenceFailures +
+      ' soustractions ignorees.',
+  )
+  console.log(
+    'cotes de voie avec trottoir : ' +
+      cityWalks.allowedSides +
+      ' / ' +
+      cityWalks.totalSides +
+      ' (' +
+      ((100 * cityWalks.allowedSides) / cityWalks.totalSides).toFixed(1) +
+      '%)',
+  )
+  console.log(
+    'dont centre-ville (600 m)   : ' +
+      cityWalks.allowedCentre +
+      ' / ' +
+      cityWalks.totalCentre +
+      ' (' +
+      ((100 * cityWalks.allowedCentre) / cityWalks.totalCentre).toFixed(1) +
+      '%)',
+  )
 }
 
 console.log('Diagnostic genere: ' + outPath)

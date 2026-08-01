@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { SPAWN, terrainHeight } from './cityData'
-import { ROADWAY, ROADWAY_TILE, roadwayTiles, type RoadChunk } from './roadway'
+import { ROADWAY, ROADWAY_TILE, roadwayTiles, walkOuterReach, type RoadChunk } from './roadway'
 import roadSurfaceTest from './data/road-surface-test.json'
 import { editorTileReach } from '../editorStreaming'
 import { createTileResourceCache } from './tileResourceCache'
@@ -13,9 +13,18 @@ import { buildRoadSurfaceBuffers } from './roadSurfaceGeometry'
 /**
  * Routes de Beauvais en volume.
  *
- * La surface physique vient de roadway.ts. Ici on dessine de vrais rubans continus,
- * avec bordures et accotements. Les cotes interieurs fusionnes par roadway.ts sont
- * rendus en bitume pour eviter les separations inutiles entre voies paralleles.
+ * La surface physique vient de `roadway.ts`. Le rendu se fait à TROIS couches, et
+ * il faut savoir laquelle dessine quoi avant d'y toucher :
+ *
+ *  1. **la dalle de bitume** — un polygone fusionné par tuile, calculé hors-jeu ;
+ *  2. **la dalle de trottoir** — le complément du précédent, moins les bâtiments,
+ *     calculé par la même passe hors-jeu et posé à la hauteur de bordure ;
+ *  3. **les rubans par voie** (`addChunk`) — ce qui reste : l'accotement en pente,
+ *     et le profil complet là où aucune dalle n'existe (chemins, sentiers).
+ *
+ * ⚠️ Une voie couverte par les dalles ne dessine PLUS son bitume, sa bordure ni son
+ * trottoir en ruban. C'est le fond du lot trottoirs : extrudés par voie, ils se
+ * chevauchaient à chaque croisement. Voir la décision n°4 en tête de `roadway.ts`.
  */
 
 const ASPHALT = '#454b52'
@@ -58,6 +67,25 @@ const SURFACE_MATERIAL = new THREE.MeshToonMaterial({
 })
 const SURFACE_EDGE_MATERIAL = new THREE.MeshToonMaterial({ color: KERB, gradientMap: toonGradient })
 
+/**
+ * Le dessus du trottoir, et sa tranche.
+ *
+ * Deux gris volontairement proches mais distincts : le dessus légèrement plus
+ * clair que la bordure. C'est ce petit écart qui donne l'épaisseur — un trottoir
+ * d'un seul ton se lit comme un autocollant posé sur l'herbe.
+ *
+ * `polygonOffset` comme le bitume : les deux dalles se touchent exactement le long
+ * du caniveau, et sans décalage de profondeur le GPU ne sait pas laquelle est
+ * devant (z-fighting scintillant sur toute la longueur de la rue).
+ */
+const WALK_TOP = '#9aa0a7'
+const WALK_MATERIAL = new THREE.MeshToonMaterial({
+  color: WALK_TOP,
+  gradientMap: toonGradient,
+  polygonOffset: true,
+  polygonOffsetFactor: -3,
+})
+
 const PROFILE = 8
 const SURFACE_HIDE_PAD = 8
 
@@ -73,12 +101,27 @@ type RoadSurfaceTest = {
   preview?: { polygons?: number[][][][] }
   tileSize?: number
   tiles?: Record<string, RoadSurfaceTile>
+  walkTiles?: Record<string, RoadSurfaceTile>
 }
 
 const ROAD_SURFACE_TEST = roadSurfaceTest as RoadSurfaceTest
 const SURFACE_TILE_SIZE = ROAD_SURFACE_TEST.tileSize ?? ROADWAY_TILE
 const SURFACE_TILES = ROAD_SURFACE_TEST.tiles ?? null
 const LEGACY_SURFACE_POLYGONS = ROAD_SURFACE_TEST.polygons ?? ROAD_SURFACE_TEST.preview?.polygons ?? []
+
+/**
+ * 🚶 Les trottoirs, calculés hors-jeu par `debug:roads` (voir
+ * `debug-road-geometry.mjs`) : réseau élargi − chaussée − bâtiments.
+ *
+ * Absent d'un `road-surface-test.json` produit avant ce lot → pas de trottoir,
+ * plutôt qu'un plantage. Relancer `npm run debug:roads` suffit à les faire
+ * apparaître.
+ */
+const WALK_TILES = ROAD_SURFACE_TEST.walkTiles ?? null
+
+function walkPolygonsForTile(tileKey: string): number[][][][] {
+  return WALK_TILES?.[tileKey]?.polygons ?? []
+}
 
 function pointInRing(x: number, z: number, ring: number[][]): boolean {
   let inside = false
@@ -176,11 +219,11 @@ function section(
   const leftMerge = chunk.leftMerge[i]
   const rightMerge = chunk.rightMerge[i]
 
-  // Bord extérieur du TROTTOIR : bordure + la largeur mesurée jusqu'à la façade.
-  // C'est la seule partie plate où le joueur marche — avant, elle valait
-  // `KERB_W` (35 cm) et il n'y avait donc pas vraiment de trottoir.
-  const walkOutL = half + ROADWAY.KERB_W + chunk.leftWalk[i]
-  const walkOutR = half + ROADWAY.KERB_W + chunk.rightWalk[i]
+  // Bord extérieur du TROTTOIR. Même fonction que la physique et que le découpage
+  // des polygones hors-jeu : les trois sortent de `walkOuterReach`, il n'y a plus
+  // qu'un seul endroit où la largeur est décidée.
+  const walkOutL = walkOuterReach(half)
+  const walkOutR = walkOutL
   // Puis l'accotement en pente rattrape le terrain naturel, comme avant.
   const outerL = walkOutL + ROADWAY.SHOULDER_W
   const outerR = walkOutR + ROADWAY.SHOULDER_W
@@ -242,43 +285,40 @@ function addChunk(chunk: RoadChunk, positions: number[], colors: number[]) {
      * la dalle — celle-ci est construite à partir de ces mêmes routes. Il est
      * donc vrai presque partout, et il servait à sauter TOUTE la coupe : bitume,
      * bordure ET trottoir. Comme la dalle ne dessine que le bitume, la ville se
-     * retrouvait en plaques de goudron nues, sans le moindre bord — alors que
-     * `groundHeight()`, qui ignore ce masque, avait bien ses trottoirs. D'où le
-     * symptôme « la voiture les sent mais on ne les voit pas ».
+     * retrouvait en plaques de goudron nues, sans le moindre bord.
      *
-     * On ne saute donc que ce que la dalle sait réellement dessiner : le bitume.
+     * Ce n'est plus un problème depuis que la dalle de TROTTOIR existe : les deux
+     * dalles couvrent ensemble tout ce que le ruban dessinait, tranche comprise. Le
+     * masque peut donc sauter la coupe entière — et il le doit, voir plus bas.
      */
     const paved =
       inExperimentalSurfaceZone(ax, az) ||
       inExperimentalSurfaceZone(bx, bz) ||
       inExperimentalSurfaceZone((ax + bx) * 0.5, (az + bz) * 0.5)
 
-    /**
-     * ⚠️ `||`, pas `&&` — et c'est la PHYSIQUE qui fixe la règle : `roadway.ts`
-     * marque un segment comme carrefour dès qu'UN de ses bouts l'est
-     * (`segJunction[s + i] = flags[i] || flags[i + 1]`).
-     *
-     * Le rendu exigeait les deux. Un segment à cheval sur l'entrée d'un carrefour
-     * dessinait donc bordure et trottoir là où le sol, lui, était déjà rabattu au
-     * ras du bitume — un biseau qui montait dans le vide. Avec 35 cm de bordure
-     * ça ne se voyait pas ; avec un vrai trottoir, ça saute aux yeux.
-     */
     const junction = chunk.junction[i] === 1 || chunk.junction[i + 1] === 1
-    if (paved && junction) continue // le carrefour n'est QUE du bitume
-
-    const leftPaved = chunk.leftMerge[i] > 0 || chunk.leftMerge[i + 1] > 0
-    const rightPaved = chunk.rightMerge[i] > 0 || chunk.rightMerge[i + 1] > 0
 
     for (let band = 0; band < PROFILE - 1; band++) {
       if (junction && band !== 3) continue
 
-      if (paved) {
-        // Bande 3 = la chaussée. Les bandes 0-2 / 4-6 deviennent elles aussi du
-        // bitume quand une voie parallèle a été fusionnée de ce côté.
-        if (band === 3) continue
-        if (leftPaved && band < 3) continue
-        if (rightPaved && band > 3) continue
-      }
+      /**
+       * ⚠️ Sous les dalles, le ruban ne dessine PLUS RIEN.
+       *
+       * C'est le fond du lot trottoirs. Extrudés par voie, bordure et trottoir se
+       * chevauchaient à chaque croisement — d'où la règle « pas de trottoir dans un
+       * carrefour », donc un trou à chaque intersection. Les deux dalles les
+       * remplacent : un polygone fusionné pour toute la ville, juste aux carrefours
+       * par construction, et leurs jupes verticales fournissent la tranche.
+       *
+       * Garder l'accotement du ruban ici a été essayé, et c'est faux : il part du
+       * bord du trottoir, alors que les vetos (terre-plein, absence de bâti)
+       * suppriment le trottoir sur 71 % des côtés de voie de la commune. L'accotement
+       * partait donc dans le vide. Une seule autorité par surface, sinon les deux
+       * divergent — c'est exactement le bug qu'on vient de payer.
+       *
+       * `roadway.ts` applique la règle SYMÉTRIQUE côté physique (`segPaved`).
+       */
+      if (paved) continue
 
       const c = bandColor(chunk, i, band)
       const l = i * PROFILE + band
@@ -312,6 +352,8 @@ function buildTile(chunks: RoadChunk[]): THREE.BufferGeometry | null {
 type SurfaceGeometryResource = {
   surfaceGeometry: THREE.BufferGeometry | null
   edgeGeometry: THREE.BufferGeometry | null
+  walkGeometry: THREE.BufferGeometry | null
+  walkEdgeGeometry: THREE.BufferGeometry | null
   dispose: () => void
 }
 
@@ -332,12 +374,26 @@ const surfaceTileCache = createTileResourceCache<SurfaceGeometryResource>({
     const buffers = buildRoadSurfaceBuffers(polygons)
     const surfaceGeometry = buildGeometryFromPositions(buffers.surfacePositions)
     const edgeGeometry = buildGeometryFromPositions(buffers.edgePositions)
+
+    // Le trottoir : mêmes contours tuilés, même échantillonnage de hauteur, relevé
+    // de la bordure. Il vit dans la MÊME entrée de cache que le bitume — mêmes
+    // montage, démontage et budget de préparation, donc les deux apparaissent
+    // toujours ensemble. Une rue qui reçoit son bitume une image avant son
+    // trottoir, ça se voit.
+    const walkBuffers = buildRoadSurfaceBuffers(walkPolygonsForTile(tileKey), ROADWAY.KERB_H)
+    const walkGeometry = buildGeometryFromPositions(walkBuffers.surfacePositions)
+    const walkEdgeGeometry = buildGeometryFromPositions(walkBuffers.edgePositions)
+
     return {
       surfaceGeometry,
       edgeGeometry,
+      walkGeometry,
+      walkEdgeGeometry,
       dispose: () => {
         surfaceGeometry?.dispose()
         edgeGeometry?.dispose()
+        walkGeometry?.dispose()
+        walkEdgeGeometry?.dispose()
       },
     }
   },
@@ -384,10 +440,30 @@ function ExperimentalRoadSurface({ tileKey }: { tileKey?: string }) {
   }, [cacheKey])
 
   if (!resource) return null
-  const { surfaceGeometry, edgeGeometry } = resource
-  if (!surfaceGeometry && !edgeGeometry) return null
+  const { surfaceGeometry, edgeGeometry, walkGeometry, walkEdgeGeometry } = resource
+  if (!surfaceGeometry && !edgeGeometry && !walkGeometry) return null
   return (
     <>
+      {walkGeometry && (
+        <mesh
+          geometry={walkGeometry}
+          material={WALK_MATERIAL}
+          castShadow={false}
+          receiveShadow={false}
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
+      )}
+      {walkEdgeGeometry && (
+        <mesh
+          geometry={walkEdgeGeometry}
+          material={SURFACE_EDGE_MATERIAL}
+          castShadow={false}
+          receiveShadow={false}
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
+      )}
       {surfaceGeometry && (
         <mesh
           geometry={surfaceGeometry}

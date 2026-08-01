@@ -308,72 +308,155 @@ L'impression d'étroitesse restante se joue dans l'espace **entre le bitume et l
 le build : sans lui, chaque régénération effacerait le travail fait à la main et le
 chantier tournerait en rond.
 
-#### 🚶 Les trottoirs sont mesurés jusqu'à la façade
+#### 🚶 Le trottoir est le COMPLÉMENT de la chaussée, pas un ruban par rue
 
-**Le problème.** La seule partie PLATE au bord de la chaussée était le dessus de la bordure :
-**35 cm**. Les 80 cm de `SHOULDER_W` sont une pente en terre qui rattrape le terrain, pas un
-trottoir. Beauvais n'avait donc pratiquement pas de trottoir — et comme la sensation d'une
-ville tient au rapport largeur de rue / hauteur de façade, les rues paraissaient étranglées
-même avec un bitume à la bonne largeur.
+**Le problème d'origine.** La seule partie PLATE au bord de la chaussée était le dessus de la
+bordure : **35 cm**. Les 80 cm de `SHOULDER_W` sont une pente en terre qui rattrape le terrain,
+pas un trottoir. Beauvais n'avait donc pratiquement pas de trottoir — et comme la sensation
+d'une ville tient au rapport largeur de rue / hauteur de façade, les rues paraissaient
+étranglées même avec un bitume à la bonne largeur.
 
-**La méthode.** En chaque point de chaque voie, `roadway.ts` lance une **droite
-perpendiculaire** et cherche la première façade de chaque côté (`facadeDistances`). Le
-résultat est lissé le long de la rue pour qu'un simple porche ne fasse pas de dents de scie.
+**La première tentative, et pourquoi elle a été abandonnée.** Le trottoir était une bande du
+ruban extrudé de chaque voie, large de ce que mesurait une perpendiculaire jusqu'à la première
+façade. Trois défauts, tous structurels — aucun réglage ne les corrigeait :
 
-> ⚠️ **Un trottoir a une largeur VOULUE, il ne remplit pas l'espace disponible.**
-> Première version : « on prend tout jusqu'à 4 m ». Dès qu'une façade était un peu loin
-> (carrefour, place, recul d'immeuble), chaque voie posait 4 m de chaque côté et les voies
-> convergentes fusionnaient en **grandes plaques grises informes**. Une vraie ville fait
-> l'inverse : la largeur est un choix de projet, et elle ne RÉTRÉCIT que si la façade est
-> trop proche.
+- **un trou à chaque intersection.** Deux rubans qui se croisent se chevauchent ; le seul moyen
+  de s'en sortir était de supprimer le trottoir dans les carrefours ;
+- **des planches grises qui s'arrêtent en l'air** là où deux voies se rejoignent en biais ;
+- **deux voies voisines ne tombaient pas d'accord sur le bord**, parce que chacune mesurait son
+  propre couloir et le lissait de son côté.
 
-La largeur voulue suit le rang de la voie (`WALK_TARGET_RATIO` × la demi-chaussée, borné
-par `WALK_TARGET_MIN` 1,2 m et `WALK_TARGET_MAX` 3 m) : une avenue a de vrais trottoirs,
-une ruelle non. Résultat : **1,64 m de moyenne**, 83 % entre 1 et 2 m.
+> ⚠️ **Un trottoir est une propriété du RÉSEAU, pas d'une rue prise isolément.** C'est l'espace
+> entre la chaussée et les bâtiments. Tant qu'on le construit rue par rue, il ne peut pas être
+> propre.
 
-> ⚠️ **Ça ne marche QUE parce que routes et bâtiments viennent du même référentiel IGN.**
-> Avec les routes OSM décalées de 1 à 5 m, la mesure aurait donné 6 m d'un côté et 0 de
-> l'autre. C'est la contrepartie directe du changement décrit juste au-dessus.
+**La méthode retenue.** On ne dessine plus le trottoir, on le **déduit** — hors-jeu, dans
+`debug-road-geometry.mjs` (`npm run debug:roads`), par une soustraction de polygones :
 
-**Aucune donnée nouvelle n'est téléchargée** : on réutilise les 33 958 emprises de
-bâtiments déjà en mémoire, via la grille de `collision.ts`.
+```
+trottoir = (réseau élargi de la largeur du trottoir) − (la chaussée) − (les emprises des bâtiments)
+```
 
-**Le sol suit le trottoir.** `groundHeight()` applique le **même** profil que `section()`
-dans `Roads.tsx` (`segLeftWalk` / `segRightWalk`) : sans ça le joueur marcherait dans le
-vide au-delà de 35 cm du bitume. Vérifié sur 80 579 points hors carrefour : **94,7 %**
-concordent à moins de 2 cm. Les écarts restants vont de 2 cm à 0,49 m et viennent du
-recouvrement de deux voies d'altitudes différentes, où c'est la plus haute qui gagne —
-comportement d'origine, mais **0,49 m est une marche bien réelle** : c'est le prochain
-défaut à traiter si tu sens des accrochages en voiture.
+Les trois termes sont des polygones fusionnés avec `polygon-clipping`, exactement comme la dalle
+de bitume qui existait déjà. Conséquences :
 
-**Les carrefours : `||`, pas `&&`.** `roadway.ts` marque un segment comme carrefour dès
-qu'UN de ses bouts l'est (`segJunction[s + i] = flags[i] || flags[i + 1]`). Le rendu
-exigeait les DEUX. Un segment à cheval sur l'entrée d'un carrefour dessinait donc bordure
-et trottoir là où le sol était déjà rabattu au ras du bitume — **un biseau qui montait dans
-le vide**. Invisible avec 35 cm de bordure, spectaculaire avec un vrai trottoir. Les deux
-côtés utilisent maintenant la même règle.
+- **les carrefours sont justes par construction.** L'union de deux rues élargies couvre le coin,
+  la soustraction de la chaussée ouvre le passage. Il n'y a plus de cas particulier « carrefour »
+  à écrire — donc plus de trou ;
+- **il n'y a qu'un seul bord**, partagé par toutes les voies qui le touchent ;
+- **le trottoir s'arrête net au pied des murs** au lieu d'y rentrer.
 
-**Coût.** Le sondage ajoute ~0,4 s à la construction des routes, faite **une seule fois**
-au premier affichage (~2,0 s au total sur toute la commune).
+Sortie : **1 953 tuiles de trottoir**, dans le champ `walkTiles` de `road-surface-test.json`, au
+même découpage que le bitume. Un fichier produit avant ce lot n'a pas ce champ ; `Roads.tsx` le
+traite alors comme « pas de trottoir » plutôt que de planter.
 
-**⚠️ Le masque de la dalle ne doit cacher QUE le bitume.** `Roads.tsx` teste
-`inExperimentalSurfaceZone()` sur l'**axe** de la voie — qui est forcément dans la dalle,
-puisque celle-ci est construite à partir de ces mêmes routes. Le test est donc vrai sur
-**99,3 %** des segments, et il servait à sauter la coupe **entière** : bitume, bordure et
-trottoir. Comme la dalle ne dessine que le bitume, la ville n'avait aucun bord : 4 930
-bandes de profil émises sur toute la commune, au lieu de 568 465 aujourd'hui.
+**La largeur reste un choix de projet.** `WALK_TARGET_RATIO` × la demi-chaussée, borné par
+`WALK_TARGET_MIN` 1,2 m et `WALK_TARGET_MAX` 3 m : une avenue a de vrais trottoirs, une ruelle
+non. Le rabotage par les bâtiments n'a pas disparu, il a changé de nature — c'est la
+soustraction qui s'en charge, ce qui donne un bord **net** au pied du mur au lieu d'une largeur
+moyennée. Le sondage de façade (`facadeDistances`) et le lissage ont donc été supprimés.
 
-Le symptôme était trompeur — `groundHeight()` ignore ce masque, donc **la voiture sentait
-des trottoirs invisibles**. Si ça se reproduit (bordures ou trottoirs absents alors que la
-physique les a), c'est ici qu'il faut regarder : on ne saute que la bande 3 (la chaussée),
-plus les bandes latérales devenues du bitume par fusion de voies parallèles.
+#### 🚫 Deux vetos : un trottoir possible n'est pas un trottoir réel
 
-⚙️ Réglages dans `ROADWAY` : `WALK_MIN`, `WALK_TARGET_RATIO`, `WALK_TARGET_MIN`,
-`WALK_TARGET_MAX`, `WALK_GAP`, `WALK_PROBE`. Trottoirs trop larges ou trop étroits à ton
-goût ? C'est `WALK_TARGET_MAX` (3 m) et `WALK_TARGET_RATIO` (0,7) qu'il faut bouger, pas
-la mesure. Réduire `WALK_PROBE` à la stricte largeur utile a été testé : **aucun gain
-de temps**, et 18 % de repli au centre au lieu de 11 %. Le coût est dans le balayage des
-murs, pas dans le rayon.
+La soustraction seule produisait deux absurdités. Toutes deux se règlent en **interdisant un
+côté**, pas en rabotant une largeur — c'est le rôle de `walkSidesAllowed()`.
+
+**Veto n°1 — entre deux voies parallèles proches, jamais de trottoir.** Le terre-plein qui sépare
+les deux chaussées d'un boulevard n'est pas du bitume : il devenait donc du trottoir, et on
+avait **une bande grise en plein milieu de la route**. 20 % des segments de Beauvais ont une voie
+parallèle à moins de 8 m, écart médian 3 m. Le veto s'applique tant que l'écart entre les deux
+bitumes est plus petit que ce que les deux trottoirs occuperaient : en dessous, ce n'est pas un
+trottoir, c'est un terre-plein.
+
+> ⚠️ **Écarter les tronçons colinéaires.** L'IGN découpe une rue en tronçons successifs, chacun
+> avec son propre index. Deux tronçons qui se suivent sont donc « une autre route », colinéaire
+> et à écart négatif : le veto les prenait pour un boulevard à deux chaussées et supprimait le
+> trottoir **des deux côtés de la rue**. Mesuré avant correction : **54,5 %** des déclenchements
+> du veto au centre-ville étaient ce faux positif. Un vrai couple de chaussées parallèles est
+> décalé latéralement ; une continuation ne l'est pas.
+
+**Veto n°2 — pas de bâti, pas de trottoir.** Une route de campagne, une bretelle, un chemin
+d'exploitation n'en ont pas. La géométrie seule ne peut pas le savoir : pour elle, une
+départementale au milieu des champs ressemble à une rue. Le signal qui fait la différence est le
+**bâti** — un trottoir dessert des portes. Critère retenu : 4 bâtiments distincts dans 25 m.
+
+> ⚠️ **Le critère porte sur la RUE, pas sur le côté.** Compter les bâtiments côté par côté
+> paraissait plus fin, mais c'est faux dans la ville réelle : une rue bâtie qui longe un parc,
+> une place, une rivière ou un parking a bien un trottoir du côté dégagé. Mesuré au centre-ville,
+> le critère par côté supprimait le trottoir de **40 %** des côtés de rue.
+
+Les chemins de terre (`cls: track`) sont écartés d'office.
+
+**Résultat mesuré** : **73,6 %** des côtés de voie du centre-ville (600 m) portent un trottoir,
+contre **28,8 %** sur la commune entière — qui est pleine de routes rurales, de chemins et de
+zones d'activité. C'est le meilleur contraste obtenu sur les réglages testés (18 à 30 m de
+portée, 1 à 6 bâtiments).
+
+**Le sol dit exactement la même chose.** On ne peut pas rejouer une soustraction de polygones à
+chaque image, mais on n'en a pas besoin : la même règle s'écrit en distances dans
+`roadwayHeightAt()`. Dans la dalle de bitume → chaussée (c'est le terme « − chaussée ») ; sinon,
+en deçà de `walkOuterReach(half)` d'un axe → trottoir (c'est le « réseau élargi »). Le terme
+« − bâtiments » n'a **volontairement** pas d'équivalent : un bâtiment est déjà un volume plein,
+on ne peut pas marcher dedans.
+
+> ⚠️ `walkOuterReach()` dans `roadway.ts` et `walkTarget()` dans `debug-road-geometry.mjs` sont
+> le **même calcul écrit deux fois**, l'un pour la physique, l'autre pour le découpage. Ils
+> doivent donner le même nombre pour la même voie, sinon on marche à côté du trottoir qu'on
+> voit. Toute modification se fait des deux côtés, **dans le même commit**.
+
+**⚠️ La boîte englobante n'est pas une optimisation, c'est ce qui rend la lecture possible.**
+`roadwayHeightAt()` interroge maintenant deux couches de polygones. Un point HORS trottoir doit
+balayer les 9 tuiles voisines en entier avant de pouvoir répondre non — le cas le plus fréquent
+est donc le plus cher. Mesuré sur 106 666 points : **67 µs par appel** sans boîte englobante,
+**3,4 µs avec**. `buildPolygonIndex()` précalcule donc la boîte de chaque polygone (77 ms, une
+fois). Quatre comparaisons éliminent la quasi-totalité des candidats avant le lancer de rayon.
+Le marquage `segPaved` coûte 850 ms de plus à la construction des routes, une seule fois.
+
+**Ce qui a été vérifié.** Sur 6 000 points tirés à l'intérieur des polygones de trottoir :
+**0,00 %** tombent dans un bâtiment, **0,20 %** sur le bitume (échardes résiduelles de
+simplification, absorbées par le `polygonOffset` du matériau). Le fichier de données passe de
+**6,7 à 5,6 Mo** malgré l'ajout des trottoirs, grâce à une sérialisation compacte.
+
+> ⚠️ **Le bord intérieur du trottoir EST le bord du bitume.** Les deux dalles sont découpées sur
+> le même contour, et le trottoir n'est presque pas re-simplifié (5 cm, contre 55 cm pour le
+> bitume). Simplifier les deux indépendamment déplaçait le bord de part et d'autre : mesuré à
+> 2,3 % de recouvrement, soit une bordure qui débordait jusqu'à un demi-mètre dans la rue.
+
+**Ce que les rubans dessinent encore.** Le profil complet là où aucune dalle n'existe — chemins,
+sentiers et voies écartées de la fusion. **Sous les dalles, ils ne dessinent plus rien du tout.**
+
+> ⚠️ Garder l'accotement du ruban sous les dalles a été essayé, et c'est faux : il part du bord
+> du TROTTOIR, alors que les vetos en suppriment un sur 71 % des côtés de voie de la commune.
+> L'accotement partait donc dans le vide. **Une seule autorité par surface** — sinon les deux
+> divergent, ce qui est exactement le défaut que ce lot corrige. La tranche verticale est
+> fournie par les jupes des dalles.
+
+**Coût.** La construction des routes en jeu est **plus rapide qu'avant** : le sondage de
+façade, qui balayait les murs voisins de chaque point, a disparu. Le calcul est passé
+hors-jeu, dans `npm run debug:roads` (~4 min pour toute la commune, à relancer uniquement
+quand les routes ou les bâtiments changent).
+
+**⚠️ Le masque de la dalle, et la règle symétrique côté physique.** `Roads.tsx` teste
+`inExperimentalSurfaceZone()` sur l'**axe** de la voie ; `roadway.ts` fait le même test au
+milieu de chaque segment et le retient dans `segPaved`. Là où il est vrai, **le ruban ne
+dessine rien et le calcul analytique se tait** : les deux dalles font seules autorité, sur
+99,3 % des segments.
+
+> ⚠️ Piège historique, à connaître avant de retoucher cette condition : à une époque le
+> masque sautait la coupe entière alors que la dalle ne dessinait que le bitume. La ville se
+> retrouvait en plaques de goudron nues, sans le moindre bord. Le symptôme était trompeur,
+> parce que `groundHeight()` ignorait ce masque : **la voiture sentait des trottoirs
+> invisibles**. C'est pour ça que `roadwayHeightAt()` lit désormais les polygones de trottoir
+> eux-mêmes plutôt qu'une règle de distance — une règle ne peut pas rejouer les vetos, et la
+> moindre divergence redonne ce bug. Si tu
+> vois réapparaître des bords que la physique a mais pas l'écran, c'est ici qu'il faut
+> regarder — en vérifiant d'abord que `walkTiles` existe bien dans
+> `road-surface-test.json`.
+
+⚙️ Réglages dans `ROADWAY` : `WALK_TARGET_RATIO`, `WALK_TARGET_MIN`, `WALK_TARGET_MAX`.
+Trottoirs trop larges ou trop étroits à ton goût ? Ce sont ces trois-là qu'il faut bouger —
+**et il faut relancer `npm run debug:roads`**, sinon la physique change sans la géométrie et
+tu marches à côté du trottoir. Les constantes miroir sont en tête de `buildWalkTiles`.
 
 #### ⚠️ Le piège : `road-surface-test.json` est DÉRIVÉ des routes
 

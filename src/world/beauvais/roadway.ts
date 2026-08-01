@@ -1,5 +1,5 @@
 import { ROADS, CITY_GENERATED_AT, terrainHeight, type Road, type RoadClass } from './cityData'
-import { isBlocked, forEachWallNear } from './collision'
+import { isBlocked } from './collision'
 import { isTerrainReady } from './terrain'
 import roadSurfaceTest from './data/road-surface-test.json'
 
@@ -42,6 +42,15 @@ import roadSurfaceTest from './data/road-surface-test.json'
  *     perpendiculaire ferait un dos-d'âne en béton en plein croisement. On repère
  *     donc les points où une AUTRE voie passe (`junction`) et on y rabat bordure
  *     et accotement au ras du bitume — comme dans la vraie vie.
+ *
+ *  4. **Le trottoir n'est plus un ruban par rue, c'est le COMPLÉMENT du bitume.**
+ *     Extrudé rue par rue, il se chevauchait à chaque croisement, et le seul moyen
+ *     de s'en sortir était de le supprimer dans les carrefours : un trou à chaque
+ *     intersection. Il est maintenant calculé hors-jeu comme un polygone unique
+ *     (réseau élargi − chaussée − bâtiments, voir `debug-road-geometry.mjs`), et
+ *     `roadwayHeightAt()` exprime la MÊME règle en distances. Il n'y a donc plus de
+ *     cas particulier « carrefour » côté trottoir : le coin est juste par
+ *     construction.
  */
 
 /** Les cotes de l'ouvrage, en mètres. Tout le reste en découle. */
@@ -77,53 +86,26 @@ export const ROADWAY = {
   /**
    * ── LE TROTTOIR ────────────────────────────────────────────────────────────
    *
-   * Jusqu'ici la seule partie PLATE au bord de la chaussée était le dessus de la
-   * bordure : 35 cm. Les 80 cm de `SHOULDER_W` sont une pente en terre qui
-   * rattrape le terrain, pas un trottoir. Autrement dit, Beauvais n'avait
-   * pratiquement pas de trottoir — et comme la sensation d'une ville tient au
-   * rapport largeur de rue / hauteur de façade, les rues paraissaient étranglées
-   * même quand leur bitume était à la bonne largeur.
+   * Le dessus de bordure faisait 35 cm : ce n'est pas un trottoir. Comme la
+   * sensation d'une ville tient au rapport largeur de rue / hauteur de façade, les
+   * rues paraissaient étranglées même avec un bitume à la bonne largeur.
    *
-   * On mesure donc, en chaque point et de chaque côté, la distance réelle
-   * jusqu'à la façade la plus proche, et on remplit l'espace disponible.
+   * ⚠️ **La largeur est un choix de PROJET, pas une mesure.** Une première
+   * version sondait la distance à la façade la plus proche et remplissait
+   * l'espace. Deux défauts, tous deux visibles en jeu : dès qu'une façade était
+   * loin (place, recul d'immeuble) les voies convergentes posaient de grandes
+   * plaques grises informes ; et deux voies voisines mesurant deux couloirs
+   * différents ne tombaient pas d'accord sur l'emplacement du bord.
    *
-   * ⚠️ Ça ne marche QUE parce que routes et bâtiments viennent maintenant du
-   * même référentiel IGN. Avec les routes OSM décalées de 1 à 5 m, cette mesure
-   * aurait donné des trottoirs de 6 m d'un côté et 0 de l'autre.
-   */
-  /** En dessous, on ne pose pas de trottoir : juste la bordure, comme avant. */
-  WALK_MIN: 0.35,
-  /**
-   * ⚠️ Un trottoir a une largeur VOULUE, il ne remplit pas l'espace disponible.
-   *
-   * Première version : « on prend tout jusqu'à 4 m ». Résultat, dès qu'une
-   * façade était un peu loin (carrefour, place, recul d'immeuble) chaque voie
-   * posait 4 m de chaque côté, et les voies convergentes fusionnaient en grandes
-   * plaques grises informes. Une vraie ville fait l'inverse : le trottoir a une
-   * largeur de projet, et il ne RÉTRÉCIT que si la façade est trop proche.
-   *
-   * La largeur voulue suit le rang de la voie — une avenue a de vrais trottoirs,
-   * une ruelle non.
+   * La largeur suit donc le rang de la voie, et rien d'autre — une avenue a de
+   * vrais trottoirs, une ruelle non. C'est `walkTarget()` plus bas. Le rabotage
+   * par les bâtiments existe toujours, mais il se fait par soustraction de
+   * polygones hors-jeu (`debug-road-geometry.mjs`), ce qui donne un bord net au
+   * pied du mur au lieu d'une largeur moyennée.
    */
   WALK_TARGET_RATIO: 0.7, // × la demi-chaussée
   WALK_TARGET_MIN: 1.2,
   WALK_TARGET_MAX: 3,
-  /**
-   * Portée du sondage de façade (m).
-   *
-   * Volontairement plus large que le trottoir maximal : au-delà de
-   * `WALK_TARGET_MAX` la largeur est plafonnée de toute façon, mais TOUCHER une
-   * façade reste l'information utile — ça distingue « rue large » de « pas de
-   * rue du tout ».
-   *
-   * Testé : réduire cette portée à la stricte largeur utile (~8 m) ne gagne rien
-   * en temps de construction et fait retomber 18 % du centre-ville sur la valeur
-   * par défaut au lieu de 11 %. Le coût est ailleurs (le balayage des murs), pas
-   * dans le rayon.
-   */
-  WALK_PROBE: 16,
-  /** Espace laissé libre au pied de la façade : on ne colle pas au mur. */
-  WALK_GAP: 0.4,
   /** De combien l'accotement s'enfonce sous le terrain (pour ne pas laisser de jour). */
   EMBED: 0.3,
 } as const
@@ -169,6 +151,7 @@ type RoadSurfaceTest = {
   preview?: { polygons?: number[][][][] }
   tileSize?: number
   tiles?: Record<string, RoadSurfaceTile>
+  walkTiles?: Record<string, RoadSurfaceTile>
   sourceCity?: { generatedAt: string | null; roadCount: number }
 }
 
@@ -210,6 +193,8 @@ warnIfSurfaceStale()
 const EXPERIMENTAL_SURFACE_HEIGHT_SAMPLE_RADIUS = 1.6
 const EXPERIMENTAL_SURFACE_TILE_SIZE = ROAD_SURFACE_TEST.tileSize ?? ROADWAY_TILE
 const EXPERIMENTAL_SURFACE_TILES = ROAD_SURFACE_TEST.tiles ?? null
+/** Les trottoirs publiés par `npm run debug:roads`. Absents d'un fichier antérieur. */
+const EXPERIMENTAL_WALK_TILES = ROAD_SURFACE_TEST.walkTiles ?? null
 const LEGACY_EXPERIMENTAL_SURFACE_POLYGONS = ROAD_SURFACE_TEST.polygons ?? ROAD_SURFACE_TEST.preview?.polygons ?? []
 
 /** Un tronçon de chaussée prêt à être mis en volume par `Roads.tsx`. */
@@ -229,10 +214,6 @@ export interface RoadChunk {
   leftMerge: Float32Array
   /** Extension de bitume sur le cote droit quand une voie parallele est fusionnee. */
   rightMerge: Float32Array
-  /** Largeur du trottoir gauche (m), mesurée jusqu'à la façade. */
-  leftWalk: Float32Array
-  /** Largeur du trottoir droit (m), mesurée jusqu'à la façade. */
-  rightWalk: Float32Array
   /** Classe d'usage IGN → décide du revêtement dans `Roads.tsx`. */
   cls?: RoadClass
 }
@@ -251,16 +232,14 @@ let segB = new Float32Array(0) // arrivée : x, z, y
 let segHalf = new Float32Array(0)
 let segLeftMerge = new Float32Array(0)
 let segRightMerge = new Float32Array(0)
-/**
- * Largeur de trottoir par segment — la contrepartie PHYSIQUE de ce que dessine
- * `Roads.tsx`. Sans elle, le joueur marcherait dans le vide au-delà de 35 cm du
- * bitume : c'est la règle « ce qu'on voit = ce qu'on touche » de ce module.
- */
-let segLeftWalk = new Float32Array(0)
-let segRightWalk = new Float32Array(0)
 let segRun = new Int32Array(0)
 let segRoad = new Int32Array(0)
 let segJunction = new Uint8Array(0)
+/**
+ * 1 = ce segment est sous la dalle de bitume, donc bitume ET trottoir sont déjà
+ * décrits par les polygones publiés. Le profil analytique n'a plus rien à y dire.
+ */
+let segPaved = new Uint8Array(0)
 let cells: Map<string, number[]> = new Map()
 
 const keyOf = (cx: number, cz: number) => cx + ':' + cz
@@ -287,41 +266,106 @@ function pointInRing(x: number, z: number, ring: number[][]): boolean {
   return inside
 }
 
-function experimentalSurfacePolygonsNear(x: number, z: number): number[][][][] {
-  if (!EXPERIMENTAL_SURFACE_TILES) return LEGACY_EXPERIMENTAL_SURFACE_POLYGONS
+/**
+ * 🔎 Un index de polygones par tuile, avec la BOÎTE ENGLOBANTE de chacun.
+ *
+ * ⚠️ La boîte n'est pas un raffinement, c'est ce qui rend ces tests utilisables à
+ * chaque image. `roadwayHeightAt()` interroge deux couches de polygones, et un
+ * point hors trottoir doit balayer les 9 tuiles voisines EN ENTIER avant de
+ * pouvoir répondre non — le cas le plus fréquent est donc le plus cher. Mesuré sur
+ * 106 666 points : **67 µs par appel** sans boîte, **3,4 µs avec**. Vingt fois.
+ *
+ * Quatre comparaisons éliminent la quasi-totalité des candidats avant le lancer de
+ * rayon. L'index se construit en 77 ms, une seule fois.
+ */
+interface PolygonIndex {
+  polys: number[][][][]
+  /** x0, z0, x1, z1 par polygone, à plat. */
+  bounds: Float64Array
+}
 
+function buildPolygonIndex(
+  tiles: Record<string, RoadSurfaceTile> | null,
+): Map<string, PolygonIndex> | null {
+  if (!tiles) return null
+  const index = new Map<string, PolygonIndex>()
+  for (const key of Object.keys(tiles)) {
+    const polys = tiles[key].polygons
+    const bounds = new Float64Array(polys.length * 4)
+    for (let i = 0; i < polys.length; i++) {
+      let x0 = Infinity
+      let z0 = Infinity
+      let x1 = -Infinity
+      let z1 = -Infinity
+      for (const [x, z] of polys[i][0]) {
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (z < z0) z0 = z
+        if (z > z1) z1 = z
+      }
+      bounds[i * 4] = x0
+      bounds[i * 4 + 1] = z0
+      bounds[i * 4 + 2] = x1
+      bounds[i * 4 + 3] = z1
+    }
+    index.set(key, { polys, bounds })
+  }
+  return index
+}
+
+/** Le point tombe-t-il dans un polygone de cette couche ? (trous compris) */
+function insideIndexedLayer(index: Map<string, PolygonIndex> | null, x: number, z: number): boolean {
+  if (!index) return false
   const tx = Math.floor(x / EXPERIMENTAL_SURFACE_TILE_SIZE)
   const tz = Math.floor(z / EXPERIMENTAL_SURFACE_TILE_SIZE)
-  const polygons: number[][][][] = []
   for (let dx = -1; dx <= 1; dx++) {
     for (let dz = -1; dz <= 1; dz++) {
-      const tile = EXPERIMENTAL_SURFACE_TILES[tx + dx + ':' + (tz + dz)]
-      if (tile) polygons.push(...tile.polygons)
+      const tile = index.get(tx + dx + ':' + (tz + dz))
+      if (!tile) continue
+      const { polys, bounds } = tile
+      for (let i = 0; i < polys.length; i++) {
+        const b = i * 4
+        if (x < bounds[b] || x > bounds[b + 2] || z < bounds[b + 1] || z > bounds[b + 3]) continue
+        const poly = polys[i]
+        if (!pointInRing(x, z, poly[0])) continue
+        let inHole = false
+        for (let k = 1; k < poly.length; k++) {
+          if (pointInRing(x, z, poly[k])) {
+            inHole = true
+            break
+          }
+        }
+        if (!inHole) return true
+      }
     }
   }
-  return polygons
+  return false
 }
+
+const SURFACE_INDEX = buildPolygonIndex(EXPERIMENTAL_SURFACE_TILES)
+const WALK_INDEX = buildPolygonIndex(EXPERIMENTAL_WALK_TILES)
 
 function insideExperimentalSurface(x: number, z: number): boolean {
   if (!EXPERIMENTAL_SURFACE_TILES) {
+    // Repli : un fichier d'avant le découpage en tuiles, avec une seule zone d'essai.
     const dx = x - ROAD_SURFACE_TEST.center.x
     const dz = z - ROAD_SURFACE_TEST.center.z
     if (Math.hypot(dx, dz) > ROAD_SURFACE_TEST.radius + 8) return false
-  }
-
-  for (const poly of experimentalSurfacePolygonsNear(x, z)) {
-    const outer = poly[0]
-    if (!outer || !pointInRing(x, z, outer)) continue
-    let inHole = false
-    for (const hole of poly.slice(1)) {
-      if (pointInRing(x, z, hole)) {
-        inHole = true
-        break
+    for (const poly of LEGACY_EXPERIMENTAL_SURFACE_POLYGONS) {
+      const outer = poly[0]
+      if (!outer || !pointInRing(x, z, outer)) continue
+      let inHole = false
+      for (const hole of poly.slice(1)) {
+        if (pointInRing(x, z, hole)) {
+          inHole = true
+          break
+        }
       }
+      if (!inHole) return true
     }
-    if (!inHole) return true
+    return false
   }
-  return false
+  return insideIndexedLayer(SURFACE_INDEX, x, z)
 }
 
 function experimentalSurfaceTopHeight(x: number, z: number): number {
@@ -337,6 +381,32 @@ function experimentalSurfaceTopHeight(x: number, z: number): number {
 function experimentalSurfaceHeightAt(x: number, z: number): number {
   if (!insideExperimentalSurface(x, z)) return -Infinity
   return experimentalSurfaceTopHeight(x, z)
+}
+
+/**
+ * 🚶 Le TROTTOIR, lu sur les mêmes polygones que ceux qui sont dessinés.
+ *
+ * ⚠️ C'est le seul moyen d'être exact. Un trottoir n'existe pas partout où la
+ * géométrie le permettrait : deux vetos le suppriment hors-jeu (terre-plein entre
+ * voies parallèles, absence de bâti — voir `debug-road-geometry.mjs`). Une règle de
+ * distance, si fidèle soit-elle, ne peut pas les rejouer sans dupliquer tout le
+ * raisonnement, et la moindre divergence redonne des **trottoirs invisibles** : le
+ * joueur bute sur une marche de 13 cm en rase campagne, là où l'écran ne montre que
+ * de l'herbe. C'était le bug historique de ce module.
+ *
+ * On paie donc un test point-dans-polygone, sur le même index à boîtes englobantes
+ * que le bitume : **3,4 µs par appel** mesurés sur 106 666 points, dans le cas le
+ * plus défavorable (hors trottoir, donc sans sortie anticipée).
+ */
+function insideExperimentalWalk(x: number, z: number): boolean {
+  return insideIndexedLayer(WALK_INDEX, x, z)
+}
+
+function experimentalWalkHeightAt(x: number, z: number): number {
+  if (!insideExperimentalWalk(x, z)) return -Infinity
+  // Même échantillonnage que le bitume, relevé de la bordure : c'est ce que fait
+  // `buildRoadSurfaceBuffers(polygones, KERB_H)` côté rendu.
+  return experimentalSurfaceTopHeight(x, z) + ROADWAY.KERB_H
 }
 
 function ensureBuilt(): boolean {
@@ -449,64 +519,24 @@ function smoothRoadTops(pts: number[][], half: number): number[] {
 }
 
 /**
- * Distance aux façades de part et d'autre de (x, z), le long de la normale.
+ * 🚶 LARGEUR DU TROTTOIR — une fonction du RANG DE LA VOIE, et rien d'autre.
  *
- * On lance une vraie DROITE perpendiculaire plutôt que de chercher le bâtiment
- * le plus proche : ce qu'on veut est la largeur du COULOIR de rue en travers,
- * pas la distance à un pignon situé derrière nous.
+ * ⚠️ C'est le miroir EXACT de `walkTarget()` dans `debug-road-geometry.mjs`, qui
+ * découpe les polygones affichés. Les deux doivent donner le même nombre pour la
+ * même voie, sinon on marche à côté du trottoir qu'on voit. Toute modification se
+ * fait des deux côtés, dans le même commit.
  *
- * Les deux côtés sont résolus en UNE seule passe : c'est la même droite, seul le
- * signe de `t` change. Balayer deux fois les murs voisins doublait le temps de
- * construction pour rien (2,2 s → 1,1 s sur toute la commune).
+ * ── Pourquoi ce n'est plus mesuré jusqu'à la façade ─────────────────────────
+ * La version précédente lançait une perpendiculaire, cherchait le premier mur de
+ * chaque côté et remplissait l'espace, puis lissait le résultat le long de la rue.
+ * L'intention était bonne, mais elle imposait la largeur au TRACÉ, alors que c'est
+ * la largeur qui doit être un choix de projet. Deux voies voisines mesuraient deux
+ * couloirs différents et ne tombaient pas d'accord sur l'emplacement du bord.
  *
- * `out` reçoit [gauche, droite], `Infinity` si rien n'est touché dans la portée
- * — cas normal en périphérie, où l'appelant pose alors la largeur voulue sans
- * contrainte.
- */
-function facadeDistances(
-  x: number,
-  z: number,
-  dx: number,
-  dz: number,
-  probe: number,
-  out: [number, number],
-): void {
-  // (`probe` reste un paramètre : c'est le seul réglage qu'on ait eu besoin de
-  // faire varier pour arbitrer qualité/temps, et le garder explicite évite de
-  // refaire l'expérience à l'aveugle.)
-  let pos = Infinity
-  let neg = Infinity
-
-  forEachWallNear(x, z, probe, (ax, az, bx, bz) => {
-    // Intersection droite / segment, résolue par déterminant. `denom` nul = mur
-    // parallèle à la droite : il ne borne aucun des deux côtés.
-    const ex = bx - ax
-    const ez = bz - az
-    const denom = dx * ez - dz * ex
-    if (denom === 0) return
-
-    const px = ax - x
-    const pz = az - z
-    const t = (px * ez - pz * ex) / denom // distance signée le long de la droite
-    const abs = t < 0 ? -t : t
-    if (abs >= (t >= 0 ? pos : neg)) return
-
-    const u = (px * dz - pz * dx) / -denom // position sur le mur, 0..1
-    if (u < 0 || u > 1) return
-
-    if (t >= 0) pos = abs
-    else neg = abs
-  })
-
-  out[0] = pos
-  out[1] = neg
-}
-
-/**
- * Largeur de trottoir VOULUE pour une voie, avant contrainte par les façades.
- *
- * Proportionnelle au rang de la voie : une avenue mérite de vrais trottoirs, une
- * ruelle non. C'est cette largeur qu'on obtient partout où la place existe.
+ * Le rabotage par les bâtiments n'a pas disparu — il a changé de place. Il se fait
+ * maintenant par SOUSTRACTION de polygones, hors-jeu, ce qui donne un bord net au
+ * pied du mur au lieu d'une largeur moyennée. Et la physique n'a pas besoin de le
+ * refaire : un bâtiment est déjà un volume plein, on ne peut pas y entrer.
  */
 function walkTarget(half: number): number {
   const wanted = half * ROADWAY.WALK_TARGET_RATIO
@@ -515,74 +545,9 @@ function walkTarget(half: number): number {
   return wanted
 }
 
-/**
- * Largeur de trottoir retenue : la largeur voulue, rabotée si la façade est trop
- * proche.
- *
- * `reachOut` = demi-chaussée + bordure : c'est là que commence le trottoir.
- * `hit` infini = aucune façade en vue → rien ne contraint, on pose la largeur
- * voulue.
- */
-function walkWidthFrom(hit: number, reachOut: number, target: number): number {
-  if (!Number.isFinite(hit)) return target
-
-  const free = hit - reachOut - ROADWAY.WALK_GAP
-  if (free <= ROADWAY.WALK_MIN) return ROADWAY.WALK_MIN
-  return Math.min(free, target)
-}
-
-/**
- * Lisse les largeurs de trottoir le long de la voie.
- *
- * Sans ça, un simple décrochement de façade (un porche, un recul d'immeuble)
- * ferait un trottoir en dents de scie. Une vraie ville a des trottoirs qui
- * s'élargissent progressivement.
- */
-function smoothWalk(values: Float32Array, passes = 2): void {
-  if (values.length < 3) return
-  const tmp = new Float32Array(values.length)
-  for (let p = 0; p < passes; p++) {
-    tmp[0] = values[0]
-    tmp[values.length - 1] = values[values.length - 1]
-    for (let i = 1; i < values.length - 1; i++) {
-      tmp[i] = (values[i - 1] + values[i] * 2 + values[i + 1]) / 4
-    }
-    values.set(tmp)
-  }
-}
-
-/**
- * Mesure le trottoir de chaque côté, tout le long d'un axe densifié.
- *
- * La normale est prise sur le segment courant : deux points voisins suffisent à
- * l'orienter, et on la réutilise pour les deux côtés (gauche = +, droite = −).
- */
-function measureWalks(dense: number[][], half: number): { leftWalk: Float32Array; rightWalk: Float32Array } {
-  const n = dense.length
-  const leftWalk = new Float32Array(n)
-  const rightWalk = new Float32Array(n)
-  const reachOut = half + ROADWAY.KERB_W
-  const target = walkTarget(half)
-  const hits: [number, number] = [0, 0]
-
-  for (let i = 0; i < n; i++) {
-    const a = dense[Math.max(0, i - 1)]
-    const b = dense[Math.min(n - 1, i + 1)]
-    let dx = b[0] - a[0]
-    let dz = b[1] - a[1]
-    const len = Math.hypot(dx, dz) || 1
-    dx /= len
-    dz /= len
-
-    const [x, z] = dense[i]
-    facadeDistances(x, z, -dz, dx, ROADWAY.WALK_PROBE, hits)
-    leftWalk[i] = walkWidthFrom(hits[0], reachOut, target)
-    rightWalk[i] = walkWidthFrom(hits[1], reachOut, target)
-  }
-
-  smoothWalk(leftWalk)
-  smoothWalk(rightWalk)
-  return { leftWalk, rightWalk }
+/** Bord extérieur du trottoir, mesuré depuis l'axe de la voie. */
+export function walkOuterReach(half: number): number {
+  return half + ROADWAY.KERB_W + walkTarget(half)
 }
 
 /** Un axe de voie prêt à l'emploi (entre deux bâtiments), pendant la construction. */
@@ -598,9 +563,6 @@ interface Run {
   leftMerge: Float32Array
   /** Bitume ajoute cote droit pour fondre les voies paralleles proches. */
   rightMerge: Float32Array
-  /** Largeur du trottoir de chaque cote (m). Rempli juste apres la densification. */
-  leftWalk: Float32Array
-  rightWalk: Float32Array
   source: Road
 }
 
@@ -629,7 +591,6 @@ function build() {
         flags: new Uint8Array(dense.length),
         leftMerge: new Float32Array(dense.length),
         rightMerge: new Float32Array(dense.length),
-        ...measureWalks(dense, half),
         source: road,
       })
     }
@@ -644,11 +605,10 @@ function build() {
   segHalf = new Float32Array(total)
   segLeftMerge = new Float32Array(total)
   segRightMerge = new Float32Array(total)
-  segLeftWalk = new Float32Array(total)
-  segRightWalk = new Float32Array(total)
   segRun = new Int32Array(total)
   segRoad = new Int32Array(total)
   segJunction = new Uint8Array(total)
+  segPaved = new Uint8Array(total)
   cells = new Map()
 
   let s = 0
@@ -691,6 +651,22 @@ function build() {
 
   markParallelMerges(runs)
 
+  /**
+   * Quels segments sont couverts par les dalles ?
+   *
+   * ⚠️ Là où elles règnent, le calcul analytique ci-dessous doit se TAIRE. Sinon il
+   * ajoute une bordure et un trottoir de son cru par-dessus — y compris sur les
+   * côtés que les vetos ont supprimés, et on retrouve les trottoirs invisibles.
+   *
+   * Le test porte sur le milieu du segment : les segments font quelques mètres
+   * après densification, et la dalle est bâtie sur ces mêmes axes.
+   */
+  for (let i = 0; i < total; i++) {
+    const mx = (segA[i * 3] + segB[i * 3]) / 2
+    const mz = (segA[i * 3 + 1] + segB[i * 3 + 1]) / 2
+    segPaved[i] = insideExperimentalSurface(mx, mz) ? 1 : 0
+  }
+
   // --- 3. Les carrefours : ou une AUTRE voie passe, on n'a pas le droit de bordure ---
   s = 0
   for (const run of runs) {
@@ -715,10 +691,6 @@ function build() {
       segJunction[s + i] = run.flags[i] || run.flags[i + 1]
       segLeftMerge[s + i] = Math.max(run.leftMerge[i], run.leftMerge[i + 1])
       segRightMerge[s + i] = Math.max(run.rightMerge[i], run.rightMerge[i + 1])
-      // Moyenne des deux extrémités : le trottoir varie continûment le long du
-      // segment, alors que la fusion de chaussée est un « au moins l'un des deux ».
-      segLeftWalk[s + i] = (run.leftWalk[i] + run.leftWalk[i + 1]) / 2
-      segRightWalk[s + i] = (run.rightWalk[i] + run.rightWalk[i + 1]) / 2
     }
     s += n - 1
   }
@@ -759,8 +731,6 @@ function pushChunk(tile: string, run: Run, from: number, to: number) {
     junction: run.flags.slice(from, to + 1),
     leftMerge: run.leftMerge.slice(from, to + 1),
     rightMerge: run.rightMerge.slice(from, to + 1),
-    leftWalk: run.leftWalk.slice(from, to + 1),
-    rightWalk: run.rightWalk.slice(from, to + 1),
     cls: run.source.cls,
   }
   let list = tiles!.get(tile)
@@ -970,19 +940,40 @@ function distToSegment(
 /**
  * Altitude de la CHAUSSÉE au point (x, z), ou `-Infinity` s'il n'y a pas de route.
  *
- * C'est la contrepartie exacte de la géométrie construite par `Roads.tsx` :
- * bitume plat, marche de bordure, puis accotement qui redescend vers le terrain.
- * Aux carrefours (pas de bordure), seule la surface du bitume compte.
+ * C'est la contrepartie exacte de la géométrie affichée : bitume plat, marche de
+ * bordure, trottoir plat, puis accotement qui redescend vers le terrain.
+ *
+ * ── La règle du trottoir, et pourquoi elle est écrite comme ça ──────────────
+ * Le trottoir affiché est un POLYGONE, calculé hors-jeu par soustraction :
+ * réseau élargi − chaussée − bâtiments. On ne peut pas rejouer une soustraction de
+ * polygones à chaque image, mais on n'en a pas besoin — la même règle s'exprime en
+ * distances :
+ *
+ *   - dans la dalle de bitume (`experimentalSurfaceHeightAt`) → on est sur la
+ *     chaussée, on sort tout de suite. C'est le terme « − chaussée » ;
+ *   - sinon, en deçà de `walkOuterReach(half)` d'un axe → on est sur le trottoir.
+ *     C'est le terme « réseau élargi » ;
+ *   - le terme « − bâtiments » n'a pas d'équivalent ici, et c'est voulu : un
+ *     bâtiment est déjà un volume plein, on ne peut pas marcher dedans.
+ *
+ * ⚠️ Il n'y a plus de cas particulier « carrefour ». C'en était un avant, parce que
+ * les rubans par rue se chevauchaient ; le polygone fusionné rend le coin juste par
+ * construction, et la physique doit dire la même chose — sinon le joueur retombe au
+ * niveau du bitume sur des coins où le trottoir est bien dessiné.
  */
 export function roadwayHeightAt(x: number, z: number): number {
   if (!ensureBuilt()) return -Infinity
   const experimentalTop = experimentalSurfaceHeightAt(x, z)
   if (experimentalTop !== -Infinity) return experimentalTop
+  const walkTop = experimentalWalkHeightAt(x, z)
+  if (walkTop !== -Infinity) return walkTop
   const list = cells.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
   if (!list) return -Infinity
 
   let best = -Infinity
   for (const i of list) {
+    // Sous les dalles, tout a déjà été dit par les deux tests ci-dessus.
+    if (segPaved[i]) continue
     const ax = segA[i * 3]
     const az = segA[i * 3 + 1]
     const ex = segB[i * 3] - ax
@@ -995,8 +986,8 @@ export function roadwayHeightAt(x: number, z: number): number {
 
     const half = segHalf[i]
     const maxMergedReach = half + Math.max(segLeftMerge[i], segRightMerge[i])
-    const maxWalkReach = reach(half) + Math.max(segLeftWalk[i], segRightWalk[i])
-    if (d > Math.max(maxWalkReach, maxMergedReach)) continue
+    const walkOut = walkOuterReach(half)
+    if (d > Math.max(walkOut + ROADWAY.SHOULDER_W, maxMergedReach)) continue
 
     // Altitude du dessus du bitume, interpolée le long du segment.
     const top = segA[i * 3 + 2] + (segB[i * 3 + 2] - segA[i * 3 + 2]) * t
@@ -1009,22 +1000,16 @@ export function roadwayHeightAt(x: number, z: number): number {
     let y: number
     if (d <= half || (mergeExtra > 0 && d <= half + mergeExtra)) {
       y = top
-    } else if (segJunction[i]) {
-      continue // carrefour : ni bordure ni accotement, c'est la voie d'en face qui décide
+    } else if (d <= walkOut) {
+      y = top + ROADWAY.KERB_H // bordure ou trottoir : même niveau
     } else {
-      // Le trottoir est PLAT, à la hauteur de la bordure : bordure + la largeur
-      // mesurée jusqu'à la façade. Ces deux lignes doivent rester le miroir
-      // exact de `section()` dans `Roads.tsx`, sinon on remarche dans le vide.
-      const walk = signedSide >= 0 ? segLeftWalk[i] : segRightWalk[i]
-      const walkOut = half + ROADWAY.KERB_W + walk
-
-      if (d <= walkOut) {
-        y = top + ROADWAY.KERB_H // bordure ou trottoir : même niveau
-      } else {
-        // Accotement : on redescend en pente vers le terrain naturel.
-        const u = Math.min(1, (d - walkOut) / ROADWAY.SHOULDER_W)
-        y = (top + ROADWAY.KERB_H) * (1 - u) + terrainHeight(x, z) * u
-      }
+      // Accotement : on redescend en pente vers le terrain naturel. Il n'est plus
+      // dessiné que par les rubans (bandes 0 et 6 de `Roads.tsx`), mais il reste
+      // indispensable ici : sans lui, le bord du trottoir serait une marche franche
+      // de ~30 cm, et une marche dans une fonction de hauteur fait sauter les
+      // véhicules qui la franchissent.
+      const u = Math.min(1, (d - walkOut) / ROADWAY.SHOULDER_W)
+      y = (top + ROADWAY.KERB_H) * (1 - u) + terrainHeight(x, z) * u
     }
     if (y > best) best = y
   }

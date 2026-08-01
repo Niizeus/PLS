@@ -33,23 +33,32 @@ function cleanRing(ring: number[][]): THREE.Vector2[] {
   return points.map(([x, z]) => new THREE.Vector2(x, z))
 }
 
-function surfaceTopHeight(x: number, z: number): number {
+function surfaceTopHeight(x: number, z: number, lift: number): number {
   const r = SURFACE_HEIGHT_SAMPLE_RADIUS
   let h = terrainHeight(x, z)
   h = Math.max(h, terrainHeight(x + r, z), terrainHeight(x - r, z))
   h = Math.max(h, terrainHeight(x, z + r), terrainHeight(x, z - r))
   h = Math.max(h, terrainHeight(x + r, z + r), terrainHeight(x - r, z - r))
   h = Math.max(h, terrainHeight(x + r, z - r), terrainHeight(x - r, z + r))
-  return h + ROADWAY.THICKNESS + SURFACE_VISUAL_LIFT
+  return h + ROADWAY.THICKNESS + SURFACE_VISUAL_LIFT + lift
 }
 
-function createSurfaceHeightSampler() {
+/**
+ * `lift` sert le TROTTOIR : il est bâti sur le même échantillonnage que le bitume,
+ * simplement relevé de la hauteur de bordure.
+ *
+ * ⚠️ C'est ce qui garantit qu'il n'y a jamais de marche parasite entre les deux.
+ * Si le trottoir échantillonnait le terrain de son côté, deux points distants de
+ * 20 cm de part et d'autre du caniveau pourraient tomber sur des bosses
+ * différentes, et la bordure ondulerait le long de la rue.
+ */
+function createSurfaceHeightSampler(lift: number) {
   const cache = new Map<string, number>()
   return (x: number, z: number) => {
     const key = x.toFixed(2) + ':' + z.toFixed(2)
     let h = cache.get(key)
     if (h === undefined) {
-      h = surfaceTopHeight(x, z)
+      h = surfaceTopHeight(x, z, lift)
       cache.set(key, h)
     }
     return h
@@ -176,8 +185,8 @@ function buildSurfaceEdgePositions(
   return positions.length === 0 ? null : new Float32Array(positions)
 }
 
-export function buildRoadSurfaceBuffers(polygons: number[][][][]): RoadSurfaceBuffers {
-  const heightAt = createSurfaceHeightSampler()
+export function buildRoadSurfaceBuffers(polygons: number[][][][], lift = 0): RoadSurfaceBuffers {
+  const heightAt = createSurfaceHeightSampler(lift)
   return {
     surfacePositions: buildSurfacePositions(polygons, heightAt),
     edgePositions: buildSurfaceEdgePositions(polygons, heightAt),

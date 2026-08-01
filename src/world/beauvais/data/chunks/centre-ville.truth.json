@@ -1,0 +1,367 @@
+{
+ "chunk": "centre-ville",
+ "annotatedAt": "2026-08-01T02:52:38.360Z",
+ "count": 90,
+ "truth": {
+  "BATIMENT0000000317903269": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317894683": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903339": {
+   "archetype": "pavillon-crepi",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902770": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317899406": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904093": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902617": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317899506": {
+   "archetype": "reconstruction-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901615": {
+   "archetype": "reconstruction-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317900859": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903156": {
+   "archetype": "pan-de-bois",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903588": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903713": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904124": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902969": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317899457": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903245": {
+   "archetype": "pavillon-recent",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902750": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902204": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "xz:-292_315": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904196": {
+   "archetype": "hangar",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317893131": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903676": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902845": {
+   "archetype": "hangar",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901208": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903827": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903887": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904101": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901576": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903830": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904032": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317894423": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903032": {
+   "archetype": "pavillon-recent",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903404": {
+   "archetype": "pavillon-recent",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903837": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903420": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902663": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "xz:312_-30": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317895971": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903955": {
+   "archetype": "pan-de-bois",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903561": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901661": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901638": {
+   "archetype": "grand-ensemble",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902482": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902748": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903892": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904022": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317904011": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902514": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903575": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317895503": {
+   "archetype": "pavillon-recent",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903701": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317893200": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317900884": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903478": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903963": {
+   "archetype": "maison-ville-brique",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903147": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317902836": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317901191": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903623": {
+   "archetype": "inconnu",
+   "lot": "aleatoire"
+  },
+  "BATIMENT0000000317903509": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903240": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903372": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903631": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317901639": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317899497": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317901560": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317904051": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317902613": {
+   "archetype": "equipement-public",
+   "lot": "file"
+  },
+  "xz:-25_-89": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903056": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903262": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317902835": {
+   "archetype": "equipement-public",
+   "lot": "file"
+  },
+  "BATIMENT0000000317902631": {
+   "archetype": "equipement-public",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903494": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317899491": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317902554": {
+   "archetype": "equipement-public",
+   "lot": "file"
+  },
+  "BATIMENT0000000317899492": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903081": {
+   "archetype": "petit-collectif",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903712": {
+   "archetype": "petit-collectif",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903757": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903460": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903284": {
+   "archetype": "grand-ensemble",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903578": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903636": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317899508": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "xz:-295_-138": {
+   "archetype": "petit-collectif",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903864": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  },
+  "BATIMENT0000000317894603": {
+   "archetype": "inconnu",
+   "lot": "file"
+  },
+  "BATIMENT0000000317903374": {
+   "archetype": "immeuble-centre-commerce",
+   "lot": "file"
+  }
+ }
+}

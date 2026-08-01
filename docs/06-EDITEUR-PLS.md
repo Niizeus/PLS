@@ -289,6 +289,29 @@ Actions a prevoir :
 Important : si on masque ou remplace un batiment visible, il faut garder la coherence
 avec les collisions. Un mur invisible est un bug.
 
+### Module ChunkForge ✅
+
+Troisieme onglet de l'editeur, a cote de Carte et Interieurs. Il sert a **relire et corriger** le
+classement des batiments en familles architecturales.
+
+- **Maj + glisser** delimite une zone de travail ; molette pour zoomer, clic pour inspecter.
+- Le plan colore chaque batiment par famille, avec les rues a leur vraie largeur.
+- L'inspecteur affiche l'adresse, la proposition, sa confiance et **les indices qui ont vote**.
+- On tranche aux touches `1..9` / `A..G`, `Entree` confirme la proposition.
+- La file est triee par **impact visuel**, pas par confiance : on relit ce qui se verra dans le
+  jeu, pas ce dont la machine doute le plus.
+
+⚠️ **Le classement ne tourne pas dans l'editeur** : il se fait hors-jeu (`npm run chunk:classify`).
+L'editeur ne fait que ce qu'un humain seul peut faire — regarder et decider. Si le chunk classe
+n'existe pas, le module affiche les commandes a lancer.
+
+Les corrections vont dans `src/world/beauvais/data/chunk-overrides.json` via le plugin Vite
+`chunkOverridesPlugin`. **Aucun script ne reecrit ce fichier** : on peut relancer la collecte et le
+classement autant de fois qu'on veut sans perdre une correction — meme principe que
+`road-overrides.json` pour les routes.
+
+Specification complete et suivi des lots : [08 - ChunkForge](08-CHUNKFORGE.md).
+
 ### Edition des routes
 
 L'edition des routes est plus complexe et doit venir apres les POI.

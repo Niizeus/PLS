@@ -114,6 +114,13 @@ OSM contient les **contours des bâtiments**, les **rues**, les **points d'inté
 
 ## 🏗️ Du monde réel au jeu 3D (le pipeline)
 
+> 🔜 **Ce pipeline va être doublé, quartier par quartier, par ChunkForge** — un système qui déduit
+> *ce qu'est* chaque bâtiment (16 archétypes beauvaisiens, avec un % de confiance) pour en générer
+> un volume et des façades crédibles, au lieu d'un volume peint en aplat. La spécification complète
+> est dans [`08-CHUNKFORGE.md`](08-CHUNKFORGE.md) ; zone pilote : carré de ±400 m autour de la
+> cathédrale. **Rien n'est supprimé ici** : le pipeline ci-dessous reste en service partout où
+> aucun chunk n'est publié.
+
 L'idée générale, étape par étape :
 
 1. **Récupérer Beauvais à grande échelle** depuis OpenStreetMap / Overpass, avec une priorité sur
@@ -528,7 +535,12 @@ jeu fluide :
 - [x] **Toits en pente** avec pignons, orientés sur les façades libres et colorés au matériau réel. *(roofs.mjs, buildingMesh.ts)*
 - [ ] Cours intérieures (les `holes` des relations OSM sont dans la donnée mais pas encore percés dans le maillage).
 - [ ] Faîtage **partagé** entre maisons mitoyennes : aujourd'hui chaque maison d'une rangée a son propre toit, alors qu'en vrai la rangée n'en fait souvent qu'un seul.
-- [ ] Façades : fenêtres et portes en shader procédural, par usage (résidentiel / commercial / industriel — l'attribut existe dans la BD TOPO).
+- [ ] **Façades : tout est à refaire.** L'atlas de fenêtres dessinées est **débranché**
+  (`FACADES_TEXTUREES = false` dans `archetypes/facadeAtlas.ts`) : il produisait des damiers de
+  rectangles sombres qui n'évoquaient pas Beauvais. Les bâtiments sortent en aplats cel-shading
+  en attendant. La méthode de remplacement doit donner des travées irrégulières, un
+  rez-de-chaussée lié à l'usage réel et des murs aveugles — voir
+  [`08-CHUNKFORGE.md`](08-CHUNKFORGE.md#4-les-façades-sont-en-texture-pas-en-géométrie-modulaire).
 - [ ] Optimisation : découpage en tuiles + LOD (quand on agrandira la ville).
 - [ ] Placer les premières zones utiles : appartement Saint-Lucien, gare, mairie, commissariat,
   lieu de travail.

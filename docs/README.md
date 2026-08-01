@@ -15,6 +15,7 @@ Pour comprendre le projet depuis zero :
 6. [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) : items, inventaire, equipements.
 7. [06 - Editeur PLS](06-EDITEUR-PLS.md) : outil de production, carte, interieurs, futurs modules.
 8. [07 - Backlog d'idees](07-BACKLOG-IDEES.md) : idees pas encore specifiees. **Rien n'y est a coder.**
+9. [08 - ChunkForge](08-CHUNKFORGE.md) : generation de quartiers credibles (archetypes, confiance, chunks).
 
 ## Chercher vite
 
@@ -28,6 +29,7 @@ Pour comprendre le projet depuis zero :
 | Beauvais, quartiers, centre-ville, police, relief, routes | [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md) |
 | Liste d'objets, categories, structure item, equipements | [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) |
 | Editeur carte, interieurs, items, PNJ, factions, validations | [06 - Editeur PLS](06-EDITEUR-PLS.md) |
+| Archetypes de batiments, chunks, passeports, score de confiance | [08 - ChunkForge](08-CHUNKFORGE.md) |
 | Radios, identite des stations, workflow audio | [Documentations RADIO](Documentations%20RADIO/) |
 | Une idee pas encore tranchee, une envie, une piste a explorer | [07 - Backlog d'idees](07-BACKLOG-IDEES.md) |
 | Anciennes recherches utiles mais plus forcement actuelles | [archive](archive/) |
@@ -38,6 +40,7 @@ Pour comprendre le projet depuis zero :
 - **Detail sur Beauvais ou ses quartiers** : [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md).
 - **Objet, item, equipement, inventaire** : [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md).
 - **Outil pour creer du contenu** : [06 - Editeur PLS](06-EDITEUR-PLS.md).
+- **Generation d'un quartier, archetype de batiment, chunk** : [08 - ChunkForge](08-CHUNKFORGE.md).
 - **Implementation et architecture de code** : [02 - Architecture](02-ARCHITECTURE.md).
 - **Recherche ancienne ou piste mise de cote** : [archive](archive/).
 - **Idee pas encore decidee ni specifiee** : [07 - Backlog d'idees](07-BACKLOG-IDEES.md). Des qu'elle
@@ -55,4 +58,5 @@ proche, puis on ajoute seulement un renvoi court dans les autres docs.
 | [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) | Base de bible items. Doit devenir plus data-driven avec les prochains objets. |
 | [06 - Editeur PLS](06-EDITEUR-PLS.md) | Vision + roadmap + etat implemente. A separer plus tard entre vision et suivi technique si besoin. |
 | [07 - Backlog d'idees](07-BACKLOG-IDEES.md) | Recueil d'idees non specifiees. Ne decrit PAS le jeu actuel et ne doit pas etre implemente sans demande explicite. |
+| [08 - ChunkForge](08-CHUNKFORGE.md) | Specification validee, **pas encore implementee**. Contrat du systeme + suivi des lots. Ne decrit PAS du code existant. |
 

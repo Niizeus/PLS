@@ -6,6 +6,9 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { usePlayerStore } from '../../gameplay/stats/playerStore'
 import { BUILDINGS, SPAWN, type Building } from './cityData'
 import { buildBuilding } from './buildingMesh'
+import { buildFromArchetype } from './archetypes/buildingGen'
+import { FACADES_TEXTUREES, facadeAtlas } from './archetypes/facadeAtlas'
+import { chunkInfo } from './chunkIndex'
 import { CATHEDRAL } from './cathedralMesh'
 import { editorTileReach } from '../editorStreaming'
 import { createTileResourceCache } from './tileResourceCache'
@@ -14,11 +17,20 @@ import { createTileResourceCache } from './tileResourceCache'
  * 🏙️  Beauvais, bâtiment par bâtiment.
  *
  * Chaque bâtiment = son contour réel (OpenStreetMap), sa hauteur réelle et son
- * toit (IGN BD TOPO). Pas encore de texture ni de fenêtres : les façades restent
- * unies, c'est la prochaine étape. La FORME, elle, est juste.
+ * toit (IGN BD TOPO). La FORME est juste partout dans la ville.
  *
- * La fabrication du volume (murs + toit) vit dans `buildingMesh.ts` ; ce fichier-ci
- * ne s'occupe que d'une chose : décider QUELS bâtiments sont montés à un instant t.
+ * ── Deux rendus coexistent, et c'est voulu ──────────────────────────────────
+ *  - **Dans un chunk classé** (le centre-ville pour l'instant) : on connaît la
+ *    FAMILLE du bâtiment, donc `archetypes/buildingGen.ts` lui donne des étages,
+ *    des fenêtres et un rez-de-chaussée — texturés par l'atlas de façades.
+ *  - **Partout ailleurs** : `buildingMesh.ts`, volumes en aplat comme avant.
+ *
+ * On ne supprime donc rien tant que les chunks ne couvrent pas toute la ville :
+ * une tuile peut porter les deux, et un bâtiment absent de l'index retombe
+ * simplement sur l'ancien rendu. Voir `docs/08-CHUNKFORGE.md`.
+ *
+ * Ce fichier-ci ne s'occupe que d'une chose : décider QUELS bâtiments sont montés
+ * à un instant t.
  *
  * ⚠️ La ville fait ~34 000 bâtiments : impossible de tout afficher d'un coup.
  * On fait donc du STREAMING par tuiles :
@@ -40,6 +52,32 @@ const REACH = 1 // anneaux de tuiles autour du joueur (1 = 3×3 tuiles)
 const PREPARE_DELAY_MS = 16
 const CITY_TILE_MATERIAL = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient })
 
+/**
+ * Matériau des bâtiments d'un CHUNK classé : mêmes règles de cel-shading que le
+ * reste de la ville.
+ *
+ * ⚠️ L'atlas de façades n'est PAS branché tant que `FACADES_TEXTUREES` vaut
+ * `false` : les fenêtres dessinées donnaient des damiers de rectangles sombres
+ * qui n'évoquaient pas Beauvais. Sans `map`, ce sont les couleurs de sommet
+ * calculées par `buildingGen.ts` qui portent tout le rendu (mur par registre,
+ * pignon, toit). Construit à la demande — l'atlas, lui, a besoin du DOM.
+ */
+let chunkMaterial: THREE.MeshToonMaterial | null = null
+function materiauChunk() {
+  if (!chunkMaterial) {
+    chunkMaterial = new THREE.MeshToonMaterial({
+      // `map` ET `vertexColors` se MULTIPLIENT : le jour où une vraie méthode de
+      // façades existera, il suffira de rebrancher la texture ici et de repasser
+      // `FACADES_TEXTUREES` à `true` — `buildingGen.ts` rendra alors la main sur
+      // les couleurs de sommet, qui redeviendront une simple modulation.
+      ...(FACADES_TEXTUREES ? { map: facadeAtlas() } : {}),
+      vertexColors: true,
+      gradientMap: toonGradient,
+    })
+  }
+  return chunkMaterial
+}
+
 // --- Rangement des bâtiments par tuile (une seule fois, au chargement) ---
 const tiles = new Map<string, Building[]>()
 const keyOf = (tx: number, tz: number) => tx + ':' + tz
@@ -53,22 +91,65 @@ for (const b of BUILDINGS) {
 }
 
 /** Une tuile de ville : géométrie streamée, gardée brièvement en cache pour les retours arrière. */
-const cityTileCache = createTileResourceCache<THREE.BufferGeometry | null>({
+/**
+ * Une tuile porte DEUX géométries : celle des bâtiments classés (texturés) et
+ * celle des autres (aplats). Deux matériaux différents ne peuvent pas partager
+ * une géométrie fusionnée, et découper en groupes coûterait plus cher que le
+ * second mesh — d'autant que les tuiles hors chunk n'en auront qu'un.
+ */
+interface TileGeometries {
+  legacy: THREE.BufferGeometry | null
+  chunk: THREE.BufferGeometry | null
+}
+
+function fusionner(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+  if (parts.length === 0) return null
+  const merged = mergeGeometries(parts, false)
+  parts.forEach((p) => p.dispose())
+  merged?.computeBoundingSphere()
+  return merged
+}
+
+const cityTileCache = createTileResourceCache<TileGeometries | null>({
   name: 'city-buildings',
   maxEntries: 72,
   build: (tileKey) => {
     const list = tiles.get(tileKey)
     if (!list) return null
-    const parts: THREE.BufferGeometry[] = []
+    const legacyParts: THREE.BufferGeometry[] = []
+    const chunkParts: THREE.BufferGeometry[] = []
+
     for (const b of list) {
+      const info = chunkInfo(b)
+      if (info) {
+        // Bâtiment classé : on lui donne des étages et des ouvertures.
+        const geo = buildFromArchetype({
+          pts: b.pts,
+          h: b.h,
+          rh: b.rh,
+          ra: b.ra,
+          rm: b.rm,
+          cx: b.cx,
+          cz: b.cz,
+          archetype: info.archetype,
+          ign: { etages: info.etages },
+          rue: info.rue,
+        })
+        // Repli sur l'ancien rendu si la génération échoue : mieux vaut un volume
+        // en aplat qu'un trou dans la rue.
+        if (geo) {
+          chunkParts.push(geo)
+          continue
+        }
+      }
       const geo = buildBuilding(b)
-      if (geo) parts.push(geo)
+      if (geo) legacyParts.push(geo)
     }
-    if (parts.length === 0) return null
-    const merged = mergeGeometries(parts, false)
-    parts.forEach((p) => p.dispose())
-    merged?.computeBoundingSphere()
-    return merged
+
+    const legacy = fusionner(legacyParts)
+    const chunk = fusionner(chunkParts)
+    if (!legacy && !chunk) return null
+    return { legacy, chunk }
   },
 })
 
@@ -88,7 +169,7 @@ export function warmCityTilesAround(x: number, z: number, reach = REACH): number
 }
 
 function CityTile({ tileKey }: { tileKey: string }) {
-  const geometry = useMemo(() => cityTileCache.get(tileKey), [tileKey])
+  const geometries = useMemo(() => cityTileCache.get(tileKey), [tileKey])
 
   // Libère la mémoire GPU quand la tuile sort du cache.
   useEffect(() => {
@@ -96,16 +177,30 @@ function CityTile({ tileKey }: { tileKey: string }) {
     return () => cityTileCache.release(tileKey)
   }, [tileKey])
 
-  if (!geometry) return null
+  if (!geometries) return null
   return (
-    <mesh
-      geometry={geometry}
-      material={CITY_TILE_MATERIAL}
-      castShadow
-      receiveShadow
-      matrixAutoUpdate={false}
-      dispose={null}
-    />
+    <>
+      {geometries.legacy && (
+        <mesh
+          geometry={geometries.legacy}
+          material={CITY_TILE_MATERIAL}
+          castShadow
+          receiveShadow
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
+      )}
+      {geometries.chunk && (
+        <mesh
+          geometry={geometries.chunk}
+          material={materiauChunk()}
+          castShadow
+          receiveShadow
+          matrixAutoUpdate={false}
+          dispose={null}
+        />
+      )}
+    </>
   )
 }
 

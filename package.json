@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "debug:roads": "node src/world/beauvais/debug-road-geometry.mjs"
+    "debug:roads": "node src/world/beauvais/debug-road-geometry.mjs",
+    "chunk:collect": "node src/world/beauvais/chunks/collect-chunk.mjs",
+    "chunk:classify": "node src/world/beauvais/chunks/classify.mjs",
+    "chunk:annotate": "node src/world/beauvais/chunks/annotate.mjs",
+    "chunk:calibrate": "node src/world/beauvais/chunks/calibrate.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",

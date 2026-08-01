@@ -1,5 +1,6 @@
 import EditorApp from './EditorApp'
 import InteriorEditor from './InteriorEditor'
+import ChunkForge from './ChunkForge'
 import { useEditorWorkspace } from './editorWorkspace'
 import { useEditorPanels } from './EditorPanels'
 
@@ -37,6 +38,13 @@ export default function EditorHub() {
       >
         Interieurs
       </button>
+      <button
+        type="button"
+        className={module === 'chunks' ? 'active' : ''}
+        onClick={() => setModule('chunks')}
+      >
+        ChunkForge
+      </button>
     </div>
   )
 
@@ -44,6 +52,7 @@ export default function EditorHub() {
     <>
       <EditorApp moduleTabs={tabs} panels={panels} active={module === 'map'} />
       <InteriorEditor moduleTabs={tabs} panels={panels} active={module === 'interiors'} />
+      <ChunkForge moduleTabs={tabs} panels={panels} active={module === 'chunks'} />
     </>
   )
 }

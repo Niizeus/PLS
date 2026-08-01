@@ -1,0 +1,209 @@
+/**
+ * 🏗️ Styles propres au module ChunkForge.
+ *
+ * Le chassis (grille, volets, barre du haut) vient d'EditorApp.css, partage par tous
+ * les modules : on ne le redefinit pas ici, on ne fait qu'ajouter ce qui est propre
+ * a ce module. Toutes les classes sont prefixees `cf-` pour qu'aucune ne puisse
+ * entrer en collision avec celles de la Carte ou des Interieurs.
+ */
+
+.cf-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Le curseur dit ce que fait le glisser : ici, deplacer le plan. */
+  cursor: grab;
+  touch-action: none;
+}
+
+.cf-canvas:active {
+  cursor: grabbing;
+}
+
+.cf-plein {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 24px;
+  color: #8b93a3;
+  text-align: center;
+  white-space: pre-wrap;
+  z-index: 2;
+}
+
+.cf-erreur {
+  color: #e07b7b;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: left;
+  align-items: center;
+}
+
+/* ── Volet gauche : chiffres et legende ─────────────────────────────────── */
+
+.cf-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.cf-stats dt {
+  color: #8b93a3;
+}
+
+.cf-stats dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-legende {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.cf-legende button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cf-legende button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cf-legende button.active {
+  border-color: #e8b84b;
+  background: rgba(232, 184, 75, 0.12);
+}
+
+.cf-puce {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.cf-nom {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-n {
+  color: #8b93a3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Volet droit : l'inspecteur ─────────────────────────────────────────── */
+
+.cf-restant {
+  float: right;
+  font-weight: 400;
+  font-size: 12px;
+  color: #e07b7b;
+}
+
+.cf-addr {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #e8b84b;
+}
+
+.cf-pred {
+  margin: 10px 0 4px;
+  font-size: 14px;
+}
+
+.cf-flags {
+  margin: 4px 0;
+  font-size: 11.5px;
+  color: #8b93a3;
+}
+
+.cf-ev {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #9aa4b5;
+}
+
+.cf-familles {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.cf-familles button {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #3a3f4a;
+  border-radius: 6px;
+  background: #2a2e37;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cf-familles button:hover {
+  background: #343945;
+}
+
+.cf-familles button.sel {
+  background: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.cf-familles kbd {
+  flex: none;
+  margin-top: 1px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #3a3f4a;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
+.cf-familles b {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Le critere de decision. Sans lui, l'annotateur devine le sens de l'etiquette —
+   c'est exactement ce qui avait fausse la premiere calibration (voir docs/08). */
+.cf-familles i {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #98a2b3;
+}
+
+.cf-familles button.sel i {
+  color: #cfe8cf;
+}

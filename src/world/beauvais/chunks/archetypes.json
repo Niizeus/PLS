@@ -1,0 +1,1347 @@
+{
+  "_comment": [
+    "🧱 Les familles de bâtiments de Beauvais. Lu par classify.mjs (lot 2 de ChunkForge).",
+    "",
+    "COMMENT ÇA MARCHE — chaque archétype décrit ce qu'il ATTEND. Le classifieur compare",
+    "le bâtiment réel à ces attentes, signal par signal, et en tire un score.",
+    "",
+    "Deux formes d'attente :",
+    "  • intervalle  { \"range\": [min, max], \"soft\": t }  → +1 dedans, puis décroît sur",
+    "    une marge de tolérance `t` de part et d'autre, jusqu'à -1. `soft` par défaut =",
+    "    30 % de la largeur de l'intervalle.",
+    "  • catégorie   { \"valeur\": accord, ... }  → accord entre -1 et +1. Une valeur absente",
+    "    du tableau vaut 0 (pas d'information), sauf si `_else` est défini.",
+    "",
+    "Un signal ABSENT du bâtiment ne compte pas : il ne pénalise ni ne favorise personne.",
+    "Un signal absent de l'archétype ne compte pas non plus — inutile de tout renseigner,",
+    "on ne met que ce qui CARACTÉRISE la famille.",
+    "",
+    "Les poids de chaque signal sont dans signals.mjs, pas ici : ils sont communs à tous",
+    "les archétypes, pour qu'on n'ait qu'un seul endroit à régler.",
+    "",
+    "⚠️ Valeurs réellement présentes dans usage_1 à Beauvais (mesuré au lot 1) :",
+    "   Indifférencié · Résidentiel · Commercial et services · Annexe · Religieux · Industriel",
+    "   Il n'y a PAS de valeur « Public » : les équipements se détectent par OSM, pas par l'IGN.",
+    "   « Indifférencié » est traité comme une ABSENCE, pas comme une valeur.",
+    "",
+    "requires : au moins UN de ces signaux doit etre present ET en accord (>= 0,5) pour",
+    "  que l archetype ait le droit de concourir. Sans ce filtre, un archetype dont les",
+    "  signaux definissants manquent gagne sur ses signaux secondaires — mesure au lot 2 :",
+    "  pan-de-bois raflait 232 batiments au lieu de ~27.",
+    "prior : frequence attendue relative (1 = neutre). Un bati rare doit apporter plus de",
+    "  preuves qu un bati courant pour l emporter. Applique en log dans classify.mjs.",
+    "",
+    "label + critere : ce que voit l ANNOTATEUR humain (annotate.mjs), pas le code.",
+    "  Mesure au lot 2 : sans criteres affiches, un annotateur non specialiste lit",
+    "  « Barre ou tour de grand ensemble » comme « grand batiment » et etiquette ainsi",
+    "  des immeubles de la Reconstruction. La premiere calibration a rendu 6,5 % de",
+    "  precision, qui mesurait un ecart de VOCABULAIRE, pas une erreur du classifieur."
+  ],
+  "archetypes": [
+    {
+      "key": "maison-ville-brique",
+      "name": "Maison de ville mitoyenne (brique/tuile)",
+      "note": "Le tissu ancien ordinaire : étroite sur rue, profonde, collée à ses voisines.",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Commercial et services": 0.2,
+          "Industriel": -1
+        },
+        "annee": {
+          "range": [
+            1820,
+            1940
+          ],
+          "soft": 25
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            1,
+            3
+          ],
+          "soft": 2
+        },
+        "area": {
+          "range": [
+            50,
+            200
+          ],
+          "soft": 60
+        },
+        "h": {
+          "range": [
+            4,
+            10
+          ],
+          "soft": 3
+        },
+        "width": {
+          "range": [
+            5,
+            12
+          ],
+          "soft": 4
+        },
+        "sharedRatio": {
+          "range": [
+            0.2,
+            1
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            30,
+            55
+          ],
+          "soft": 12
+        },
+        "murMat": {
+          "brique": 1,
+          "pierre": 0.5,
+          "beton": -0.5,
+          "bois": 0.2,
+          "metal": -1
+        },
+        "rm": {
+          "t": 0.6,
+          "a": 0.4,
+          "z": 0,
+          "b": -0.6
+        },
+        "elongation": {
+          "range": [
+            1,
+            3
+          ],
+          "soft": 1
+        },
+        "builtRatio50": {
+          "range": [
+            0.15,
+            1
+          ],
+          "soft": 0.1
+        },
+        "poiCommerce": {
+          "false": 0.3,
+          "true": -0.4
+        },
+        "osmBuilding": {
+          "house": 1,
+          "residential": 0.8,
+          "yes": 0,
+          "apartments": -0.5
+        }
+      },
+      "requires": [
+        "usage1",
+        "annee"
+      ],
+      "prior": 1.2,
+      "label": "Maison de ville (mitoyenne)",
+      "critere": "1 SEUL logement, R+1/R+2, collée aux voisines, avant 1940"
+    },
+    {
+      "key": "immeuble-centre-commerce",
+      "name": "Immeuble de centre-ville, commerce en rez-de-chaussée",
+      "note": "La preuve décisive est le POI contenu : une boutique dedans, c'est un RDC commercial.",
+      "expects": {
+        "usage1": {
+          "Commercial et services": 1,
+          "Résidentiel": 0.4,
+          "Annexe": -1,
+          "Industriel": -0.5
+        },
+        "usage2": {
+          "Commercial et services": 1,
+          "Résidentiel": 0.5,
+          "Annexe": -0.5
+        },
+        "poiCommerce": {
+          "true": 1,
+          "false": -0.3
+        },
+        "etages": {
+          "range": [
+            2,
+            5
+          ],
+          "soft": 1
+        },
+        "h": {
+          "range": [
+            8,
+            20
+          ],
+          "soft": 4
+        },
+        "area": {
+          "range": [
+            80,
+            600
+          ],
+          "soft": 150
+        },
+        "sharedRatio": {
+          "range": [
+            0.2,
+            1
+          ],
+          "soft": 0.15
+        },
+        "roadDist": {
+          "range": [
+            0,
+            12
+          ],
+          "soft": 8
+        },
+        "roadClass": {
+          "pedestrian": 0.8,
+          "drivable": 0.5,
+          "service": -0.2,
+          "track": -1
+        },
+        "zone": {
+          "centre-ville": 0.6
+        },
+        "builtRatio50": {
+          "range": [
+            0.25,
+            1
+          ],
+          "soft": 0.12
+        }
+      },
+      "requires": [
+        "usage1",
+        "usage2",
+        "poiCommerce"
+      ],
+      "prior": 1,
+      "label": "Immeuble avec COMMERCE en bas",
+      "critere": "vitrine/boutique au rez-de-chaussée, logements au-dessus"
+    },
+    {
+      "key": "pan-de-bois",
+      "name": "Maison à pan de bois",
+      "note": "Très rare : seuls ~27 bâtiments de la zone pilote sont datés d'avant 1800. Exige des preuves fortes.",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 0.8,
+          "Commercial et services": 0.5,
+          "Annexe": -1,
+          "Industriel": -1
+        },
+        "annee": {
+          "range": [
+            1400,
+            1800
+          ],
+          "soft": 40
+        },
+        "murMat": {
+          "bois": 1,
+          "pierre": 0.3,
+          "brique": -0.2,
+          "beton": -1,
+          "metal": -1
+        },
+        "area": {
+          "range": [
+            30,
+            130
+          ],
+          "soft": 40
+        },
+        "etages": {
+          "range": [
+            1,
+            3
+          ],
+          "soft": 1
+        },
+        "h": {
+          "range": [
+            5,
+            13
+          ],
+          "soft": 3
+        },
+        "sharedRatio": {
+          "range": [
+            0.2,
+            1
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            35,
+            55
+          ],
+          "soft": 10
+        },
+        "rm": {
+          "t": 0.5,
+          "a": 0.5,
+          "b": -1
+        },
+        "orthogonality": {
+          "range": [
+            0,
+            0.7
+          ],
+          "soft": 0.2
+        },
+        "zone": {
+          "centre-ville": 0.6
+        },
+        "osmHistoric": {
+          "true": 1
+        }
+      },
+      "requires": [
+        "annee",
+        "murMat",
+        "osmHistoric"
+      ],
+      "prior": 0.15,
+      "label": "Maison à colombages",
+      "critere": "poutres de bois apparentes en façade. Très rare"
+    },
+    {
+      "key": "reconstruction-brique",
+      "name": "Immeuble de la Reconstruction (1945-1962)",
+      "note": "LA signature de Beauvais — 360 bâtiments datés des années 1950 dans la seule zone pilote, après le bombardement de juin 1940. Gabarits alignés, brique, R+2/R+3, tuile.",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Commercial et services": 0.6,
+          "Annexe": -1,
+          "Industriel": -0.8
+        },
+        "annee": {
+          "range": [
+            1945,
+            1962
+          ],
+          "soft": 8
+        },
+        "etages": {
+          "range": [
+            2,
+            4
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            2,
+            30
+          ],
+          "soft": 10
+        },
+        "area": {
+          "range": [
+            60,
+            500
+          ],
+          "soft": 120
+        },
+        "h": {
+          "range": [
+            7,
+            17
+          ],
+          "soft": 4
+        },
+        "width": {
+          "range": [
+            7,
+            22
+          ],
+          "soft": 6
+        },
+        "sharedRatio": {
+          "range": [
+            0.15,
+            1
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            25,
+            50
+          ],
+          "soft": 12
+        },
+        "murMat": {
+          "brique": 1,
+          "pierre": -0.2,
+          "beton": 0.3,
+          "metal": -1,
+          "bois": -1
+        },
+        "rm": {
+          "t": 0.6,
+          "a": 0.2,
+          "b": -0.3
+        },
+        "elongation": {
+          "range": [
+            1,
+            3.5
+          ],
+          "soft": 1
+        },
+        "orthogonality": {
+          "range": [
+            0.7,
+            1
+          ],
+          "soft": 0.3
+        },
+        "builtRatio50": {
+          "range": [
+            0.2,
+            1
+          ],
+          "soft": 0.12
+        },
+        "zone": {
+          "centre-ville": 0.4
+        }
+      },
+      "requires": [
+        "usage1",
+        "annee"
+      ],
+      "prior": 1.4,
+      "label": "Immeuble Reconstruction (1945-62)",
+      "critere": "brique, R+2/R+3, quelques logements. LE PLUS COURANT ICI"
+    },
+    {
+      "key": "pavillon-brique",
+      "name": "Pavillon brique 1930-1960",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Commercial et services": -0.4,
+          "Industriel": -1
+        },
+        "annee": {
+          "range": [
+            1900,
+            1960
+          ],
+          "soft": 20
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "area": {
+          "range": [
+            60,
+            150
+          ],
+          "soft": 45
+        },
+        "h": {
+          "range": [
+            4,
+            9
+          ],
+          "soft": 2.5
+        },
+        "width": {
+          "range": [
+            6,
+            13
+          ],
+          "soft": 4
+        },
+        "sharedRatio": {
+          "range": [
+            0,
+            0.12
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            30,
+            50
+          ],
+          "soft": 12
+        },
+        "murMat": {
+          "brique": 1,
+          "pierre": 0.3,
+          "beton": -0.2
+        },
+        "rm": {
+          "t": 0.6,
+          "a": 0.3,
+          "b": -0.6
+        },
+        "elongation": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 0.8
+        },
+        "builtRatio50": {
+          "range": [
+            0,
+            0.3
+          ],
+          "soft": 0.12
+        },
+        "poiCommerce": {
+          "true": -0.6
+        },
+        "osmBuilding": {
+          "house": 1,
+          "detached": 1,
+          "yes": 0
+        }
+      },
+      "requires": [
+        "annee",
+        "usage1"
+      ],
+      "prior": 0.6,
+      "label": "Pavillon brique (1930-60)",
+      "critere": "maison ISOLÉE avec jardin, brique rouge"
+    },
+    {
+      "key": "pavillon-crepi",
+      "name": "Pavillon crépi 1965-1995",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Commercial et services": -0.5,
+          "Industriel": -1
+        },
+        "annee": {
+          "range": [
+            1965,
+            1995
+          ],
+          "soft": 12
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "area": {
+          "range": [
+            80,
+            190
+          ],
+          "soft": 55
+        },
+        "h": {
+          "range": [
+            3.5,
+            8
+          ],
+          "soft": 2.5
+        },
+        "sharedRatio": {
+          "range": [
+            0,
+            0.12
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            22,
+            45
+          ],
+          "soft": 12
+        },
+        "murMat": {
+          "beton": 0.8,
+          "brique": 0.2,
+          "pierre": -0.5
+        },
+        "rm": {
+          "t": 0.5,
+          "a": 0.2,
+          "b": -0.4
+        },
+        "elongation": {
+          "range": [
+            1,
+            2.2
+          ],
+          "soft": 0.8
+        },
+        "orthogonality": {
+          "range": [
+            0.7,
+            1
+          ],
+          "soft": 0.3
+        },
+        "builtRatio50": {
+          "range": [
+            0,
+            0.28
+          ],
+          "soft": 0.12
+        },
+        "poiCommerce": {
+          "true": -0.6
+        }
+      },
+      "requires": [
+        "annee",
+        "usage1"
+      ],
+      "prior": 0.6,
+      "label": "Pavillon crépi (1965-95)",
+      "critere": "maison ISOLÉE, façade crépie claire, garage accolé"
+    },
+    {
+      "key": "pavillon-recent",
+      "name": "Pavillon récent (après 1995)",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Industriel": -1
+        },
+        "annee": {
+          "range": [
+            1995,
+            2030
+          ],
+          "soft": 10
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            1,
+            4
+          ],
+          "soft": 2
+        },
+        "area": {
+          "range": [
+            70,
+            220
+          ],
+          "soft": 60
+        },
+        "h": {
+          "range": [
+            3.5,
+            9
+          ],
+          "soft": 2.5
+        },
+        "sharedRatio": {
+          "range": [
+            0,
+            0.2
+          ],
+          "soft": 0.15
+        },
+        "pitch": {
+          "range": [
+            20,
+            45
+          ],
+          "soft": 14
+        },
+        "orthogonality": {
+          "range": [
+            0.75,
+            1
+          ],
+          "soft": 0.25
+        },
+        "builtRatio50": {
+          "range": [
+            0,
+            0.3
+          ],
+          "soft": 0.12
+        }
+      },
+      "requires": [
+        "annee"
+      ],
+      "prior": 0.5,
+      "label": "Pavillon récent (après 1995)",
+      "critere": "maison ISOLÉE, construction moderne"
+    },
+    {
+      "key": "dependance",
+      "name": "Garage, appentis, remise de cour",
+      "note": "Pilier de la zone : 413 bâtiments portent « Annexe » en usage_1 ou usage_2, et l'aire médiane du centre est de 44 m². Ce sont eux qui donnent l'aspect « tas de cubes » s'ils sont traités comme des maisons.",
+      "expects": {
+        "usage1": {
+          "Annexe": 1,
+          "Résidentiel": -0.8,
+          "Commercial et services": -0.5,
+          "Industriel": -0.5,
+          "Religieux": -1
+        },
+        "usage2": {
+          "Annexe": 0.8
+        },
+        "legere": {
+          "true": 1
+        },
+        "area": {
+          "range": [
+            1,
+            45
+          ],
+          "soft": 25
+        },
+        "h": {
+          "range": [
+            1,
+            4
+          ],
+          "soft": 1.5
+        },
+        "etages": {
+          "range": [
+            1,
+            1
+          ],
+          "soft": 0.5
+        },
+        "logements": {
+          "range": [
+            0,
+            0
+          ],
+          "soft": 1
+        },
+        "pitch": {
+          "range": [
+            0,
+            35
+          ],
+          "soft": 15
+        },
+        "width": {
+          "range": [
+            2,
+            7
+          ],
+          "soft": 3
+        },
+        "roadDist": {
+          "range": [
+            8,
+            200
+          ],
+          "soft": 10
+        },
+        "poiCommerce": {
+          "true": -1
+        },
+        "osmBuilding": {
+          "garage": 1,
+          "shed": 1,
+          "roof": 0.8,
+          "house": -0.8,
+          "apartments": -1
+        }
+      },
+      "requires": [
+        "usage1",
+        "usage2",
+        "legere",
+        "area"
+      ],
+      "prior": 1.3,
+      "label": "Garage / annexe / remise",
+      "critere": "PAS habitable : moins de ~45 m², 1 niveau, souvent en fond de cour"
+    },
+    {
+      "key": "petit-collectif",
+      "name": "Petit collectif R+3/R+4",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Industriel": -1
+        },
+        "logements": {
+          "range": [
+            6,
+            30
+          ],
+          "soft": 8
+        },
+        "etages": {
+          "range": [
+            3,
+            5
+          ],
+          "soft": 1
+        },
+        "h": {
+          "range": [
+            9,
+            18
+          ],
+          "soft": 4
+        },
+        "area": {
+          "range": [
+            150,
+            800
+          ],
+          "soft": 200
+        },
+        "annee": {
+          "range": [
+            1950,
+            2000
+          ],
+          "soft": 25
+        },
+        "width": {
+          "range": [
+            10,
+            25
+          ],
+          "soft": 8
+        },
+        "orthogonality": {
+          "range": [
+            0.7,
+            1
+          ],
+          "soft": 0.3
+        },
+        "rm": {
+          "b": 0.5,
+          "t": 0.2,
+          "a": 0
+        },
+        "osmBuilding": {
+          "apartments": 1,
+          "residential": 0.6,
+          "house": -1
+        }
+      },
+      "requires": [
+        "logements",
+        "etages"
+      ],
+      "prior": 0.8,
+      "label": "Petit immeuble collectif",
+      "critere": "6 à 30 logements, R+3/R+4, après-guerre, pas de commerce"
+    },
+    {
+      "key": "grand-ensemble",
+      "name": "Barre ou tour de grand ensemble",
+      "note": "Rare dans le centre : plutôt Argentine et Saint-Jean. Présent ici pour que la grille tienne quand on étendra la méthode.",
+      "expects": {
+        "usage1": {
+          "Résidentiel": 1,
+          "Annexe": -1,
+          "Industriel": -0.8
+        },
+        "logements": {
+          "range": [
+            30,
+            400
+          ],
+          "soft": 20
+        },
+        "etages": {
+          "range": [
+            4,
+            15
+          ],
+          "soft": 2
+        },
+        "h": {
+          "range": [
+            12,
+            50
+          ],
+          "soft": 6
+        },
+        "area": {
+          "range": [
+            300,
+            3000
+          ],
+          "soft": 400
+        },
+        "annee": {
+          "range": [
+            1955,
+            1985
+          ],
+          "soft": 15
+        },
+        "elongation": {
+          "range": [
+            2,
+            10
+          ],
+          "soft": 1.5
+        },
+        "orthogonality": {
+          "range": [
+            0.8,
+            1
+          ],
+          "soft": 0.2
+        },
+        "pitch": {
+          "range": [
+            0,
+            15
+          ],
+          "soft": 12
+        },
+        "rm": {
+          "b": 0.8,
+          "z": 0.3,
+          "t": -0.5
+        },
+        "osmBuilding": {
+          "apartments": 1,
+          "house": -1
+        }
+      },
+      "requires": [
+        "logements",
+        "etages"
+      ],
+      "prior": 0.3,
+      "label": "Barre ou tour HLM",
+      "critere": "30 logements MINIMUM, R+5 et plus, cité des années 60. Quasi absent du centre"
+    },
+    {
+      "key": "hangar",
+      "name": "Hangar, entrepôt, atelier métallique",
+      "expects": {
+        "usage1": {
+          "Industriel": 1,
+          "Commercial et services": 0.3,
+          "Résidentiel": -1,
+          "Annexe": -0.2
+        },
+        "nature": {
+          "Industriel, agricole ou commercial": 1
+        },
+        "area": {
+          "range": [
+            250,
+            5000
+          ],
+          "soft": 250
+        },
+        "h": {
+          "range": [
+            4,
+            15
+          ],
+          "soft": 4
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            0,
+            0
+          ],
+          "soft": 1
+        },
+        "elongation": {
+          "range": [
+            1.4,
+            8
+          ],
+          "soft": 1
+        },
+        "orthogonality": {
+          "range": [
+            0.85,
+            1
+          ],
+          "soft": 0.2
+        },
+        "vertices": {
+          "range": [
+            4,
+            12
+          ],
+          "soft": 6
+        },
+        "pitch": {
+          "range": [
+            0,
+            22
+          ],
+          "soft": 12
+        },
+        "murMat": {
+          "metal": 1,
+          "beton": 0.5,
+          "brique": 0,
+          "pierre": -0.5
+        },
+        "rm": {
+          "z": 0.8,
+          "b": 0.5,
+          "t": -0.4,
+          "a": -0.6
+        },
+        "builtRatio50": {
+          "range": [
+            0,
+            0.4
+          ],
+          "soft": 0.15
+        }
+      },
+      "requires": [
+        "usage1",
+        "nature",
+        "murMat"
+      ],
+      "prior": 0.5,
+      "label": "Hangar / entrepôt / atelier",
+      "critere": "grand volume d activité, 250 m² et +, tôle ou charpente métal"
+    },
+    {
+      "key": "commerce-peripherie",
+      "name": "Commerce de périphérie (boîte + parking)",
+      "expects": {
+        "usage1": {
+          "Commercial et services": 1,
+          "Industriel": 0.4,
+          "Résidentiel": -1,
+          "Annexe": -0.8
+        },
+        "area": {
+          "range": [
+            400,
+            8000
+          ],
+          "soft": 300
+        },
+        "h": {
+          "range": [
+            4,
+            12
+          ],
+          "soft": 3
+        },
+        "etages": {
+          "range": [
+            1,
+            2
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            0,
+            0
+          ],
+          "soft": 1
+        },
+        "pitch": {
+          "range": [
+            0,
+            12
+          ],
+          "soft": 10
+        },
+        "orthogonality": {
+          "range": [
+            0.85,
+            1
+          ],
+          "soft": 0.2
+        },
+        "roadClass": {
+          "drivable": 0.6,
+          "pedestrian": -0.6
+        },
+        "sharedRatio": {
+          "range": [
+            0,
+            0.1
+          ],
+          "soft": 0.15
+        },
+        "builtRatio50": {
+          "range": [
+            0,
+            0.35
+          ],
+          "soft": 0.15
+        },
+        "rm": {
+          "b": 0.6,
+          "z": 0.5,
+          "t": -0.5
+        }
+      },
+      "requires": [
+        "usage1"
+      ],
+      "prior": 0.4,
+      "label": "Grande surface / commerce isolé",
+      "critere": "boîte commerciale avec parking, toit plat"
+    },
+    {
+      "key": "equipement-public",
+      "name": "École, gymnase, bâtiment administratif",
+      "note": "⚠️ usage_1 de la BD TOPO n'a PAS de valeur « Public » : cet archétype repose sur OSM (building=school/public/civic, amenity), le nom, et le gabarit. La BD TOPO n'a qu'une valeur d'usage utile ici : « Sportif » (1 seul cas dans la zone pilote).",
+      "expects": {
+        "osmBuilding": {
+          "school": 1,
+          "public": 1,
+          "civic": 1,
+          "university": 1,
+          "hospital": 1,
+          "sports_hall": 1,
+          "house": -1,
+          "garage": -1
+        },
+        "poiPublic": {
+          "true": 1
+        },
+        "osmName": {
+          "true": 0.6
+        },
+        "area": {
+          "range": [
+            300,
+            6000
+          ],
+          "soft": 250
+        },
+        "h": {
+          "range": [
+            5,
+            20
+          ],
+          "soft": 5
+        },
+        "etages": {
+          "range": [
+            1,
+            4
+          ],
+          "soft": 1
+        },
+        "logements": {
+          "range": [
+            0,
+            0
+          ],
+          "soft": 2
+        },
+        "usage1": {
+          "Sportif": 1,
+          "Résidentiel": -0.6,
+          "Annexe": -1,
+          "Industriel": -0.3,
+          "Commercial et services": -0.2
+        },
+        "orthogonality": {
+          "range": [
+            0.6,
+            1
+          ],
+          "soft": 0.3
+        },
+        "vertices": {
+          "range": [
+            6,
+            40
+          ],
+          "soft": 10
+        }
+      },
+      "requires": [
+        "osmBuilding",
+        "poiPublic",
+        "osmName",
+        "usage1"
+      ],
+      "prior": 0.4,
+      "label": "École, mairie, gymnase, hôpital",
+      "critere": "bâtiment public identifiable"
+    },
+    {
+      "key": "religieux",
+      "name": "Église, chapelle, édifice religieux",
+      "note": "Déclenché en signal EXCLUSIF par nature=Eglise ou usage_1=Religieux (voir classify.mjs). La grille ci-dessous ne sert qu'aux cas limites.",
+      "expects": {
+        "usage1": {
+          "Religieux": 1,
+          "Résidentiel": -1,
+          "Annexe": -1
+        },
+        "nature": {
+          "Eglise": 1
+        },
+        "osmBuilding": {
+          "church": 1,
+          "chapel": 1,
+          "cathedral": 1
+        },
+        "h": {
+          "range": [
+            8,
+            60
+          ],
+          "soft": 8
+        },
+        "area": {
+          "range": [
+            80,
+            5000
+          ],
+          "soft": 200
+        },
+        "pitch": {
+          "range": [
+            35,
+            80
+          ],
+          "soft": 20
+        },
+        "rm": {
+          "a": 0.8,
+          "z": 0.4,
+          "t": 0
+        },
+        "logements": {
+          "range": [
+            0,
+            0
+          ],
+          "soft": 1
+        }
+      },
+      "requires": [
+        "usage1",
+        "nature",
+        "osmBuilding"
+      ],
+      "prior": 0.3,
+      "label": "Église, chapelle",
+      "critere": "édifice de culte"
+    },
+    {
+      "key": "monument",
+      "name": "Monument / patrimoine remarquable",
+      "note": "⛔ JAMAIS généré : remplacé par un asset fait main (lot 6). Le classer sert justement à l'exclure du générateur.",
+      "expects": {
+        "nature": {
+          "Monument": 1,
+          "Château": 1
+        },
+        "osmHistoric": {
+          "true": 1
+        },
+        "osmName": {
+          "true": 0.5
+        },
+        "h": {
+          "range": [
+            10,
+            80
+          ],
+          "soft": 10
+        },
+        "area": {
+          "range": [
+            150,
+            6000
+          ],
+          "soft": 300
+        },
+        "usage1": {
+          "Annexe": -1,
+          "Résidentiel": -0.5
+        }
+      },
+      "requires": [
+        "nature",
+        "osmHistoric"
+      ],
+      "prior": 0.2,
+      "label": "Monument historique",
+      "critere": "cathédrale, palais, patrimoine remarquable"
+    },
+    {
+      "key": "inconnu",
+      "name": "Inclassable",
+      "note": "Aucune attente : attribué par défaut quand aucun archétype ne dépasse le seuil d'accord minimal. Part directement en file de validation.",
+      "expects": {},
+      "label": "Je ne sais pas",
+      "critere": "à utiliser sans hésiter : mieux vaut ça qu un mauvais choix"
+    }
+  ]
+}

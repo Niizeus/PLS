@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PLS - Atlas de facades</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; padding: 24px; background: #15171c; color: #e6e6e6;
+             font: 14px/1.6 system-ui, sans-serif; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      h2 { font-size: 14px; margin: 28px 0 8px; color: #e8b84b; }
+      p  { color: #9aa4b5; margin: 0 0 16px; max-width: 70ch; }
+      canvas { image-rendering: pixelated; border: 1px solid #333; border-radius: 6px;
+               background: #0e1014; display: block; max-width: 100%; }
+      .legende { display: flex; gap: 0; margin-top: 6px; }
+      .legende span { font-size: 11px; color: #8b93a3; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <h1>Atlas de façades — PLS</h1>
+    <p>
+      Page de <b>développement uniquement</b> (elle n'est pas dans le build du jeu, comme
+      <code>editor.html</code> et <code>regie.html</code>). Elle affiche l'atlas dessiné par
+      <code>src/world/beauvais/archetypes/facadeAtlas.ts</code> pour qu'on puisse juger les
+      façades sans lancer le jeu ni chercher le bon angle de caméra.
+    </p>
+    <div id="app"></div>
+    <script type="module" src="/src/devtools/atlasPreview.ts"></script>
+  </body>
+</html>

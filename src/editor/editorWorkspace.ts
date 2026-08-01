@@ -14,7 +14,7 @@ import { MAP_MARKERS, type MapMarker } from '../data/mapMarkers'
  * On reste sur Zustand, le choix d'etat du projet (voir AGENTS.md).
  */
 
-export type EditorModule = 'map' | 'interiors'
+export type EditorModule = 'map' | 'interiors' | 'chunks'
 
 interface EditorWorkspaceState {
   /** Tous les interieurs connus : ceux du disque au demarrage, plus ceux crees dans la session. */

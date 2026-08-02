@@ -470,6 +470,15 @@ progression.
 Le **monde psychique** est une vraie zone jouable. Il peut devenir une route complète pour quitter
 Beauvais autrement, en abandonnant le monde physique.
 
+Une V1 de substances existe maintenant comme items consommables : prix, durées, bonus/malus,
+légalité IG et tags (`drogue`, `psychique`, `stimulant`, etc.). La spécification dédiée vit dans
+[09 - Substances](09-SUBSTANCES.md).
+
+Ce qui est déjà en jeu : consommer un item applique ses effets via le système de stats existant, et
+l'inventaire affiche le prix, la durée et la légalité. Ce qui reste à coder : une vraie jauge
+psychique, les crashes après expiration, les effets visuels/sonores, les interactions police et les
+stocks de vendeurs.
+
 ---
 
 ## 🚗 Véhicules

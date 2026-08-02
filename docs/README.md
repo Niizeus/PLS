@@ -16,6 +16,7 @@ Pour comprendre le projet depuis zero :
 7. [06 - Editeur PLS](06-EDITEUR-PLS.md) : outil de production, carte, interieurs, futurs modules.
 8. [07 - Backlog d'idees](07-BACKLOG-IDEES.md) : idees pas encore specifiees. **Rien n'y est a coder.**
 9. [08 - ChunkForge](08-CHUNKFORGE.md) : generation de quartiers credibles (archetypes, confiance, chunks).
+10. [09 - Substances](09-SUBSTANCES.md) : drogues, effets, legalite IG, prix et route psychique.
 
 ## Chercher vite
 
@@ -28,6 +29,7 @@ Pour comprendre le projet depuis zero :
 | Inventaire sac a dos, smartphone, PNJ, gangs, ragdoll | [03 - Game Design](03-GAME-DESIGN.md) |
 | Beauvais, quartiers, centre-ville, police, relief, routes | [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md) |
 | Liste d'objets, categories, structure item, equipements | [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md) |
+| Drogues, effets, legalite, prix et monde psychique | [09 - Substances](09-SUBSTANCES.md) |
 | Editeur carte, interieurs, items, PNJ, factions, validations | [06 - Editeur PLS](06-EDITEUR-PLS.md) |
 | Archetypes de batiments, chunks, passeports, score de confiance | [08 - ChunkForge](08-CHUNKFORGE.md) |
 | Radios, identite des stations, workflow audio | [Documentations RADIO](Documentations%20RADIO/) |
@@ -39,6 +41,8 @@ Pour comprendre le projet depuis zero :
 - **Decision de gameplay** : [03 - Game Design](03-GAME-DESIGN.md).
 - **Detail sur Beauvais ou ses quartiers** : [04 - Monde Beauvais](04-MONDE-BEAUVAIS.md).
 - **Objet, item, equipement, inventaire** : [05 - Objets et equipements](05-OBJETS-EQUIPEMENTS.md).
+- **Drogue, substance, effet psychique, legalite ou prix de marche chelou** :
+  [09 - Substances](09-SUBSTANCES.md).
 - **Outil pour creer du contenu** : [06 - Editeur PLS](06-EDITEUR-PLS.md).
 - **Generation d'un quartier, archetype de batiment, chunk** : [08 - ChunkForge](08-CHUNKFORGE.md).
 - **Implementation et architecture de code** : [02 - Architecture](02-ARCHITECTURE.md).
@@ -59,4 +63,4 @@ proche, puis on ajoute seulement un renvoi court dans les autres docs.
 | [06 - Editeur PLS](06-EDITEUR-PLS.md) | Vision + roadmap + etat implemente. A separer plus tard entre vision et suivi technique si besoin. |
 | [07 - Backlog d'idees](07-BACKLOG-IDEES.md) | Recueil d'idees non specifiees. Ne decrit PAS le jeu actuel et ne doit pas etre implemente sans demande explicite. |
 | [08 - ChunkForge](08-CHUNKFORGE.md) | Specification validee, **pas encore implementee**. Contrat du systeme + suivi des lots. Ne decrit PAS du code existant. |
-
+| [09 - Substances](09-SUBSTANCES.md) | V1 data jouable des drogues/produits chelous + direction du futur systeme psychique. |

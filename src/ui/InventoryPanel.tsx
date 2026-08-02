@@ -6,6 +6,7 @@ import {
   type EquipmentSlot,
   type ItemCategory,
   type ItemEffectKey,
+  type ItemLegality,
 } from '../data/items'
 import { KEY } from '../gameplay/input/keyMap'
 import { setCursorUiOpen } from '../gameplay/input/pointerLock'
@@ -95,6 +96,20 @@ const EFFECT_LABEL: Record<ItemEffectKey, string> = {
   chance: 'Chance',
   speed: 'Vitesse',
   chaos: 'Chaos',
+}
+
+const LEGALITY_LABEL: Record<ItemLegality, string> = {
+  legal: 'Legal',
+  prescription: 'Ordonnance',
+  grey_market: 'Zone grise',
+  illegal: 'Illegal',
+}
+
+const LEGALITY_COLOR: Record<ItemLegality, string> = {
+  legal: '#5aa832',
+  prescription: '#9ed3ef',
+  grey_market: '#ffd83d',
+  illegal: '#e63946',
 }
 
 /** Côté d'une case, en pixels. Toute la grille se dimensionne à partir de là. */
@@ -392,6 +407,17 @@ export default function InventoryPanel() {
                   <h3 style={detailTitleStyle}>{selectedItem.name}</h3>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     <span style={priceStyle}>{selectedItem.price} €</span>
+                    {selectedItem.legality && (
+                      <span
+                        style={{
+                          ...legalityPillStyle,
+                          background: LEGALITY_COLOR[selectedItem.legality],
+                          color: selectedItem.legality === 'illegal' ? HUD.paper : HUD.ink,
+                        }}
+                      >
+                        {LEGALITY_LABEL[selectedItem.legality]}
+                      </span>
+                    )}
                     <span style={weightPillStyle}>{formatWeight(selectedItem.weightKg)}</span>
                     <span style={stackPillStyle}>
                       {getItemSize(selectedItem.id).w}×{getItemSize(selectedItem.id).h}
@@ -694,6 +720,8 @@ const weightPillStyle: CSSProperties = {
   color: HUD.text,
   font: `800 12px ${HUD.font}`,
 }
+
+const legalityPillStyle: CSSProperties = { ...weightPillStyle, color: HUD.ink }
 
 const stackPillStyle: CSSProperties = { ...weightPillStyle, background: '#c9b6ef' }
 

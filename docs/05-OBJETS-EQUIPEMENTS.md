@@ -28,6 +28,16 @@ Les objets équipés **quittent le sac** et libèrent leur place ; les retirer e
 Le détail du fonctionnement en jeu vit dans
 [03 - Game Design § Inventaire sac à dos](03-GAME-DESIGN.md#-inventaire-sac-à-dos).
 
+## Level test items
+
+Une zone de test existe près du spawn joueur. Elle pose automatiquement **tous les items déclarés**
+dans `src/data/items.ts`, en grille, via `src/entities/items/ItemPickups.tsx`.
+
+- Les pickups de test ont un id `test-item-*`.
+- Ils réapparaissent après ramassage/placement pour pouvoir tester plusieurs fois le même objet.
+- Les piles empilables donnent jusqu'à 3 exemplaires, pratique pour tester consommation et raccourcis.
+- Les véhicules déjà branchés, scooter et voiture, restent garés à côté du spawn.
+
 ## Structure conseillee
 
 Chaque objet pourra ensuite etre decrit avec les champs suivants :
@@ -39,6 +49,8 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | `categorie` | Famille de l'objet |
 | `rarete` | Commun, rare, epique, legendaire, etc. |
 | `prix` | Valeur chez les marchands ou a la revente |
+| `legality` | Statut gameplay : `legal`, `prescription`, `grey_market`, `illegal` |
+| `tags` | Mots-clefs gameplay : `drogue`, `psychique`, `stimulant`, `soiree`, etc. |
 | `taille` | Largeur/hauteur dans la grille d'inventaire |
 | `forme` | Rectangulaire au debut, forme speciale plus tard si utile |
 | `rotatable` | Peut etre tourne dans la grille ou non |
@@ -52,8 +64,6 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | `soin` | Recuperation pour les consommables |
 | `effets` | Bonus, malus ou effet absurde |
 | `durabilite` | Nombre d'utilisations ou solidite |
-| `legalite` | Legal, illegal, suspect, objet vole, etc. |
-| `tags` | Mots-clefs gameplay : nourriture, arme, drogue, mission, quartier, etc. |
 | `description` | Texte court dans l'inventaire |
 
 ## Categories
@@ -141,6 +151,26 @@ Chaque objet pourra ensuite etre decrit avec les champs suivants :
 | Petits plats maison de foncede | Nourriture | Soin aleatoire |
 | Beauvaisienne | Nourriture | Pain lardon, soin et endurance |
 | Sandwich du ter ter | Nourriture | Soin moyen, bonus de bagarre |
+
+### Drogues et produits chelous V1
+
+La direction complete vit dans [09 - Substances](09-SUBSTANCES.md). Ces objets sont deja presents
+dans `src/data/items.ts` : ils utilisent le systeme de consommables existant, avec effets instantanes
+sur les jauges vitales et effets temporaires sur les stats RPG.
+
+| Objet | Role | Legalite IG | Prix |
+|---|---|---|---|
+| CBD chelou | Calme leger, zone grise | `grey_market` | 9 EUR |
+| Zombie Kush | Detente, faim, lenteur | `illegal` | 15 EUR |
+| Anxiolytique du tiroir | Anti-panique, reflexes ralentis | `prescription` | 14 EUR |
+| Pilon coupe au pneu | Resistance sale, grosse maladresse | `illegal` | 12 EUR |
+| Speed Beauvais Express | Fuite et energie courte | `illegal` | 32 EUR |
+| Cocaine coupee au platre | Gros boost de vitesse, gros chaos | `illegal` | 55 EUR |
+| Taz coeur fluo | Soiree/social, soif en chute | `illegal` | 28 EUR |
+| Champignon hallucitripogene | Chance/chaos, premiere cle psychique | `illegal` | 22 EUR |
+| Acide du hippy | Exploration psychique forte | `illegal` | 38 EUR |
+| Ketamine du centre equestre | Tank maladroit, dissociation | `illegal` | 45 EUR |
+| Sirop dodo de mamie | Douleur/defense, mobilite basse | `prescription` | 18 EUR |
 
 ## Armures et equipements
 

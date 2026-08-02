@@ -1,7 +1,7 @@
 import { Outlines } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { ITEMS_BY_ID, type ItemCategory } from '../../data/items'
+import { ITEM_DEFINITIONS, ITEMS_BY_ID, type ItemCategory } from '../../data/items'
 import { KEY } from '../../gameplay/input/keyMap'
 import { usePendingPlacementStore } from '../../gameplay/inventory/pendingPlacementStore'
 import { usePickupStore, type WorldPickup } from '../../gameplay/inventory/pickupStore'
@@ -38,6 +38,27 @@ const STATIC_PICKUPS: WorldPickup[] = [
   placePickup('spawn-gilet', 'gilet-fluo', 1, -8.2, 4),
 ]
 
+const TEST_PICKUP_COLS = 6
+const TEST_PICKUP_SPACING = 2.6
+const TEST_PICKUP_START_DX = -6.5
+const TEST_PICKUP_START_DZ = 9
+
+const TEST_PICKUPS: WorldPickup[] = ITEM_DEFINITIONS.map((item, index) => {
+  const col = index % TEST_PICKUP_COLS
+  const row = Math.floor(index / TEST_PICKUP_COLS)
+  const quantity = item.stackable ? Math.min(3, item.maxStack ?? 3) : 1
+
+  return placePickup(
+    `test-item-${item.id}`,
+    item.id,
+    quantity,
+    TEST_PICKUP_START_DX + col * TEST_PICKUP_SPACING,
+    TEST_PICKUP_START_DZ + row * TEST_PICKUP_SPACING,
+  )
+})
+
+const isTestPickup = (pickupId: string) => pickupId.startsWith('test-item-')
+
 const PICKUP_COLOR: Record<ItemCategory, string> = {
   arme: '#f97316',
   arme_lancer: '#94a3b8',
@@ -61,6 +82,7 @@ export default function ItemPickups() {
   const activePickups = useMemo(
     () => [
       ...STATIC_PICKUPS.filter((pickup) => !collectedIds.includes(pickup.id)),
+      ...TEST_PICKUPS,
       ...droppedPickups,
     ],
     [collectedIds, droppedPickups],
@@ -107,7 +129,7 @@ export default function ItemPickups() {
       if (!nearby) return
 
       const pickup = activePickups.find((candidate) => candidate.id === nearby.pickupId)
-      if (!pickup || usePickupStore.getState().collectedIds.includes(pickup.id)) return
+      if (!pickup || (!isTestPickup(pickup.id) && usePickupStore.getState().collectedIds.includes(pickup.id))) return
 
       // ⚠️ On ne RANGE pas l'objet ici : on le met « en main » et le sac s'ouvre.
       // C'est le joueur qui lui trouve une place (voir pendingPlacementStore).

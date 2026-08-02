@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { MINUTES_PER_DAY, useGameTimeStore } from './gameTimeStore'
+import { MINUTES_PER_DAY } from './gameTimeStore'
+import { useRunStore } from '../run/runStore'
 
 const DEV_TIME_SCALES = [1, 12, 60, 240, 720]
 
@@ -17,19 +18,21 @@ declare global {
 
 function setDayHour(dayNumber: number, hour = 22) {
   const dayIndex = Math.max(0, Math.floor(dayNumber) - 1)
-  useGameTimeStore.getState().setTotalMinutes(dayIndex * MINUTES_PER_DAY + hour * 60)
+  useRunStore.getState().setWorldTotalMinutes(dayIndex * MINUTES_PER_DAY + hour * 60)
 }
 
 function setHour(hour: number) {
-  const store = useGameTimeStore.getState()
-  const currentDayStart = Math.floor(store.totalMinutes / MINUTES_PER_DAY) * MINUTES_PER_DAY
-  store.setTotalMinutes(currentDayStart + hour * 60)
+  const store = useRunStore.getState()
+  const currentDayStart = Math.floor(store.worldTotalMinutes / MINUTES_PER_DAY) * MINUTES_PER_DAY
+  let target = currentDayStart + hour * 60
+  if (target < store.worldTotalMinutes && hour < store.gameHour) target += MINUTES_PER_DAY
+  store.setWorldTotalMinutes(target)
 }
 
 function setNextNight() {
-  const store = useGameTimeStore.getState()
-  const nextDayStart = (Math.floor(store.totalMinutes / MINUTES_PER_DAY) + 1) * MINUTES_PER_DAY
-  store.setTotalMinutes(nextDayStart + 22 * 60)
+  const store = useRunStore.getState()
+  const nextDayStart = (Math.floor(store.worldTotalMinutes / MINUTES_PER_DAY) + 1) * MINUTES_PER_DAY
+  store.setWorldTotalMinutes(nextDayStart + 22 * 60)
 }
 
 export default function TimeDevControls() {
@@ -37,18 +40,18 @@ export default function TimeDevControls() {
     if (!import.meta.env.DEV) return undefined
 
     window.PLSDevTime = {
-      speed: (timeScale) => useGameTimeStore.getState().setTimeScale(timeScale),
+      speed: (timeScale) => useRunStore.getState().setTimeScale(timeScale),
       hour: setHour,
       day: setDayHour,
-      pause: () => useGameTimeStore.getState().setPaused(true),
-      play: () => useGameTimeStore.getState().setPaused(false),
+      pause: () => useRunStore.getState().setPaused(true),
+      play: () => useRunStore.getState().setPaused(false),
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) return
       if (event.code === 'F6') {
         event.preventDefault()
-        const store = useGameTimeStore.getState()
+        const store = useRunStore.getState()
         const currentIndex = DEV_TIME_SCALES.findIndex((scale) => scale === store.timeScale)
         const nextScale = DEV_TIME_SCALES[(currentIndex + 1) % DEV_TIME_SCALES.length]
         store.setPaused(false)
@@ -64,7 +67,7 @@ export default function TimeDevControls() {
       }
       if (event.code === 'F9' && event.shiftKey) {
         event.preventDefault()
-        const store = useGameTimeStore.getState()
+        const store = useRunStore.getState()
         store.setPaused(!store.isPaused)
       }
       if (event.code === 'F10') {

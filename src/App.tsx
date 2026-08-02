@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import GameCanvas from './core/GameCanvas'
 import RadioAudioSystem from './audio/RadioAudioSystem'
 import RadioControls from './audio/RadioControls'
-import GameTimeTicker from './gameplay/time/GameTimeTicker'
+import RunTicker from './gameplay/run/RunTicker'
 import TimeDevControls from './gameplay/time/TimeDevControls'
 import NeedsTicker from './gameplay/stats/NeedsTicker'
 import ApplyDisplaySettings from './gameplay/settings/ApplyDisplaySettings'
@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <>
-      <GameTimeTicker />
+      <RunTicker />
       <DevToolsControls />
       <TimeDevControls />
       <NeedsTicker />

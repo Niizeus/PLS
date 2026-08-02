@@ -120,8 +120,8 @@ Puis ouvre **http://localhost:5173/regie.html**.
 - Le bouton **⇥ semaine** copie une journee sur les sept.
 - **Enregistrer** reecrit `src/data/radioSchedule.json` et le jeu se recharge tout seul.
 - La Regie affiche la **duree reelle** de chaque emission et **jusqu'ou elle deborde** (cases
-  hachurees). C'est important : une heure de jeu ne valant que 2 min 30, une emission de
-  14 minutes occupe pres de 6 heures de grille.
+  hachurees). C'est important : une heure de jeu ne valant que 1 min 15, une emission de
+  14 minutes occupe un peu plus de 11 heures de grille.
 
 > La Regie est un **outil de developpement** : elle n'existe qu'en `npm run dev` et ne part pas
 > dans le jeu compile.
@@ -147,9 +147,10 @@ Puis ouvre **http://localhost:5173/regie.html**.
 > vehicule est tiree **uniquement parmi celles qui ont de la musique**. On peut toujours zapper
 > sur une station muette avec **R** — c'est alors un choix.
 
-⏱️ **Attention a l'echelle de temps.** Un jour de jeu dure une heure reelle, donc **une heure de jeu
-ne vaut que 2 minutes 30 d'audio reel**. Une emission de 14 minutes occupe donc pres de 6 heures
-de jeu. C'est normal, mais ca surprend quand on remplit le planning.
+⏱️ **Attention a l'echelle de temps.** Une run dure 90 minutes reelles pour 3 jours de jeu :
+un jour de jeu dure 30 minutes reelles, donc **une heure de jeu ne vaut que 1 minute 15 d'audio
+reel**. Une emission de 14 minutes occupe donc un peu plus de 11 heures de jeu. C'est normal,
+mais ca surprend quand on remplit le planning.
 
 La station joue « en continu » meme quand personne n'ecoute : en montant dans un vehicule, on
 tombe au milieu d'un morceau.

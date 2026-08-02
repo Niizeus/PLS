@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "stations": {
+    "R01": {
+      "jingles": {
+        "enabled": true,
+        "musicInterval": 2,
+        "maxPerBreak": 1
+      },
+      "ads": {
+        "enabled": false,
+        "musicInterval": 0,
+        "maxPerBreak": 0
+      }
+    },
+    "R02": {
+      "jingles": {
+        "enabled": true,
+        "musicInterval": 3,
+        "maxPerBreak": 1
+      },
+      "ads": {
+        "enabled": true,
+        "musicInterval": 6,
+        "maxPerBreak": 1
+      }
+    },
+    "R03": {
+      "jingles": {
+        "enabled": true,
+        "musicInterval": 3,
+        "maxPerBreak": 1
+      },
+      "ads": {
+        "enabled": true,
+        "musicInterval": 5,
+        "maxPerBreak": 1
+      }
+    },
+    "R04": {
+      "jingles": {
+        "enabled": true,
+        "musicInterval": 2,
+        "maxPerBreak": 1
+      },
+      "ads": {
+        "enabled": true,
+        "musicInterval": 4,
+        "maxPerBreak": 1
+      }
+    },
+    "R05": {
+      "jingles": {
+        "enabled": true,
+        "musicInterval": 2,
+        "maxPerBreak": 1
+      },
+      "ads": {
+        "enabled": true,
+        "musicInterval": 3,
+        "maxPerBreak": 2
+      }
+    }
+  }
+}

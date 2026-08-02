@@ -2,8 +2,8 @@ import {
   MINUTES_PER_DAY,
   formatGameTime,
   getDayNumber,
-  useGameTimeStore,
 } from '../../gameplay/time/gameTimeStore'
+import { useRunStore } from '../../gameplay/run/runStore'
 import {
   actionRowStyle,
   buttonStyle,
@@ -26,8 +26,11 @@ export default function TimeTools({
   isPaused: boolean
 }) {
   const setHour = (hour: number) => {
-    const dayStart = Math.floor(useGameTimeStore.getState().totalMinutes / MINUTES_PER_DAY) * MINUTES_PER_DAY
-    useGameTimeStore.getState().setTotalMinutes(dayStart + hour * 60)
+    const store = useRunStore.getState()
+    const dayStart = Math.floor(store.worldTotalMinutes / MINUTES_PER_DAY) * MINUTES_PER_DAY
+    let target = dayStart + hour * 60
+    if (target < store.worldTotalMinutes && hour < store.gameHour) target += MINUTES_PER_DAY
+    store.setWorldTotalMinutes(target)
   }
 
   return (
@@ -36,11 +39,11 @@ export default function TimeTools({
         Jour {getDayNumber(totalMinutes)} - {formatGameTime(totalMinutes)} - temps x{timeScale}
       </div>
       <div style={actionRowStyle}>
-        <button style={buttonStyle} onClick={() => useGameTimeStore.getState().setPaused(!isPaused)}>
+        <button style={buttonStyle} onClick={() => useRunStore.getState().setPaused(!isPaused)}>
           {isPaused ? 'Reprendre le temps' : 'Figer le temps'}
         </button>
         {[1, 12, 60, 240, 720].map((scale) => (
-          <button key={scale} style={buttonStyle} onClick={() => useGameTimeStore.getState().setTimeScale(scale)}>
+          <button key={scale} style={buttonStyle} onClick={() => useRunStore.getState().setTimeScale(scale)}>
             x{scale}
           </button>
         ))}

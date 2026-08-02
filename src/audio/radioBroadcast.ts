@@ -1,5 +1,6 @@
 import { getDayNumber, getMinuteOfDay } from '../gameplay/time/gameTimeStore'
-import type { RadioStation, RadioStationId, RadioTrack } from './radioCatalog'
+import type { RadioEpisodeSegment, RadioStation, RadioStationId, RadioTrack } from './radioCatalog'
+import { getStationProgramming, type RadioStationProgramming } from './radioProgramming'
 import { getSlot } from './radioSchedule'
 
 /**
@@ -63,8 +64,6 @@ export interface BroadcastPosition {
 const MAX_CATCH_UP_MS = 6 * 60 * 60 * 1000
 /** Garde-fou contre une boucle infinie si des durées étaient aberrantes. */
 const MAX_STEPS = 2000
-/** Nombre de musiques laissees entre deux jingles d'habillage. */
-const MUSIC_BEFORE_JINGLE = 2
 
 interface Antenna {
   item: BroadcastItem | null
@@ -78,8 +77,12 @@ interface Antenna {
   jingleCursor: number
   /** Nombre de vrais morceaux joues depuis le dernier jingle. */
   musicSinceJingle: number
+  /** Nombre de vrais morceaux joues depuis la derniere coupure pub automatique. */
+  musicSinceAd: number
+  /** Nombre de pubs restantes dans la coupure automatique en cours. */
+  adsInBreakLeft: number
   /** Parties restantes de l'émission en cours. */
-  parts: RadioTrack[]
+  parts: RadioEpisodeSegment[]
   showTitle: string
   partIndex: number
   partCount: number
@@ -102,6 +105,8 @@ function getAntenna(id: RadioStationId): Antenna {
       jingleOrder: [],
       jingleCursor: 0,
       musicSinceJingle: 0,
+      musicSinceAd: 0,
+      adsInBreakLeft: 0,
       parts: [],
       showTitle: '',
       partIndex: 0,
@@ -133,6 +138,7 @@ export function getBroadcast(
   const music = keep(station.musicTracks)
   const jingles = keep(station.jingles)
   const ads = keep(station.ads)
+  const programming = getStationProgramming(station.id)
 
   // --- Une émission doit-elle prendre l'antenne ? ---
   const show = dueShow(station, antenna, gameMinutes, keep)
@@ -141,13 +147,13 @@ export function getBroadcast(
     antenna.showTitle = show.title
     antenna.partCount = show.parts.length
     antenna.partIndex = 0
-    antenna.item = nextPart(antenna)
+    antenna.item = nextShowSegment(station, antenna, music, jingles, ads, gameMinutes)
     antenna.startedAtMs = nowMs
   }
 
   // --- Rien encore diffusé, ou absence trop longue : on (r)allume ---
   if (!antenna.item || nowMs - antenna.startedAtMs > MAX_CATCH_UP_MS) {
-    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes)
+    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes, programming)
     antenna.startedAtMs = nowMs
   }
 
@@ -157,7 +163,7 @@ export function getBroadcast(
     const length = Math.max(1, antenna.item.track.durationSeconds) * 1000
     if (nowMs - antenna.startedAtMs < length) break
     antenna.startedAtMs += length
-    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes)
+    antenna.item = nextItem(station, antenna, music, jingles, ads, gameMinutes, programming)
   }
 
   if (!antenna.item) return null
@@ -173,7 +179,15 @@ export function skipCurrent(station: RadioStation, available: RadioTrack[], nowM
   const antenna = getAntenna(station.id)
   const has = new Set(available.map((track) => track.id))
   const keep = (tracks: RadioTrack[]) => tracks.filter((track) => track && has.has(track.id))
-  antenna.item = nextItem(station, antenna, keep(station.musicTracks), keep(station.jingles), keep(station.ads), gameMinutes)
+  antenna.item = nextItem(
+    station,
+    antenna,
+    keep(station.musicTracks),
+    keep(station.jingles),
+    keep(station.ads),
+    gameMinutes,
+    getStationProgramming(station.id),
+  )
   antenna.startedAtMs = nowMs
 }
 
@@ -184,7 +198,7 @@ function dueShow(
   antenna: Antenna,
   gameMinutes: number,
   keep: (tracks: RadioTrack[]) => RadioTrack[],
-): { parts: RadioTrack[]; title: string } | null {
+): { parts: RadioEpisodeSegment[]; title: string } | null {
   const hour = Math.floor(getMinuteOfDay(gameMinutes) / 60)
   const dayNumber = getDayNumber(gameMinutes)
   const slot = getSlot(station.id, (dayNumber - 1) % 7, hour)
@@ -199,25 +213,19 @@ function dueShow(
   if (!program) return null
 
   const episodes = program.episodes
-    .map((episode) => ({ ...episode, parts: keep(episode.parts) }))
-    .filter((episode) => episode.parts.length > 0)
+    .map((episode) => {
+      const parts = keep(episode.parts)
+      const allowed = new Set(parts.map((track) => track.id))
+      const segments = episode.segments.filter((segment) => segment.kind !== 'take' || (segment.track && allowed.has(segment.track.id)))
+      return { ...episode, parts, segments }
+    })
+    .filter((episode) => episode.parts.length > 0 && episode.segments.length > 0)
   if (episodes.length === 0) return null
 
   antenna.aired.add(key)
   // Un épisode par jour de jeu, dans l'ordre, puis la liste boucle.
   const episode = episodes[(dayNumber - 1) % episodes.length]
-  return { parts: episode.parts.slice(), title: program.title }
-}
-
-function nextPart(antenna: Antenna): BroadcastItem {
-  const track = antenna.parts.shift()!
-  antenna.partIndex++
-  return {
-    track,
-    kind: 'show',
-    label:
-      antenna.partCount > 1 ? `${antenna.showTitle} (${antenna.partIndex}/${antenna.partCount})` : antenna.showTitle,
-  }
+  return { parts: episode.segments.slice(), title: program.title }
 }
 
 function nextItem(
@@ -227,9 +235,13 @@ function nextItem(
   jingles: RadioTrack[],
   ads: RadioTrack[],
   gameMinutes: number,
+  programming: RadioStationProgramming,
 ): BroadcastItem | null {
-  // 1. Une émission est en cours : ses parties s'enchaînent sans interruption.
-  if (antenna.parts.length > 0) return nextPart(antenna)
+  // 1. Une émission est en cours : on suit sa structure segment par segment.
+  if (antenna.parts.length > 0) {
+    const showItem = nextShowSegment(station, antenna, music, jingles, ads, gameMinutes)
+    if (showItem) return showItem
+  }
 
   const hour = Math.floor(getMinuteOfDay(gameMinutes) / 60)
   const slot = getSlot(station.id, (getDayNumber(gameMinutes) - 1) % 7, hour)
@@ -239,16 +251,62 @@ function nextItem(
 
   // 3. Plage de publicité (on retombe sur la musique si la station n'en a pas).
   if (slot?.kind === 'ads' && ads.length > 0) {
-    const track = ads[antenna.adCursor++ % ads.length]
-    return { track, kind: 'ads', label: track.title }
+    return nextAd(antenna, ads)
   }
 
-  // 4. Sinon, et par défaut : deux musiques, puis un jingle d'habillage.
+  // 4. Coupure pub automatique, selon la politique de la station.
+  if (programming.ads.enabled && ads.length > 0) {
+    if (antenna.adsInBreakLeft > 0) return nextAd(antenna, ads)
+    if (programming.ads.musicInterval > 0 && antenna.musicSinceAd >= programming.ads.musicInterval) {
+      antenna.adsInBreakLeft = Math.max(1, programming.ads.maxPerBreak)
+      antenna.musicSinceAd = 0
+      return nextAd(antenna, ads)
+    }
+  }
+
+  // 5. Sinon, et par défaut : playlist musicale avec habillage configurable.
   if (music.length === 0) return null
-  if (antenna.musicSinceJingle >= MUSIC_BEFORE_JINGLE && jingles.length > 0) {
+  if (
+    programming.jingles.enabled &&
+    programming.jingles.musicInterval > 0 &&
+    antenna.musicSinceJingle >= programming.jingles.musicInterval &&
+    jingles.length > 0
+  ) {
     return nextJingle(station, antenna, jingles, gameMinutes)
   }
 
+  return nextMusic(station, antenna, music, gameMinutes)
+}
+
+function nextShowSegment(
+  station: RadioStation,
+  antenna: Antenna,
+  music: RadioTrack[],
+  jingles: RadioTrack[],
+  ads: RadioTrack[],
+  gameMinutes: number,
+): BroadcastItem | null {
+  let guard = 0
+  while (antenna.parts.length > 0 && guard++ < 20) {
+    const segment = antenna.parts.shift()!
+    antenna.partIndex++
+    const label =
+      antenna.partCount > 1 ? `${antenna.showTitle} (${antenna.partIndex}/${antenna.partCount})` : antenna.showTitle
+
+    if (segment.kind === 'take' && segment.track) return { track: segment.track, kind: 'show', label }
+    if (segment.kind === 'music_break' && music.length > 0) return nextMusic(station, antenna, music, gameMinutes)
+    if (segment.kind === 'jingle' && jingles.length > 0) return nextJingle(station, antenna, jingles, gameMinutes)
+    if (segment.kind === 'ad' && ads.length > 0) return nextAd(antenna, ads)
+  }
+  return null
+}
+
+function nextMusic(
+  station: RadioStation,
+  antenna: Antenna,
+  music: RadioTrack[],
+  gameMinutes: number,
+): BroadcastItem {
   if (antenna.cursor >= antenna.order.length) {
     // Playlist mélangée, puis tournée depuis un point de départ aléatoire :
     // entrer dans un véhicule ne retombe pas toujours sur le même premier titre,
@@ -258,7 +316,14 @@ function nextItem(
   }
   const track = antenna.order[antenna.cursor++]
   antenna.musicSinceJingle++
+  antenna.musicSinceAd++
   return { track, kind: 'music', label: track.title }
+}
+
+function nextAd(antenna: Antenna, ads: RadioTrack[]): BroadcastItem {
+  const track = ads[antenna.adCursor++ % ads.length]
+  antenna.adsInBreakLeft = Math.max(0, antenna.adsInBreakLeft - 1)
+  return { track, kind: 'ads', label: track.title }
 }
 
 function nextJingle(

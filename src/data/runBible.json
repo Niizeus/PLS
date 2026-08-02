@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "settings": {
+    "realDurationMinutes": 90,
+    "inGameDays": 3
+  },
+  "endings": [],
+  "paths": [],
+  "events": [],
+  "entities": []
+}

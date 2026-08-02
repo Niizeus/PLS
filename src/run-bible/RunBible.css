@@ -1,0 +1,309 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #101216;
+  color: #edf1f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #101216;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid rgba(220, 226, 235, 0.18);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #202630;
+  color: #edf1f5;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: rgba(117, 196, 255, 0.7);
+}
+
+button.primary {
+  background: #2d6cdf;
+  border-color: #75a7ff;
+}
+
+button.secondary {
+  background: #244034;
+  border-color: rgba(117, 221, 162, 0.55);
+}
+
+button.danger {
+  background: transparent;
+  color: #ff9b9b;
+  border-color: rgba(255, 155, 155, 0.35);
+}
+
+button.ghost {
+  background: transparent;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(220, 226, 235, 0.16);
+  border-radius: 6px;
+  background: #151a21;
+  color: #edf1f5;
+  padding: 9px 10px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #b7c1cf;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.run-bible-shell {
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.run-bible-header,
+.settings-panel,
+.run-tabs,
+.panel {
+  border: 1px solid rgba(220, 226, 235, 0.12);
+  background: #171c24;
+  border-radius: 8px;
+}
+
+.run-bible-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+}
+
+.run-bible-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.run-bible-header p {
+  margin: 8px 0 0;
+  color: #aeb8c7;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #75ddc2;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.header-actions {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  min-width: 190px;
+}
+
+.save-state {
+  color: #9fb0c4;
+  font-size: 12px;
+  text-align: right;
+}
+
+.save-state.dirty {
+  color: #ffd36a;
+}
+
+.settings-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.ratio-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  align-content: center;
+  color: #b7c1cf;
+  font-size: 13px;
+}
+
+.ratio-grid strong {
+  color: #edf1f5;
+}
+
+.run-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px;
+}
+
+.run-tabs button.active {
+  background: #2d6cdf;
+  border-color: #75a7ff;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.panel {
+  padding: 16px;
+}
+
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.form-panel {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+}
+
+.card-list,
+.timeline-list,
+.step-list {
+  display: grid;
+  gap: 10px;
+}
+
+.idea-card,
+.timeline-card,
+.step-card {
+  border: 1px solid rgba(220, 226, 235, 0.12);
+  border-radius: 8px;
+  background: #11161d;
+  padding: 12px;
+}
+
+.timeline-card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.timeline-card > div:first-child {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.timeline-card strong {
+  font-size: 18px;
+}
+
+.timeline-card span,
+.card-head span {
+  color: #9fb0c4;
+  font-size: 12px;
+}
+
+.card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.idea-card p,
+.step-card p {
+  margin: 10px 0 0;
+  color: #d4dbe5;
+  white-space: pre-wrap;
+}
+
+.idea-card pre {
+  margin: 10px 0 0;
+  color: #b7c1cf;
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+.card-actions {
+  margin-top: 12px;
+}
+
+.step-card {
+  display: grid;
+  gap: 8px;
+}
+
+.audit-panel {
+  margin-top: 14px;
+}
+
+.audit-panel ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.audit-panel li {
+  color: #ffd36a;
+}
+
+.empty {
+  color: #9fb0c4;
+  margin: 0;
+}
+
+@media (max-width: 880px) {
+  .run-bible-header,
+  .settings-panel,
+  .workspace-grid,
+  .timeline-card {
+    grid-template-columns: 1fr;
+  }
+
+  .run-bible-header {
+    display: grid;
+  }
+
+  .save-state {
+    text-align: left;
+  }
+}

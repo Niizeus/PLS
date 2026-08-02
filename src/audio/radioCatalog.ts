@@ -1,4 +1,5 @@
 import { RADIO_MANIFEST } from 'virtual:pls-radio-manifest'
+import authoredShowsFile from '../data/radioShows.json'
 import type { RadioManifestFile, RadioManifestStation } from '../../vite/radioManifestPlugin'
 
 export type RadioStationId = 'R01' | 'R02' | 'R03' | 'R04' | 'R05'
@@ -15,6 +16,16 @@ export interface RadioTrack {
   durationKnown: boolean
 }
 
+export type RadioEpisodeSegmentKind = 'take' | 'music_break' | 'jingle' | 'ad' | 'silence'
+
+export interface RadioEpisodeSegment {
+  id: string
+  kind: RadioEpisodeSegmentKind
+  title: string
+  track?: RadioTrack
+  durationSeconds?: number
+}
+
 /**
  * Un ÉPISODE : une diffusion, faite d'une ou plusieurs PARTIES qui s'enchaînent.
  *
@@ -27,6 +38,7 @@ export interface RadioEpisode {
   id: string
   title: string
   parts: RadioTrack[]
+  segments: RadioEpisodeSegment[]
   /** Durée totale des parties (s). `0` tant qu'aucune durée n'est connue. */
   durationSeconds: number
 }
@@ -56,6 +68,28 @@ const DEFAULT_MUSIC_SECONDS = 180
 const DEFAULT_SHORT_SECONDS = 15
 const DEFAULT_AD_SECONDS = 30
 const DEFAULT_SHOW_SECONDS = 150
+
+interface AuthoredShowSegment {
+  kind?: RadioEpisodeSegmentKind
+  title?: string
+  fileName?: string
+  durationSeconds?: number
+}
+
+interface AuthoredShowEpisode {
+  folder?: string
+  title?: string
+  segments?: AuthoredShowSegment[]
+}
+
+interface AuthoredShow {
+  stationId?: string
+  folder?: string
+  title?: string
+  episodes?: AuthoredShowEpisode[]
+}
+
+const AUTHORED_SHOWS = ((authoredShowsFile as { shows?: AuthoredShow[] }).shows ?? []) as AuthoredShow[]
 
 
 /**
@@ -138,6 +172,52 @@ function toTracks(
   }))
 }
 
+function authoredShow(stationId: RadioStationId, folder: string): AuthoredShow | undefined {
+  return AUTHORED_SHOWS.find((show) => show.stationId === stationId && show.folder === folder)
+}
+
+function authoredEpisode(show: AuthoredShow | undefined, folder: string, index: number): AuthoredShowEpisode | undefined {
+  if (!show?.episodes?.length) return undefined
+  return show.episodes.find((episode) => (episode.folder || '') === folder) ?? show.episodes[index]
+}
+
+function toEpisodeSegments(
+  episode: AuthoredShowEpisode | undefined,
+  tracks: RadioTrack[],
+): RadioEpisodeSegment[] {
+  if (!episode?.segments?.length) {
+    return tracks.map((track, index) => ({
+      id: `${track.id}|${index}`,
+      kind: 'take',
+      title: track.title,
+      track,
+    }))
+  }
+
+  const byFileName = new Map(tracks.map((track) => [track.id.split('/').at(-1) ?? track.id, track]))
+  return episode.segments
+    .map((segment, index): RadioEpisodeSegment | null => {
+      const kind = segment.kind ?? 'take'
+      if (kind === 'take') {
+        const track = segment.fileName ? byFileName.get(segment.fileName) : undefined
+        if (!track) return null
+        return {
+          id: `${track.id}|${index}`,
+          kind,
+          title: segment.title || track.title,
+          track,
+        } satisfies RadioEpisodeSegment
+      }
+      return {
+        id: `break|${kind}|${index}`,
+        kind,
+        title: segment.title || kind,
+        durationSeconds: segment.durationSeconds,
+      } satisfies RadioEpisodeSegment
+    })
+    .filter((segment): segment is RadioEpisodeSegment => segment !== null)
+}
+
 function toStation(id: RadioStationId, manifest: RadioManifestStation | undefined): RadioStation {
   const identity = STATION_IDENTITIES[id]
 
@@ -151,21 +231,26 @@ function toStation(id: RadioStationId, manifest: RadioManifestStation | undefine
     musicTracks: toTracks(id, 'music', 'Musiques', manifest?.musiques ?? [], DEFAULT_MUSIC_SECONDS),
     jingles: toTracks(id, 'jingle', 'Jingles', manifest?.jingles ?? [], DEFAULT_SHORT_SECONDS),
     ads: toTracks(id, 'ad', 'Publicites', manifest?.publicites ?? [], DEFAULT_AD_SECONDS),
-    scheduledPrograms: (manifest?.programmes ?? []).map((program) => ({
-      id: `${id}/Emissions/${program.folder}`,
-      title: program.title,
-      folder: program.folder,
-      episodes: program.episodes.map((episode) => {
+    scheduledPrograms: (manifest?.programmes ?? []).map((program) => {
+      const authored = authoredShow(id, program.folder)
+      return {
+        id: `${id}/Emissions/${program.folder}`,
+        title: authored?.title || program.title,
+        folder: program.folder,
+        episodes: program.episodes.map((episode, index) => {
+        const authoredEp = authoredEpisode(authored, episode.folder, index)
         const category = `Emissions/${program.folder}${episode.folder ? '/' + episode.folder : ''}`
         const parts = toTracks(id, 'show', category, episode.parts, DEFAULT_SHOW_SECONDS)
         return {
           id: `${id}/${category}`,
-          title: episode.title,
+          title: authoredEp?.title || episode.title,
           parts,
+          segments: toEpisodeSegments(authoredEp, parts),
           durationSeconds: parts.reduce((sum, part) => sum + part.durationSeconds, 0),
         }
       }),
-    })),
+      }
+    }),
   }
 }
 

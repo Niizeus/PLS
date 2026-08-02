@@ -1,9 +1,14 @@
 import { create } from 'zustand'
+import {
+  GAME_MINUTES_PER_REAL_SECOND as RUN_GAME_MINUTES_PER_REAL_SECOND,
+  REAL_SECONDS_PER_GAME_DAY as RUN_REAL_SECONDS_PER_GAME_DAY,
+  RUN_START_GAME_MINUTES,
+} from '../run/runConstants'
 
 export const MINUTES_PER_DAY = 24 * 60
-export const START_TIME_MINUTES = 8 * 60
-export const REAL_SECONDS_PER_GAME_DAY = 60 * 60
-export const GAME_MINUTES_PER_REAL_SECOND = MINUTES_PER_DAY / REAL_SECONDS_PER_GAME_DAY
+export const START_TIME_MINUTES = RUN_START_GAME_MINUTES
+export const REAL_SECONDS_PER_GAME_DAY = RUN_REAL_SECONDS_PER_GAME_DAY
+export const GAME_MINUTES_PER_REAL_SECOND = RUN_GAME_MINUTES_PER_REAL_SECOND
 
 export type DayPhase = 'dawn' | 'morning' | 'afternoon' | 'evening' | 'night'
 
@@ -15,6 +20,7 @@ interface GameTimeState {
   setPaused: (isPaused: boolean) => void
   setTimeScale: (timeScale: number) => void
   setTotalMinutes: (totalMinutes: number) => void
+  syncFromRunClock: (totalMinutes: number, timeScale: number, isPaused: boolean) => void
 }
 
 export const useGameTimeStore = create<GameTimeState>((set) => ({
@@ -32,6 +38,12 @@ export const useGameTimeStore = create<GameTimeState>((set) => ({
   setPaused: (isPaused) => set({ isPaused }),
   setTimeScale: (timeScale) => set({ timeScale: Math.max(0, timeScale) }),
   setTotalMinutes: (totalMinutes) => set({ totalMinutes: Math.max(0, totalMinutes) }),
+  syncFromRunClock: (totalMinutes, timeScale, isPaused) =>
+    set({
+      totalMinutes: Math.max(0, totalMinutes),
+      timeScale: Math.max(0, timeScale),
+      isPaused,
+    }),
 }))
 
 export function getMinuteOfDay(totalMinutes: number): number {

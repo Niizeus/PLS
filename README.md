@@ -60,6 +60,7 @@ PLS/
 ├── CONTRIBUTING.md    ← les règles de contribution (commits, branches)
 ├── docs/              ← toute la documentation
 ├── index.html         ← page hôte (Vite)
+├── tools/             ← petits outils locaux de production
 └── src/               ← le code du jeu
     ├── main.tsx / App.tsx   ← entrée + assemblage de l'écran
     ├── core/          ← Canvas 3D, lumières, caméra qui suit le joueur
@@ -92,6 +93,18 @@ npm run dev
 ```
 
 Puis ouvre l'adresse affichée (souvent `http://localhost:5173`) dans ton navigateur.
+
+---
+
+## 🧰 Outils pratiques
+
+### Convertir des `.wav` en `.ogg`
+
+Double-clique sur [`tools/wav-to-ogg/Convertir WAV en OGG.bat`](tools/wav-to-ogg/Convertir%20WAV%20en%20OGG.bat), puis selectionne un ou plusieurs fichiers `.wav`.
+Les `.ogg` sont crees automatiquement dans ton dossier `Downloads` / `Telechargements`.
+
+Tu peux aussi glisser-deposer plusieurs `.wav`, ou un dossier qui contient des `.wav`, sur le `.bat`.
+Si `ffmpeg` manque sur le PC, l'outil propose de l'installer avec `winget`.
 
 ---
 

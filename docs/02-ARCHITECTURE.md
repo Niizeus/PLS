@@ -11,6 +11,7 @@ Plus le code est découpé en modules, moins vous touchez les mêmes fichiers �
 PLS/
 ├── docs/                  ← la documentation
 ├── public/                ← fichiers servis tels quels (icônes, textures brutes...)
+├── tools/                 ← petits outils locaux de production hors jeu
 └── src/
     ├── main.tsx           ← point d'entrée (on n'y touche presque jamais)
     ├── App.tsx            ← assemble l'écran de jeu
@@ -283,6 +284,7 @@ ou `F2`. Un HUD, ça ne fait que grossir si personne ne défend cette règle.
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
 | Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
 | Une radio jouable | depose le fichier audio dans `public/musique/radio/RXX_Nom/Musiques/` (ou `Jingles/`, `Publicites/`, `Emissions/<Emission>/`). **Aucun code a ecrire, le nom du fichier est libre** : `vite/radioManifestPlugin.ts` scanne le dossier et fournit le catalogue au jeu via le module virtuel `virtual:pls-radio-manifest`. La logique radio vit dans `src/audio/`. |
+| Un petit outil local de production | `tools/<nom-outil>/`, avec un `README.md` court. Exemple : `tools/wav-to-ogg/` convertit plusieurs `.wav` en `.ogg` dans `Downloads` pour preparer les musiques radio. |
 | Un module de l'editeur PLS | `src/editor/` avec `editor.html` comme entree du hub actuel. L'editeur est dev-only et ne doit pas modifier le jeu principal sans necessite. |
 | Un interieur de batiment | `src/data/interiors/<interiorId>.json` (un fichier par interieur), avec les types/validateurs dans `src/data/interiors.ts` et l'edition dans le module Interieurs de `src/editor/`. |
 | Un **plan type** d'interieur (maison, appartement, boutique, egouts...) | `src/data/interiorTemplates.ts` : un template decrit des **pieces rectangulaires**, le module en deduit murs, portes, fenetres, sols et meubles. Le bouton « Generer ce plan » du module Interieurs l'appelle. |

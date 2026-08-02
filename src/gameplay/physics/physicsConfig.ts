@@ -38,6 +38,19 @@ export const PHYSICS_GROUPS = {
     PHYSICS_LAYER.PROP,
     PHYSICS_LAYER.SENSOR,
   ]),
+  playerObstacles: interactionGroups(PHYSICS_LAYER.PROP, [
+    PHYSICS_LAYER.WORLD,
+    PHYSICS_LAYER.VEHICLE,
+    PHYSICS_LAYER.PROP,
+  ]),
+  playerHardObstacles: interactionGroups(PHYSICS_LAYER.PROP, [
+    PHYSICS_LAYER.VEHICLE,
+    PHYSICS_LAYER.PROP,
+  ]),
+  playerGround: interactionGroups(PHYSICS_LAYER.PROP, [
+    PHYSICS_LAYER.WORLD,
+    PHYSICS_LAYER.VEHICLE,
+  ]),
   vehicle: interactionGroups(PHYSICS_LAYER.VEHICLE, [
     PHYSICS_LAYER.WORLD,
     PHYSICS_LAYER.PROP,

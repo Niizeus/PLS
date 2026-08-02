@@ -342,6 +342,11 @@ d'attaque différente**, sans enchaînement pour l'instant.
 > de poing. Le mode d'emploi pour brancher le futur FBX est écrit en commentaire dans
 > `src/entities/player/PlayerModel.tsx` (constante `ATTACK_TO_ANIM`).
 
+Les coups de poing sont joues en **couche haut du corps** quand le joueur marche ou court :
+les jambes continuent leur locomotion (`walk`/`run`/etc.) pendant que le torse et les bras frappent.
+Techniquement, `playerStore.locomotionAction` garde l'animation de base et `PlayerModel.tsx`
+filtre les tracks Mixamo du haut du corps pour les overlays d'attaque.
+
 ### Se défendre (clic droit maintenu)
 
 Chibrux lève sa **garde** (animation dédiée, jouée en boucle) et reste planté : en défense on ne
@@ -783,6 +788,29 @@ très en dessous de 16 ms.
 Ces briques servent à régler la gravite globale, les materiaux, le sommeil des
 objets, les groupes de collision, le decollage, les tonneaux et les atterrissages.
 
+Le joueur est maintenant un corps Rapier `kinematicPosition` avec une capsule de collision.
+Le controleur garde les intentions clavier/souris, le saut et les transitions vehicule, mais pousse
+la pose finale dans Rapier. Sa hauteur de sol peut venir d'un `castRayAndGetNormal` Rapier sur
+les supports `WORLD` et `VEHICLE` : les tremplins servent de sol montable, et le toit de voiture
+peut recevoir le joueur quand il saute dessus. Sa trajectoire horizontale est balayee separement
+avec un `castShape` capsule contre voitures et props uniquement ; les rampes ne sont donc plus des
+murs lateraux qui peuvent coincer le joueur en boucle. La reponse reste permissive pour le gameplay :
+un impact lateral projette le deplacement restant en glisse contre l'obstacle au lieu de couper
+instantanement la marche. Le vertical reste volontairement sans aimant de support : quand le joueur
+est en l'air, il se pose sur une rampe ou une voiture seulement s'il traverse son dessus depuis
+au-dessus. Une correction anti-traversee replace quand meme le joueur s'il est deja sous le sol ;
+elle est large pour le sol procedural, mais courte pour les supports Rapier afin d'eviter les yoyos
+sur les bords. Si le joueur passe sous un tremplin, le dessus de la rampe n'est pas retenu comme
+support quand il est trop haut au-dessus de lui : le sol normal dessous reprend la priorite.
+Les cotes et le dessous du tremplin restent bloquants, et le saut tape un plafond au lieu de
+faire traverser la rampe. Quand le joueur marche au sol, une verification de hauteur libre
+annule aussi l'avancee si sa tete toucherait un plafond a la nouvelle position. Le saut et la chute sont
+resolus separement du sweep horizontal, avec coyote time, jump buffer, step-up doux et fallback
+vers le dernier sol fiable en debug `F4`. Sortir d'une voiture teste plusieurs positions autour
+du chassis pour eviter de deposer le joueur dans le vehicule ou dans un obstacle. Le store publie toujours une cible
+`playerObject` separee pour la camera et l'UI. Pour les vehicules, ce blocage reste une requete de
+deplacement : le solveur Rapier ne laisse pas le joueur kinematic pousser directement le chassis.
+
 ### Ragdoll
 
 Le ragdoll est une feature de fun prioritaire dès que la physique le permet.
@@ -798,6 +826,21 @@ Déclencheurs possibles :
 Le ragdoll doit être court, drôle et lisible. On ne cherche pas une anatomie parfaite : on veut une
 transition convaincante entre animation et corps physique, une impulsion adaptée à la cause, puis un
 retour à un état stable pour éviter de coûter trop cher en performance.
+
+Prototype joueur en place : `C` bascule un ragdoll de test. L'animation normale est masquee, le
+controleur joueur est mis en pause, et un rig physique Rapier est genere depuis les vraies positions
+d'os Mixamo du modele Pierrot. Les anchors de joints sont cales sur les articulations du squelette,
+et le mesh skinne suit les corps physiques avec des offsets de bind pose. Le rig est calcule depuis
+une copie detachee du FBX pour eviter de reprendre le transform live de `PlayerModel`. La dynamique
+est reactivee : les corps sont dynamiques, les capsules restent visibles en DEV, les joints ont des
+iterations solveur supplementaires, et une resistance angulaire douce ramene chaque segment vers sa
+rotation naturelle de bind pose. Le bassin, le torse et la tete resistent plus que les bras/jambes
+pour eviter l'effet pantin qui s'effondre en tour, sans bloquer totalement le cote mou du ragdoll.
+Quand `C` est declenche pendant une course, un saut ou une chute, la vitesse courante du controleur
+est transmise aux corps physiques pour eviter l'arret net avant la chute. Les capsules ne collisionnent
+pas entre elles, mais elles collisionnent avec le monde et les vehicules pour que Chibrux puisse tomber
+sur une voiture au lieu de la traverser. Un second appui replace Chibrux debout depuis la position du
+bassin. Cette version sert au reglage et aux futurs declencheurs.
 
 ---
 

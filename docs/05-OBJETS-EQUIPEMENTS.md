@@ -28,15 +28,20 @@ Les objets équipés **quittent le sac** et libèrent leur place ; les retirer e
 Le détail du fonctionnement en jeu vit dans
 [03 - Game Design § Inventaire sac à dos](03-GAME-DESIGN.md#-inventaire-sac-à-dos).
 
-## Level test items
+## Level test plat
 
-Une zone de test existe près du spawn joueur. Elle pose automatiquement **tous les items déclarés**
-dans `src/data/items.ts`, en grille, via `src/entities/items/ItemPickups.tsx`.
+Un level test plat existe pour tester rapidement les objets et vehicules sans charger Beauvais :
+ouvrir le jeu avec `?level=test` (exemple : `http://127.0.0.1:5173/?level=test`).
+
+Ce level pose automatiquement **tous les items declares** dans `src/data/items.ts`, en grille, via
+`src/entities/items/ItemPickups.tsx`.
 
 - Les pickups de test ont un id `test-item-*`.
 - Ils réapparaissent après ramassage/placement pour pouvoir tester plusieurs fois le même objet.
 - Les piles empilables donnent jusqu'à 3 exemplaires, pratique pour tester consommation et raccourcis.
-- Les véhicules déjà branchés, scooter et voiture, restent garés à côté du spawn.
+- Le level plat contient le scooter, la voiture et quelques tremplins physiques.
+- La vraie map de Beauvais ne monte plus les pickups de test, le scooter, les marqueurs 3D ni les
+  tremplins : elle garde le joueur, la voiture et les batiments.
 
 ## Structure conseillee
 

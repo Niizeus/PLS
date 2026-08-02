@@ -2,6 +2,7 @@ import { ROADS, CITY_GENERATED_AT, terrainHeight, type Road, type RoadClass } fr
 import { isBlocked } from './collision'
 import { isTerrainReady } from './terrain'
 import roadSurfaceTest from './data/road-surface-test.json'
+import { isFlatTestLevelEnabled } from '../../gameplay/testLevel/testLevelMode'
 
 /**
  * 🛣️  LA CHAUSSÉE DE BEAUVAIS — un VOLUME, pas un décalque.
@@ -1030,6 +1031,7 @@ export function roadwayHeightAt(x: number, z: number): number {
  */
 /** Altitude du bitume uniquement, sans bordure ni accotement. */
 export function drivableRoadHeightAt(x: number, z: number): number {
+  if (isFlatTestLevelEnabled()) return 0
   if (!ensureBuilt()) return -Infinity
   const experimentalTop = experimentalSurfaceHeightAt(x, z)
   if (experimentalTop !== -Infinity) return experimentalTop
@@ -1090,6 +1092,7 @@ export function vehicleGroundHeight(x: number, z: number, offsets: GroundSampleO
 }
 
 export function groundHeight(x: number, z: number): number {
+  if (isFlatTestLevelEnabled()) return 0
   const road = roadwayHeightAt(x, z)
   const ground = terrainHeight(x, z)
   return road > ground ? road : ground

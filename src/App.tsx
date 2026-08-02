@@ -12,15 +12,18 @@ import DevToolsPanel from './devtools/DevToolsPanel'
 import PerfProfilerControls from './devtools/PerfProfilerControls'
 import CollisionDebugControls from './devtools/CollisionDebugControls'
 import LoadingScreen from './ui/LoadingScreen'
+import { isFlatTestLevelEnabled } from './gameplay/testLevel/testLevelMode'
 import { runWorldStartupWarmup, type WarmupProgress } from './world/startupWarmup'
 
 // App = l'écran de jeu complet : la scène 3D + l'interface 2D par-dessus.
 // On garde ce fichier tout petit : il ne fait qu'assembler les gros blocs.
 export default function App() {
+  const flatTestLevel = isFlatTestLevelEnabled()
   const [warmup, setWarmup] = useState<WarmupProgress>({ label: 'Initialisation', done: 0, total: 1 })
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(flatTestLevel)
 
   useEffect(() => {
+    if (flatTestLevel) return
     let alive = true
     runWorldStartupWarmup((progress) => {
       if (alive) setWarmup(progress)
@@ -35,7 +38,7 @@ export default function App() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [flatTestLevel])
 
   return (
     <>

@@ -1,4 +1,5 @@
 import rawData from './data/beauvais-buildings.json'
+import { isFlatTestLevelEnabled } from '../../gameplay/testLevel/testLevelMode'
 import { sampleHeight } from './terrain'
 
 /**
@@ -161,6 +162,7 @@ export const BUILDINGS: Building[] = data.buildings.map((b) => {
  * 0 et le monde est plat — voir l'avertissement en tête de `terrain.ts`.
  */
 export function terrainHeight(x: number, z: number): number {
+  if (isFlatTestLevelEnabled()) return 0
   return sampleHeight(x, z)
 }
 

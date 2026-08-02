@@ -23,6 +23,10 @@ export interface KeyboardState {
   /** Déclencheurs véhicule : à remettre à false par celui qui les consomme. */
   limiterQueued: boolean
   lightsQueued: boolean
+  /** Debug : bascule ragdoll joueur. */
+  ragdollQueued: boolean
+  /** Debug : replace le joueur au dernier sol fiable. */
+  unstuckQueued: boolean
 }
 
 const createEmptyState = (): KeyboardState => ({
@@ -38,6 +42,8 @@ const createEmptyState = (): KeyboardState => ({
   horn: false,
   limiterQueued: false,
   lightsQueued: false,
+  ragdollQueued: false,
+  unstuckQueued: false,
 })
 
 /**
@@ -81,6 +87,12 @@ export function useKeyboard() {
           break
         case KEY.CROUCH:
           k.crouch = pressed
+          break
+        case KEY.RAGDOLL_TEST:
+          if (pressed) k.ragdollQueued = true
+          break
+        case KEY.PLAYER_UNSTUCK:
+          if (pressed) k.unstuckQueued = true
           break
         case KEY.VEHICLE_HORN:
           k.horn = pressed

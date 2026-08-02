@@ -1,13 +1,21 @@
 import { useFrame } from '@react-three/fiber'
-import { useRapier } from '@react-three/rapier'
-import { useRef, type RefObject } from 'react'
+import { useRapier, type RapierContext, type RapierRigidBody } from '@react-three/rapier'
+import { useRef, type MutableRefObject, type RefObject } from 'react'
 import * as THREE from 'three'
 import type { KeyboardState } from '../../gameplay/input/useKeyboard'
 import type { MouseState } from '../../gameplay/input/useMouse'
 import { useInventoryStore } from '../../gameplay/inventory/inventoryStore'
 import { useCharacterStatsStore } from '../../gameplay/stats/characterStatsStore'
 import { getEffectiveStats, getMovementSpeedMultiplier } from '../../gameplay/stats/effectiveStats'
-import { usePlayerStore, type AttackMove, type PlayerAction } from '../../gameplay/stats/playerStore'
+import {
+  usePlayerStore,
+  type AttackMove,
+  type PlayerAction,
+  type PlayerLocomotionAction,
+  type PlayerPhysicsDebug,
+  type PlayerPhysicsMode,
+  type PlayerPose,
+} from '../../gameplay/stats/playerStore'
 import { getCombatStyle } from './combatStyle'
 import { useCameraStore } from '../../core/cameraStore'
 import { FRAME } from '../../core/framePriority'
@@ -26,9 +34,41 @@ import { groundHeight } from '../../world/beauvais/roadway'
 import { moveCircle } from '../movementCollision'
 import { zoneAt } from '../../world/beauvais/zones'
 import { getPlayerTuning, getVehicleTuning } from '../../devtools/devTuningStore'
+import { isFlatTestLevelEnabled } from '../../gameplay/testLevel/testLevelMode'
+import { PHYSICS_GROUPS } from '../../gameplay/physics/physicsConfig'
+import { useCollisionDebugStore } from '../../devtools/collisionDebugStore'
 
 const SCOOTER_RADIO_ID = 'vehicle:scooter:prototype'
 const CAR_RADIO_ID = 'vehicle:car:prototype'
+const PLAYER_SWEEP_SKIN = 0.035
+const PLAYER_SLIDE_DAMPING = 0.86
+const PLAYER_CLIMBABLE_NORMAL_Y = 0.42
+const PLAYER_STEP_UP_HEIGHT = 0.42
+const PLAYER_SNAP_DOWN_DISTANCE = 0.55
+const PLAYER_GROUND_PROBE_EXTRA = 2.4
+const PLAYER_SUPPORT_NORMAL_Y = 0.52
+const PLAYER_MAX_FALL_SPEED = 9
+const PLAYER_SUPPORT_PENETRATION_RECOVERY = 0.5
+const PLAYER_HEAD_CLEARANCE = 0.08
+const PLAYER_HEAD_BLOCK_NORMAL_Y = -0.35
+const PLAYER_COYOTE_TIME = 0.12
+const PLAYER_JUMP_BUFFER_TIME = 0.16
+const PLAYER_UNSTUCK_TOI = 0.001
+const PLAYER_UNSTUCK_PUSH = 0.075
+const PLAYER_LAST_SAFE_MIN_TIME = 0.2
+
+interface PlayerGroundSample {
+  y: number
+  rayHit: boolean
+  normalY: number
+  source: 'procedural' | 'rapier'
+}
+
+interface PlayerHorizontalResult {
+  mode: PlayerPhysicsMode
+  hitPoint: PlayerPhysicsDebug['hitPoint']
+  hitNormal: PlayerPhysicsDebug['hitNormal']
+}
 
 /**
  * Ce que la logique produit pour le visuel (lu par Player pour animer les bras).
@@ -57,15 +97,19 @@ export interface PlayerMotion {
  */
 export function usePlayerMovement(
   groupRef: RefObject<THREE.Group>,
+  bodyRef: RefObject<RapierRigidBody>,
   keys: RefObject<KeyboardState>,
   mouse: RefObject<MouseState>,
 ) {
   const setAction = usePlayerStore((s) => s.setAction)
+  const setLocomotionAction = usePlayerStore((s) => s.setLocomotionAction)
   const rapierContext = useRapier()
   const setDefending = usePlayerStore((s) => s.setDefending)
   const setZoneName = usePlayerStore((s) => s.setZoneName)
   const strike = usePlayerStore((s) => s.strike)
   const endStrike = usePlayerStore((s) => s.endStrike)
+  const setRagdoll = usePlayerStore((s) => s.setRagdoll)
+  const setPhysicsDebug = usePlayerStore((s) => s.setPhysicsDebug)
 
   // Dernier quartier détecté : on ne met à jour le store que quand il CHANGE.
   const lastZoneId = useRef<string | null>('__init__')
@@ -95,19 +139,83 @@ export function usePlayerMovement(
 
   // Vecteurs réutilisés chaque frame (on évite d'en allouer dans la boucle).
   const moveDir = useRef(new THREE.Vector3())
+  const sweepFrom = useRef(new THREE.Vector3())
   // Etats de conduite conserves hors React pour eviter les re-render par frame.
   const scooterDrive = useRef(createVehicleDriveState())
   // Hauteur de sol lissee pour eviter les secousses camera sur routes/bordures.
   const groundY = useRef<number | null>(null)
-  // Saut : hauteur au-dessus du sol + vitesse verticale.
-  const jumpY = useRef(0)
+  // Mouvement vertical independant des sweeps horizontaux Rapier.
   const vy = useRef(0)
+  const groundedRef = useRef(true)
+  const coyoteTimer = useRef(PLAYER_COYOTE_TIME)
+  const jumpBufferTimer = useRef(0)
+  const lastSafePose = useRef<PlayerPose | null>(null)
+  const lastSafeTimer = useRef(0)
+  const physicsMode = useRef<PlayerPhysicsMode>('grounded')
+  const previousVelocityPose = useRef<PlayerPose | null>(null)
+  const currentVelocity = useRef({ x: 0, y: 0, z: 0 })
 
   useFrame((_, rawDelta) => {
     const group = groupRef.current
+    const body = bodyRef.current
     const k = keys.current
     const m = mouse.current
-    if (!group || !k || !m) return
+    if (!group || !body || !k || !m) return
+
+    const delta = Math.min(rawDelta, 0.1)
+    const playerTuning = getPlayerTuning()
+
+    const playerStore = usePlayerStore.getState()
+    if (playerStore.isRagdoll) {
+      if (k.ragdollQueued) {
+        k.ragdollQueued = false
+        const recovery = recoveryPose(playerStore.ragdollPose, group, playerTuning.BODY_HEIGHT)
+        teleportKinematicPlayer(body, group, recovery)
+        resetVelocitySample(group, previousVelocityPose, currentVelocity)
+        setRagdoll(false, recovery)
+        setAction('idle')
+        setLocomotionAction('idle')
+      } else {
+        body.setEnabled(false)
+        if (playerStore.ragdollPose) {
+          group.position.set(playerStore.ragdollPose.x, playerStore.ragdollPose.y, playerStore.ragdollPose.z)
+          group.rotation.y = playerStore.ragdollPose.rot
+        }
+        if (playerStore.action !== 'hurt') setAction('hurt')
+        if (playerStore.locomotionAction !== 'idle') setLocomotionAction('idle')
+        if (playerStore.isDefending) setDefending(false)
+      }
+      return
+    }
+
+    if (!body.isEnabled()) {
+      teleportKinematicPlayer(body, group, poseFromObject(group))
+      resetVelocitySample(group, previousVelocityPose, currentVelocity)
+    }
+
+    if (k.ragdollQueued) {
+      k.ragdollQueued = false
+      const pose = poseWithVelocity(group, currentVelocity.current, vy.current)
+      body.setEnabled(false)
+      setRagdoll(true, pose)
+      if (usePlayerStore.getState().attackMove) endStrike()
+      setAction('hurt')
+      setLocomotionAction('idle')
+      setDefending(false)
+      return
+    }
+
+    if (k.unstuckQueued) {
+      k.unstuckQueued = false
+      const pose = lastSafePose.current ?? recoveryPose(null, group, playerTuning.BODY_HEIGHT)
+      teleportKinematicPlayer(body, group, pose)
+      resetVelocitySample(group, previousVelocityPose, currentVelocity)
+      groundY.current = pose.y
+      vy.current = 0
+      groundedRef.current = true
+      coyoteTimer.current = PLAYER_COYOTE_TIME
+      physicsMode.current = 'unstucking'
+    }
 
     // Quartier courant (marche ou scooter) : ne pousse au store que si ça change.
     const zone = zoneAt(group.position.x, group.position.z)
@@ -118,15 +226,14 @@ export function usePlayerMovement(
     }
 
     // On borne le delta : si l'onglet a "laggé", on évite un saut géant.
-    const delta = Math.min(rawDelta, 0.1)
-    const playerTuning = getPlayerTuning()
     const scooterTuning = getVehicleTuning('scooter')
     const carTuning = getVehicleTuning('car')
 
     // --- 0. Vehicules : monter / descendre (E), puis conduire si on roule ---
     const scooter = useScooterStore.getState()
     const car = useCarStore.getState()
-    const ridingScooter = scooter.riding
+    const flatTestLevel = isFlatTestLevelEnabled()
+    const ridingScooter = flatTestLevel && scooter.riding
     const ridingCar = car.riding
     let riding = ridingScooter || ridingCar
 
@@ -135,12 +242,14 @@ export function usePlayerMovement(
         let nearest: 'scooter' | 'car' | null = null
         let nearestD2 = Infinity
 
-        const scooterDx = group.position.x - scooter.parkedX
-        const scooterDz = group.position.z - scooter.parkedZ
-        const scooterD2 = scooterDx * scooterDx + scooterDz * scooterDz
-        if (scooterD2 <= scooterTuning.MOUNT_RANGE * scooterTuning.MOUNT_RANGE && scooterD2 < nearestD2) {
-          nearest = 'scooter'
-          nearestD2 = scooterD2
+        if (flatTestLevel) {
+          const scooterDx = group.position.x - scooter.parkedX
+          const scooterDz = group.position.z - scooter.parkedZ
+          const scooterD2 = scooterDx * scooterDx + scooterDz * scooterDz
+          if (scooterD2 <= scooterTuning.MOUNT_RANGE * scooterTuning.MOUNT_RANGE && scooterD2 < nearestD2) {
+            nearest = 'scooter'
+            nearestD2 = scooterD2
+          }
         }
 
         const carDx = group.position.x - car.parkedX
@@ -153,20 +262,19 @@ export function usePlayerMovement(
 
         if (nearest === 'scooter') {
           k.interactQueued = false
-          group.position.set(
-            scooter.parkedX,
-            groundHeight(scooter.parkedX, scooter.parkedZ) + scooterTuning.SEAT_HEIGHT,
-            scooter.parkedZ,
-          )
-          group.rotation.y = scooter.parkedRot
+          teleportKinematicPlayer(body, group, {
+            x: scooter.parkedX,
+            y: groundHeight(scooter.parkedX, scooter.parkedZ) + scooterTuning.SEAT_HEIGHT,
+            z: scooter.parkedZ,
+            rot: scooter.parkedRot,
+          })
           stopVehicle(scooterDrive.current)
           scooter.mount()
           useRadioStore.getState().startVehicleRadio(SCOOTER_RADIO_ID)
           riding = true
         } else if (nearest === 'car') {
           k.interactQueued = false
-          group.position.set(car.driverX, car.driverY, car.driverZ)
-          group.rotation.y = car.physicsRot
+          teleportKinematicPlayer(body, group, { x: car.driverX, y: car.driverY, z: car.driverZ, rot: car.physicsRot })
           car.mount()
           useRadioStore.getState().startVehicleRadio(CAR_RADIO_ID)
           riding = true
@@ -175,8 +283,12 @@ export function usePlayerMovement(
         k.interactQueued = false
         const rot = group.rotation.y
         scooter.parkAt(group.position.x, group.position.z, rot)
-        group.position.x += Math.cos(rot) * 1.2
-        group.position.z += -Math.sin(rot) * 1.2
+        teleportKinematicPlayer(body, group, {
+          x: group.position.x + Math.cos(rot) * 1.2,
+          y: group.position.y,
+          z: group.position.z + -Math.sin(rot) * 1.2,
+          rot,
+        })
         stopVehicle(scooterDrive.current)
         useRadioStore.getState().stopRadio(SCOOTER_RADIO_ID)
         riding = false
@@ -184,22 +296,32 @@ export function usePlayerMovement(
         k.interactQueued = false
         const carState = useCarStore.getState()
         const rot = carState.physicsRot
-        const exitX = carState.physicsX + Math.cos(rot) * 1.9
-        const exitZ = carState.physicsZ + -Math.sin(rot) * 1.9
-        const exitGroundY = groundHeight(exitX, exitZ) + playerTuning.BODY_HEIGHT
-        const exitY = Math.max(carState.driverY, exitGroundY)
+        const exitPose = findSafeVehicleExitPose(
+          carState.physicsX,
+          carState.physicsZ,
+          carState.driverY,
+          rot,
+          carTuning.COLLISION_HALF_LENGTH,
+          carTuning.COLLISION_HALF_WIDTH,
+          playerTuning.BODY_RADIUS,
+          playerTuning.BODY_HEIGHT,
+          rapierContext,
+          body,
+        )
+        const exitGroundY = exitPose.groundY
+        const exitY = Math.max(carState.driverY, exitPose.y)
         carState.parkAt(carState.physicsX, carState.physicsZ, rot)
-        group.position.set(exitX, exitY, exitZ)
-        group.rotation.y = rot
+        teleportKinematicPlayer(body, group, { x: exitPose.x, y: exitY, z: exitPose.z, rot })
         groundY.current = exitGroundY
-        jumpY.current = Math.max(0, exitY - exitGroundY)
+        groundedRef.current = exitY <= exitGroundY + 0.05
+        coyoteTimer.current = groundedRef.current ? PLAYER_COYOTE_TIME : 0
         vy.current = carState.velocityY
         useRadioStore.getState().stopRadio(CAR_RADIO_ID)
         riding = false
       }
     }
 
-    const activeScooter = useScooterStore.getState().riding
+    const activeScooter = flatTestLevel && useScooterStore.getState().riding
     const activeCar = useCarStore.getState().riding
     riding = activeScooter || activeCar
 
@@ -227,6 +349,7 @@ export function usePlayerMovement(
         delta,
         rapierContext,
       )
+      syncKinematicPlayer(body, group, group.position.x, group.position.y, group.position.z, group.rotation.y)
       if (Math.abs(scooterDrive.current.speed) > 0.2) {
         scooterState.consumeFuel((Math.abs(scooterDrive.current.speed) * 0.000009 + (k.forward ? 0.000015 : 0)) * delta)
       }
@@ -242,6 +365,7 @@ export function usePlayerMovement(
       carState.setControlsFromKeyboard(carState.fuelLiters > 0 ? k : withoutThrottle(k))
       group.position.set(carState.driverX, carState.driverY, carState.driverZ)
       group.rotation.y = carState.physicsRot
+      syncKinematicPlayer(body, group, carState.driverX, carState.driverY, carState.driverZ, carState.physicsRot)
       if (Math.abs(carState.speed) > 0.2) {
         carState.consumeFuel((Math.abs(carState.speed) * 0.000018 + (k.forward ? 0.00003 : 0)) * delta)
       }
@@ -265,9 +389,12 @@ export function usePlayerMovement(
       lastHurtToken.current = usePlayerStore.getState().hurtToken
       if (usePlayerStore.getState().attackMove) endStrike()
       if (usePlayerStore.getState().action !== vis.action) setAction(vis.action)
+      if (usePlayerStore.getState().locomotionAction !== vis.action) setLocomotionAction(vis.action)
       if (usePlayerStore.getState().isDefending) setDefending(false)
       return
     }
+
+    sweepFrom.current.copy(group.position)
 
     // --- 1a. On encaisse un coup ? (n'importe qui peut appeler takeHit()) ---
     const hurtToken = usePlayerStore.getState().hurtToken
@@ -336,19 +463,20 @@ export function usePlayerMovement(
     const needsSadWalk = shouldUseSadWalk(effectiveStats)
     const running = k.run && isMoving && !crouching && !needsSadWalk
 
-    // --- Saut (physique verticale) ---
-    const grounded = jumpY.current <= 0.001
+    jumpBufferTimer.current = Math.max(0, jumpBufferTimer.current - delta)
     if (k.jumpQueued) {
       k.jumpQueued = false
-      if (grounded && !crouching && !isDefending && hurtTimer.current <= 0) vy.current = playerTuning.JUMP_SPEED
+      jumpBufferTimer.current = PLAYER_JUMP_BUFFER_TIME
     }
-    vy.current -= playerTuning.GRAVITY * delta
-    jumpY.current += vy.current * delta
-    if (jumpY.current < 0) {
-      jumpY.current = 0
-      vy.current = 0
+
+    let jumpedThisFrame = false
+    if (jumpBufferTimer.current > 0 && coyoteTimer.current > 0 && !crouching && !isDefending && hurtTimer.current <= 0) {
+      jumpBufferTimer.current = 0
+      coyoteTimer.current = 0
+      groundedRef.current = false
+      vy.current = playerTuning.JUMP_SPEED
+      jumpedThisFrame = true
     }
-    const airborne = jumpY.current > 0.05
 
     // --- 3. Déplacement RELATIF À LA CAMÉRA ---
     // Le déplacement suit l'orientation de la caméra : "avant" = là où la caméra
@@ -389,10 +517,100 @@ export function usePlayerMovement(
       moveIntensity = running ? 1 : 0.5
     }
 
-    // Colle le perso au relief, + la hauteur de saut éventuelle.
-    const targetGroundY = groundHeight(group.position.x, group.position.z) + playerTuning.BODY_HEIGHT
-    groundY.current = smoothGroundY(groundY.current, targetGroundY, delta)
-    group.position.y = groundY.current + jumpY.current
+    const horizontal = resolvePlayerHorizontalMovement(
+      sweepFrom.current,
+      group,
+      body,
+      rapierContext,
+      playerTuning.BODY_RADIUS,
+      playerTuning.BODY_HEIGHT,
+    )
+    const movedHorizontally =
+      (group.position.x - sweepFrom.current.x) * (group.position.x - sweepFrom.current.x) +
+      (group.position.z - sweepFrom.current.z) * (group.position.z - sweepFrom.current.z) >
+      0.000001
+    if (
+      movedHorizontally &&
+      groundedRef.current &&
+      isHeadBlockedAt(group.position.x, group.position.y, group.position.z, rapierContext, body, playerTuning.BODY_HEIGHT)
+    ) {
+      group.position.x = sweepFrom.current.x
+      group.position.z = sweepFrom.current.z
+      horizontal.mode = 'sliding'
+      horizontal.hitPoint = { x: group.position.x, y: group.position.y + playerTuning.BODY_HEIGHT, z: group.position.z }
+      horizontal.hitNormal = { x: 0, y: -1, z: 0 }
+    }
+
+    const ground = samplePlayerGround(
+      group.position.x,
+      group.position.z,
+      group.position.y,
+      rapierContext,
+      body,
+      playerTuning.BODY_HEIGHT,
+    )
+    const groundDelta = ground.y - group.position.y
+    const canStepUp =
+      !jumpedThisFrame &&
+      groundedRef.current &&
+      groundDelta > 0 &&
+      groundDelta <= PLAYER_STEP_UP_HEIGHT
+    const canSnapDown =
+      !jumpedThisFrame &&
+      groundedRef.current &&
+      vy.current <= 0 &&
+      groundDelta <= 0 &&
+      Math.abs(groundDelta) <= PLAYER_SNAP_DOWN_DISTANCE
+    const canRecoverPenetration =
+      !jumpedThisFrame &&
+      vy.current <= 0 &&
+      groundDelta > PLAYER_STEP_UP_HEIGHT &&
+      (ground.source === 'procedural' || groundDelta <= PLAYER_SUPPORT_PENETRATION_RECOVERY)
+
+    if (canStepUp || canSnapDown || canRecoverPenetration) {
+      groundY.current = canRecoverPenetration ? ground.y : smoothGroundY(groundY.current, ground.y, delta)
+      group.position.y = groundY.current
+      vy.current = 0
+      groundedRef.current = true
+      coyoteTimer.current = PLAYER_COYOTE_TIME
+    } else {
+      groundedRef.current = false
+      coyoteTimer.current = Math.max(0, coyoteTimer.current - delta)
+      const previousY = group.position.y
+      vy.current = Math.max(vy.current - playerTuning.GRAVITY * delta, -PLAYER_MAX_FALL_SPEED)
+      group.position.y += vy.current * delta
+      if (vy.current > 0) {
+        const ceilingY = samplePlayerCeilingY(
+          group.position.x,
+          group.position.z,
+          previousY,
+          group.position.y,
+          rapierContext,
+          body,
+          playerTuning.BODY_HEIGHT,
+        )
+        if (ceilingY !== null) {
+          group.position.y = ceilingY
+          vy.current = 0
+        }
+      }
+      if (vy.current <= 0 && previousY >= ground.y - 0.05 && group.position.y <= ground.y) {
+        group.position.y = ground.y
+        groundY.current = ground.y
+        vy.current = 0
+        groundedRef.current = true
+        coyoteTimer.current = PLAYER_COYOTE_TIME
+      }
+    }
+
+    const airborne = !groundedRef.current || jumpedThisFrame
+    physicsMode.current = horizontal.mode !== 'grounded' ? horizontal.mode : airborne ? 'airborne' : 'grounded'
+
+    lastSafeTimer.current += delta
+    if (groundedRef.current && physicsMode.current === 'grounded' && lastSafeTimer.current >= PLAYER_LAST_SAFE_MIN_TIME) {
+      lastSafeTimer.current = 0
+      lastSafePose.current = poseFromObject(group)
+    }
 
     // --- 4. Détermine l'action affichée (priorité : dégâts > attaque > saut > ...) ---
     let action: PlayerAction
@@ -407,6 +625,16 @@ export function usePlayerMovement(
     else if (isMoving) action = 'walk'
     else action = 'idle'
 
+    let locomotionAction: PlayerLocomotionAction
+    if (airborne) locomotionAction = 'jump'
+    else if (interactTimer.current > 0) locomotionAction = 'interact'
+    else if (crouching) locomotionAction = 'crouch'
+    else if (isDefending) locomotionAction = 'defense'
+    else if (isMoving && needsSadWalk) locomotionAction = 'sadWalk'
+    else if (running) locomotionAction = 'run'
+    else if (isMoving) locomotionAction = 'walk'
+    else locomotionAction = 'idle'
+
     // --- 5. Publie l'état visuel + le store (uniquement si ça change, pour le HUD) ---
     const vis = motion.current
     vis.action = action
@@ -419,7 +647,20 @@ export function usePlayerMovement(
     vis.moveIntensity = moveIntensity
 
     if (usePlayerStore.getState().action !== action) setAction(action)
+    if (usePlayerStore.getState().locomotionAction !== locomotionAction) setLocomotionAction(locomotionAction)
     if (usePlayerStore.getState().isDefending !== isDefending) setDefending(isDefending)
+    if (useCollisionDebugStore.getState().enabled) {
+      setPhysicsDebug({
+        mode: physicsMode.current,
+        grounded: groundedRef.current,
+        position: { x: group.position.x, y: group.position.y, z: group.position.z },
+        groundY: ground.y,
+        hitPoint: horizontal.hitPoint,
+        hitNormal: horizontal.hitNormal,
+      })
+    }
+    syncKinematicPlayer(body, group, group.position.x, group.position.y, group.position.z, group.rotation.y)
+    rememberPlayerVelocity(group, delta, previousVelocityPose, currentVelocity, vy.current)
   }, FRAME.LOGIC)
 
   return motion
@@ -474,6 +715,407 @@ function smoothGroundY(current: number | null, target: number, delta: number): n
   const next = current + (target - current) * t
   const maxStep = 6 * delta
   return THREE.MathUtils.clamp(next, current - maxStep, current + maxStep)
+}
+
+function resolvePlayerHorizontalMovement(
+  from: THREE.Vector3,
+  group: THREE.Object3D,
+  body: RapierRigidBody,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  radius: number,
+  bodyHeight: number,
+): PlayerHorizontalResult {
+  const motion = {
+    x: group.position.x - from.x,
+    y: 0,
+    z: group.position.z - from.z,
+  }
+  const distanceSq = motion.x * motion.x + motion.y * motion.y + motion.z * motion.z
+  if (distanceSq < 0.000001) return { mode: 'grounded', hitPoint: null, hitNormal: null }
+
+  const halfHeight = Math.max(0.25, bodyHeight * 0.42)
+  const shape = new context.rapier.Capsule(halfHeight, radius)
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+
+  const hit = context.world.castShape(
+    { x: from.x, y: from.y, z: from.z },
+    yawToQuaternion(group.rotation.y),
+    motion,
+    shape,
+    PLAYER_SWEEP_SKIN,
+    1,
+    true,
+    filterFlags,
+    PHYSICS_GROUPS.playerObstacles,
+    undefined,
+    body,
+  )
+  if (!hit) return { mode: 'grounded', hitPoint: null, hitNormal: null }
+
+  if (isClimbableSurfaceHit(hit)) return { mode: 'grounded', hitPoint: null, hitNormal: null }
+
+  const keep = Math.max(0, hit.time_of_impact - PLAYER_SWEEP_SKIN)
+  const normal = horizontalCollisionNormal(hit, motion)
+  const hitPoint = {
+    x: from.x + motion.x * hit.time_of_impact,
+    y: from.y + motion.y * hit.time_of_impact,
+    z: from.z + motion.z * hit.time_of_impact,
+  }
+  const hitNormal = normal ? { x: normal.x, y: 0, z: normal.z } : null
+
+  const contact = {
+    x: from.x + motion.x * keep,
+    y: from.y + motion.y * keep,
+    z: from.z + motion.z * keep,
+  }
+  if (hit.time_of_impact <= PLAYER_UNSTUCK_TOI && normal) {
+    contact.x += normal.x * PLAYER_UNSTUCK_PUSH
+    contact.z += normal.z * PLAYER_UNSTUCK_PUSH
+  }
+
+  const slide = computeSlideMotion(hit, motion, keep)
+  if (!slide) {
+    group.position.set(contact.x, contact.y, contact.z)
+    return {
+      mode: hit.time_of_impact <= PLAYER_UNSTUCK_TOI ? 'unstucking' : 'sliding',
+      hitPoint,
+      hitNormal,
+    }
+  }
+
+  const slideHit = context.world.castShape(
+    contact,
+    yawToQuaternion(group.rotation.y),
+    slide,
+    shape,
+    PLAYER_SWEEP_SKIN,
+    1,
+    true,
+    filterFlags,
+    PHYSICS_GROUPS.playerObstacles,
+    undefined,
+    body,
+  )
+
+  if (slideHit && !isClimbableSurfaceHit(slideHit)) {
+    const slideKeep = Math.max(0, slideHit.time_of_impact - PLAYER_SWEEP_SKIN)
+    group.position.set(contact.x + slide.x * slideKeep, contact.y + slide.y * slideKeep, contact.z + slide.z * slideKeep)
+    return {
+      mode: slideHit.time_of_impact <= PLAYER_UNSTUCK_TOI ? 'unstucking' : 'sliding',
+      hitPoint,
+      hitNormal,
+    }
+  }
+
+  group.position.set(contact.x + slide.x, contact.y + slide.y, contact.z + slide.z)
+  return {
+    mode: hit.time_of_impact <= PLAYER_UNSTUCK_TOI ? 'unstucking' : 'sliding',
+    hitPoint,
+    hitNormal,
+  }
+}
+
+function computeSlideMotion(
+  hit: { normal1: { x: number; y: number; z: number }; normal2: { x: number; y: number; z: number } },
+  motion: { x: number; y: number; z: number },
+  keep: number,
+): { x: number; y: number; z: number } | null {
+  const normal = horizontalCollisionNormal(hit, motion)
+  if (!normal) return null
+
+  let slideX = motion.x * Math.max(0, 1 - keep)
+  let slideZ = motion.z * Math.max(0, 1 - keep)
+  const into = slideX * normal.x + slideZ * normal.z
+  if (into < 0) {
+    slideX -= normal.x * into
+    slideZ -= normal.z * into
+  }
+
+  slideX *= PLAYER_SLIDE_DAMPING
+  slideZ *= PLAYER_SLIDE_DAMPING
+  if (slideX * slideX + slideZ * slideZ < 0.000004) return null
+  return { x: slideX, y: 0, z: slideZ }
+}
+
+function horizontalCollisionNormal(
+  hit: { normal1: { x: number; y: number; z: number }; normal2: { x: number; y: number; z: number } },
+  motion: { x: number; z: number },
+): { x: number; z: number } | null {
+  const candidates = [hit.normal1, hit.normal2]
+    .map((normal) => {
+      const len = Math.hypot(normal.x, normal.z)
+      return len > 0.001 ? { x: normal.x / len, z: normal.z / len, len } : null
+    })
+    .filter((normal): normal is { x: number; z: number; len: number } => normal !== null)
+    .sort((a, b) => b.len - a.len)
+
+  const best = candidates[0]
+  if (!best) return null
+
+  if (motion.x * best.x + motion.z * best.z > 0) {
+    best.x *= -1
+    best.z *= -1
+  }
+  return best
+}
+
+function samplePlayerGround(
+  x: number,
+  z: number,
+  currentY: number,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  body: RapierRigidBody,
+  bodyHeight: number,
+): PlayerGroundSample {
+  const proceduralY = groundHeight(x, z) + bodyHeight
+  const originY = Math.max(currentY, proceduralY) + bodyHeight + PLAYER_GROUND_PROBE_EXTRA
+  const maxDistance = bodyHeight * 2 + PLAYER_GROUND_PROBE_EXTRA + PLAYER_SNAP_DOWN_DISTANCE + PLAYER_STEP_UP_HEIGHT
+  const ray = new context.rapier.Ray({ x, y: originY, z }, { x: 0, y: -1, z: 0 })
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+
+  const hit = context.world.castRayAndGetNormal(
+    ray,
+    maxDistance,
+    false,
+    filterFlags,
+    PHYSICS_GROUPS.playerGround,
+    undefined,
+    body,
+  )
+  if (!hit || hit.normal.y < PLAYER_SUPPORT_NORMAL_Y) {
+    return { y: proceduralY, rayHit: false, normalY: 1, source: 'procedural' }
+  }
+
+  const rapierY = originY - hit.timeOfImpact + bodyHeight
+  if (rapierY > currentY + PLAYER_SUPPORT_PENETRATION_RECOVERY) {
+    return { y: proceduralY, rayHit: false, normalY: 1, source: 'procedural' }
+  }
+  if (rapierY < proceduralY - 0.2) {
+    return { y: proceduralY, rayHit: false, normalY: 1, source: 'procedural' }
+  }
+  return { y: rapierY, rayHit: true, normalY: hit.normal.y, source: 'rapier' }
+}
+
+function samplePlayerCeilingY(
+  x: number,
+  z: number,
+  previousY: number,
+  currentY: number,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  body: RapierRigidBody,
+  bodyHeight: number,
+): number | null {
+  const headFrom = previousY + bodyHeight
+  const headTo = currentY + bodyHeight
+  const distance = headTo - headFrom
+  if (distance <= 0) return null
+
+  const ray = new context.rapier.Ray({ x, y: headFrom, z }, { x: 0, y: 1, z: 0 })
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+  const hit = context.world.castRayAndGetNormal(
+    ray,
+    distance + PLAYER_HEAD_CLEARANCE,
+    false,
+    filterFlags,
+    PHYSICS_GROUPS.playerGround,
+    undefined,
+    body,
+  )
+  if (!hit || hit.normal.y > -PLAYER_SUPPORT_NORMAL_Y) return null
+
+  return headFrom + hit.timeOfImpact - bodyHeight - PLAYER_HEAD_CLEARANCE
+}
+
+function isHeadBlockedAt(
+  x: number,
+  y: number,
+  z: number,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  body: RapierRigidBody,
+  bodyHeight: number,
+): boolean {
+  const ray = new context.rapier.Ray({ x, y, z }, { x: 0, y: 1, z: 0 })
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+  const hit = context.world.castRayAndGetNormal(
+    ray,
+    bodyHeight + PLAYER_HEAD_CLEARANCE,
+    false,
+    filterFlags,
+    PHYSICS_GROUPS.playerGround,
+    undefined,
+    body,
+  )
+  return !!hit && hit.normal.y < PLAYER_HEAD_BLOCK_NORMAL_Y
+}
+
+function isClimbableSurfaceHit(hit: { normal1: { y: number }; normal2: { y: number } }) {
+  return Math.max(hit.normal1.y, hit.normal2.y) > PLAYER_CLIMBABLE_NORMAL_Y
+}
+
+function findSafeVehicleExitPose(
+  vehicleX: number,
+  vehicleZ: number,
+  driverY: number,
+  rot: number,
+  halfLength: number,
+  halfWidth: number,
+  radius: number,
+  bodyHeight: number,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  body: RapierRigidBody,
+): PlayerPose & { groundY: number } {
+  const forward = { x: Math.sin(rot), z: Math.cos(rot) }
+  const right = { x: Math.cos(rot), z: -Math.sin(rot) }
+  const side = halfWidth + radius + 0.65
+  const frontBack = halfLength + radius + 0.65
+  const candidates = [
+    { x: right.x * side, z: right.z * side },
+    { x: -right.x * side, z: -right.z * side },
+    { x: -forward.x * frontBack, z: -forward.z * frontBack },
+    { x: forward.x * frontBack, z: forward.z * frontBack },
+    { x: right.x * (side + 0.45) - forward.x * 0.8, z: right.z * (side + 0.45) - forward.z * 0.8 },
+    { x: -right.x * (side + 0.45) - forward.x * 0.8, z: -right.z * (side + 0.45) - forward.z * 0.8 },
+  ]
+
+  for (const offset of candidates) {
+    const x = vehicleX + offset.x
+    const z = vehicleZ + offset.z
+    const ground = samplePlayerGround(x, z, driverY, context, body, bodyHeight)
+    const y = Math.max(driverY, ground.y)
+    if (isPlayerPoseFree(x, y, z, rot, radius, bodyHeight, context, body)) {
+      return { x, y, z, rot, groundY: ground.y }
+    }
+  }
+
+  const x = vehicleX + right.x * (side + 1.2)
+  const z = vehicleZ + right.z * (side + 1.2)
+  const ground = samplePlayerGround(x, z, driverY, context, body, bodyHeight)
+  return { x, y: Math.max(driverY, ground.y), z, rot, groundY: ground.y }
+}
+
+function isPlayerPoseFree(
+  x: number,
+  y: number,
+  z: number,
+  rot: number,
+  radius: number,
+  bodyHeight: number,
+  context: Pick<RapierContext, 'rapier' | 'world'>,
+  body: RapierRigidBody,
+) {
+  const halfHeight = Math.max(0.25, bodyHeight * 0.42)
+  const shape = new context.rapier.Capsule(halfHeight, radius)
+  const filterFlags = context.rapier.QueryFilterFlags.EXCLUDE_SENSORS
+  context.world.updateSceneQueries()
+  return !context.world.intersectionWithShape(
+    { x, y, z },
+    yawToQuaternion(rot),
+    shape,
+    filterFlags,
+    PHYSICS_GROUPS.playerHardObstacles,
+    undefined,
+    body,
+  )
+}
+
+function poseFromObject(object: THREE.Object3D): PlayerPose {
+  return { x: object.position.x, y: object.position.y, z: object.position.z, rot: object.rotation.y }
+}
+
+function poseWithVelocity(object: THREE.Object3D, velocity: { x: number; y: number; z: number }, verticalVelocity: number): PlayerPose {
+  const inherited = clampInheritedVelocity({
+    x: velocity.x,
+    y: Math.abs(verticalVelocity) > Math.abs(velocity.y) ? verticalVelocity : velocity.y,
+    z: velocity.z,
+  })
+  return {
+    ...poseFromObject(object),
+    vx: inherited.x,
+    vy: inherited.y,
+    vz: inherited.z,
+  }
+}
+
+function rememberPlayerVelocity(
+  object: THREE.Object3D,
+  delta: number,
+  previousPose: MutableRefObject<PlayerPose | null>,
+  velocity: MutableRefObject<{ x: number; y: number; z: number }>,
+  verticalVelocity: number,
+) {
+  const previous = previousPose.current
+  const current = poseFromObject(object)
+  if (previous && delta > 0) {
+    velocity.current = clampInheritedVelocity({
+      x: (current.x - previous.x) / delta,
+      y: Math.abs(verticalVelocity) > 0.01 ? verticalVelocity : (current.y - previous.y) / delta,
+      z: (current.z - previous.z) / delta,
+    })
+  }
+  previousPose.current = current
+}
+
+function resetVelocitySample(
+  object: THREE.Object3D,
+  previousPose: MutableRefObject<PlayerPose | null>,
+  velocity: MutableRefObject<{ x: number; y: number; z: number }>,
+) {
+  previousPose.current = poseFromObject(object)
+  velocity.current = { x: 0, y: 0, z: 0 }
+}
+
+function clampInheritedVelocity(velocity: { x: number; y: number; z: number }) {
+  const horizontal = Math.hypot(velocity.x, velocity.z)
+  const horizontalLimit = 12
+  const scale = horizontal > horizontalLimit ? horizontalLimit / horizontal : 1
+  return {
+    x: velocity.x * scale,
+    y: THREE.MathUtils.clamp(velocity.y, -14, 10),
+    z: velocity.z * scale,
+  }
+}
+
+function recoveryPose(pose: PlayerPose | null, fallback: THREE.Object3D, bodyHeight: number): PlayerPose {
+  const x = pose?.x ?? fallback.position.x
+  const z = pose?.z ?? fallback.position.z
+  return {
+    x,
+    y: groundHeight(x, z) + bodyHeight,
+    z,
+    rot: pose?.rot ?? fallback.rotation.y,
+  }
+}
+
+function teleportKinematicPlayer(body: RapierRigidBody, target: THREE.Object3D, pose: PlayerPose) {
+  body.setEnabled(true)
+  body.setTranslation({ x: pose.x, y: pose.y, z: pose.z }, true)
+  body.setRotation(yawToQuaternion(pose.rot), true)
+  body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+  body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+  syncKinematicPlayer(body, target, pose.x, pose.y, pose.z, pose.rot)
+}
+
+function syncKinematicPlayer(
+  body: RapierRigidBody,
+  target: THREE.Object3D,
+  x: number,
+  y: number,
+  z: number,
+  rot: number,
+) {
+  target.position.set(x, y, z)
+  target.rotation.y = rot
+  body.setNextKinematicTranslation({ x, y, z })
+  body.setNextKinematicRotation(yawToQuaternion(rot))
+}
+
+function yawToQuaternion(rot: number) {
+  const half = rot * 0.5
+  return { x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) }
 }
 
 /**

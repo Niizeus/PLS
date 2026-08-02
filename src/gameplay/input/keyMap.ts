@@ -26,6 +26,8 @@ export const KEY = {
   QUICK_4: 'Digit4', // 4 = raccourci inventaire
   JUMP: 'Space', // Espace = sauter
   CROUCH: 'ControlLeft', // Ctrl = s'accroupir
+  PLAYER_UNSTUCK: 'F4', // Debug : replace le joueur au dernier sol fiable
+  RAGDOLL_TEST: 'KeyC', // C = bascule le ragdoll joueur
 
   // --- Commandes véhicule (ignorées à pied) ---
   /**

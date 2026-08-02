@@ -21,7 +21,7 @@
       },
       "ads": {
         "enabled": true,
-        "musicInterval": 6,
+        "musicInterval": 3,
         "maxPerBreak": 1
       }
     },
@@ -33,7 +33,7 @@
       },
       "ads": {
         "enabled": true,
-        "musicInterval": 5,
+        "musicInterval": 3,
         "maxPerBreak": 1
       }
     },

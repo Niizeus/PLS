@@ -47,6 +47,38 @@ compte jusqu'à 770, et les créer d'un coup coûtait 40 à 80 ms de commit Reac
 props/colliders de test attendent le chargement du relief avant de se créer, sinon
 Rapier les figerait à une hauteur provisoire avant que le sol visible existe.
 
+Le joueur a aussi un corps Rapier : `entities/player/Player.tsx` monte un `RigidBody`
+`kinematicPosition` avec une capsule `PHYSICS_GROUPS.player`. `usePlayerMovement`
+reste le controleur gameplay, mais il pousse la pose finale avec
+`setNextKinematicTranslation/Rotation`. Le controller separe le vertical et l'horizontal :
+les supports sous les pieds sont lus par `castRayAndGetNormal` via `PHYSICS_GROUPS.playerGround`
+(`WORLD` + `VEHICLE`), donc les tremplins se montent comme du sol et le toit de voiture
+peut recevoir le joueur quand il saute dessus. Le sweep X/Z, lui, ignore `WORLD` et ne
+regarde que les obstacles durs (`VEHICLE` + `PROP`) : les rampes ne peuvent plus repousser
+le joueur lateralement et provoquer une boucle hauteur/sol. Le vertical n'a pas de
+"support magnet" : en l'air, le joueur atterrit seulement s'il traverse le support depuis
+au-dessus ; cela evite les allers-retours aux bords de tremplins ou de voiture. Si le
+joueur est deja legerement sous un support valide, une correction anti-penetration le
+replace au-dessus ; elle est illimitee pour le sol procedural, mais bornee pour les
+supports Rapier afin de ne pas aspirer le joueur vers un toit/une rampe trop loin au-dessus.
+Quand le raycast touche le dessus d'une rampe situee trop haut au-dessus du joueur
+(cas du passage sous un tremplin), ce hit est ignore et le sol procedural dessous
+redevient le support actif. En revanche le volume `WORLD` reste dans le sweep X/Z :
+une face montable dont la normale pointe vers le haut est ignoree, mais les cotes et
+le dessous du tremplin bloquent. Le saut teste aussi un plafond au-dessus de la tete,
+pour eviter de traverser le dessous d'une rampe et de pop sur son dessus. En marche,
+si le joueur est au sol mais qu'un plafond Rapier descend dans sa hauteur de tete a
+la nouvelle position X/Z, l'avancee est annulee : on ne peut donc pas ramper sous une
+rampe trop basse sans mecanique de posture adaptee.
+En cas d'impact lateral, le reste du mouvement
+est projete le long de la normale puis rebalaye une seconde fois : le joueur glisse contre
+une voiture au lieu de s'arreter net. Le controller garde aussi un coyote time, un jump
+buffer, un step-up de faible hauteur et une derniere pose sure pour le debug `F4`.
+Le store continue de publier une cible `playerObject` separee
+pour la camera, le GPS et les systemes qui ne doivent pas connaitre le rigidbody.
+La voiture est bloquee par ce sweep, pas par une resolution solveur joueur/vehicule :
+sinon le kinematic joueur peut injecter trop d'energie dans le chassis dynamique.
+
 Autour de la voiture gravitent quatre fichiers dédiés aux sensations de conduite :
 `tireContactStore.ts` (état de contact des 4 roues, **objet mutable partagé et non un store
 Zustand** : il change 60 fois par seconde et déclencherait autant de rendus React),
@@ -282,7 +314,7 @@ ou `F2`. Un HUD, ça ne fait que grossir si personne ne défend cette règle.
 | Une interface **cliquable** (qui s'ouvre par-dessus le jeu) | Déclare-la avec `setCursorUiOpen('<id>', ouvert)` dans un `useEffect` (`gameplay/input/pointerLock.ts`). Sans ça, la souris reste capturée par le canvas : on voit des boutons **sans pouvoir les viser**, et un clic à côté ferait disparaître le curseur. |
 | Une touche du clavier | `gameplay/input/keyMap.ts` (toujours via `event.code`, jamais `event.key`), puis je l'ajoute au rappel des touches dans `ui/ControlsHint.tsx` |
 | Un personnage (le pote, un PNJ) | `entities/`, puis je le monte dans `entities/Characters.tsx` |
-| Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
+| Un modèle 3D / des animations | fichiers dans `public/models/…` (servis tels quels) ; chargés via drei (`useFBX`/`useGLTF`). Ex : le joueur = `entities/player/PlayerModel.tsx` (personnage Mixamo + clips FBX, animé selon l'`action` du store). Les coups de poing utilisent aussi `locomotionAction` pour garder les jambes en marche/course pendant qu'un clip haut du corps joue en overlay. Les anims **jouées une seule fois** (coups, dégâts) sont calées sur les durées de `entities/player/playerConfig.ts` |
 | Une radio jouable | depose le fichier audio dans `public/musique/radio/RXX_Nom/Musiques/` (ou `Jingles/`, `Publicites/`, `Emissions/<Emission>/`). **Aucun code a ecrire, le nom du fichier est libre** : `vite/radioManifestPlugin.ts` scanne le dossier et fournit le catalogue au jeu via le module virtuel `virtual:pls-radio-manifest`. La logique radio vit dans `src/audio/`. |
 | Un petit outil local de production | `tools/<nom-outil>/`, avec un `README.md` court. Exemple : `tools/wav-to-ogg/` convertit plusieurs `.wav` en `.ogg` dans `Downloads` pour preparer les musiques radio. |
 | Un module de l'editeur PLS | `src/editor/` avec `editor.html` comme entree du hub actuel. L'editeur est dev-only et ne doit pas modifier le jeu principal sans necessite. |

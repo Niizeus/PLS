@@ -1,4 +1,5 @@
 import { BUILDINGS, pointInFootprint, terrainHeight, type Building } from './cityData'
+import { isFlatTestLevelEnabled } from '../../gameplay/testLevel/testLevelMode'
 
 /**
  * 🧱 Collisions avec les bâtiments.
@@ -69,6 +70,7 @@ let visitTick = 0
  * mémoire. Une requête typique balaie 1 à 4 cases et quelques dizaines d'arêtes.
  */
 export function forEachWallNear(x: number, z: number, radius: number, visit: WallVisitor) {
+  if (isFlatTestLevelEnabled()) return
   const cx0 = Math.floor((x - radius) / CELL)
   const cx1 = Math.floor((x + radius) / CELL)
   const cz0 = Math.floor((z - radius) / CELL)
@@ -95,6 +97,7 @@ export function forEachWallNear(x: number, z: number, radius: number, visit: Wal
 
 /** Le point (x, z) est-il à l'intérieur d'un bâtiment ? (rapide grâce à la grille) */
 export function isBlocked(x: number, z: number): boolean {
+  if (isFlatTestLevelEnabled()) return false
   const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
   if (!list) return false
   for (const i of list) {
@@ -109,6 +112,7 @@ export function isBlocked(x: number, z: number): boolean {
  * la vue (et pas quand elle passe au-dessus d'un petit toit).
  */
 export function buildingHeightAt(x: number, z: number): number {
+  if (isFlatTestLevelEnabled()) return 0
   const list = grid.get(keyOf(Math.floor(x / CELL), Math.floor(z / CELL)))
   if (!list) return 0
   for (const i of list) {
@@ -128,6 +132,7 @@ export function buildingHeightAt(x: number, z: number): number {
  * Sert à la minimap pour ne PAS parcourir les ~34 000 bâtiments à chaque image.
  */
 export function buildingsNear(x: number, z: number, radius: number): Building[] {
+  if (isFlatTestLevelEnabled()) return []
   const r = Math.ceil(radius / CELL)
   const cx = Math.floor(x / CELL)
   const cz = Math.floor(z / CELL)

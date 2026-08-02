@@ -7,20 +7,8 @@ import { useScooterStore } from '../vehicles/scooterStore'
 import { useCarStore } from '../vehicles/carStore'
 import { getPlayerTuning, useDevTuningStore } from '../../devtools/devTuningStore'
 
-/**
- * 🧍 Le personnage Pierrot, animé.
- *
- * ⚠️ Le GLB/FBX "de base" fournis ne sont PAS riggés (mesh statiques). En revanche
- * chaque FBX d'animation (Mixamo) contient le personnage COMPLET riggé + skinné.
- * On utilise donc `idle.fbx` comme personnage, et on lui applique les CLIPS des
- * autres FBX (même squelette `mixamorig` → compatibles).
- *
- * ⚙️ Si le perso est mal dimensionné/orienté, ajuste SCALE et FACING ci-dessous.
- */
-
 const BASE = '/models/pierrot/'
 
-// Nom d'anim → fichier FBX (dont on ne garde que le clip).
 const ANIMS: Record<string, string> = {
   idle: 'idle.fbx',
   walk: 'walk.fbx',
@@ -41,52 +29,50 @@ const ANIMS: Record<string, string> = {
   hurt: 'Hurt.fbx',
 }
 
-// Quelle animation jouer selon l'état du jeu (les autres clips restent dispo).
-// Cas particulier : `attack` n'est PAS ici, car le clip dépend du coup en cours
-// (voir ATTACK_TO_ANIM juste en dessous).
 const ACTION_TO_ANIM: Record<PlayerAction, string> = {
   idle: 'idle',
   walk: 'walk',
   sadWalk: 'sadWalk',
   run: 'run',
-  attack: 'punch1', // valeur de secours ; le vrai clip vient de ATTACK_TO_ANIM
+  attack: 'punch1',
   defense: 'defense',
   interact: 'idle',
   jump: 'jump',
-  crouch: 'sneak', // accroupi = anim "sneak" (marche accroupie)
+  crouch: 'sneak',
   hurt: 'hurt',
 }
 
-/**
- * Quel clip pour quel coup.
- *
- * 🗡️ AJOUTER L'ANIMATION D'ARME (quand tu auras le FBX) — 3 étapes :
- *   1. Mets le fichier dans `public/models/pierrot/` (ex: `WeaponAttack.fbx`).
- *   2. Ajoute-le dans ANIMS ci-dessus : `weapon: 'WeaponAttack.fbx',`
- *      puis charge-le comme les autres (`const fbxWeapon = useFBX(BASE + ANIMS.weapon)`)
- *      et ajoute `clip(fbxWeapon, 'weapon')` dans la liste des clips.
- *   3. Remplace `weapon: 'punch1'` par `weapon: 'weapon'` ici.
- * En attendant, une attaque à l'arme rejoue le 1er coup de poing.
- */
+// Quand le FBX d'arme existera, ajoute-le dans ANIMS, charge-le comme les autres,
+// ajoute son clip a la liste, puis remplace `weapon: 'punch1'` par son nom.
 const ATTACK_TO_ANIM: Record<AttackMove, string> = {
   punch1: 'punch1',
   punch2: 'punch2',
   punch3: 'punch3',
-  weapon: 'punch1', // ⏳ pas encore d'animation d'arme
+  weapon: 'punch1',
 }
 
-/**
- * Durée forcée (secondes) de chaque coup. On CALE l'animation sur le minuteur du
- * gameplay (playerConfig) : l'anim se termine pile quand le coup se termine,
- * quelle que soit la durée d'origine du FBX. Régle le feeling dans playerConfig.
- */
-const TARGET_HEIGHT = 1.75 // taille voulue du perso en mètres (échelle auto-calculée)
-const FACING = 0 // rotation Y du modèle ; mets Math.PI si le perso marche à reculons
+const UPPER_BODY_TRACK_PARTS = [
+  'spine',
+  'neck',
+  'head',
+  'shoulder',
+  'arm',
+  'forearm',
+  'hand',
+  'thumb',
+  'index',
+  'middle',
+  'ring',
+  'pinky',
+]
+
+const TARGET_HEIGHT = 1.75
+const FACING = 0
 
 export default function PlayerModel() {
   useDevTuningStore((s) => s.overrides)
   const playerTuning = getPlayerTuning()
-  // Personnage de base (mesh skinné + squelette). Les autres FBX : juste les clips.
+
   const character = useFBX(BASE + ANIMS.idle)
   const fbxWalk = useFBX(BASE + ANIMS.walk)
   const fbxSadWalk = useFBX(BASE + ANIMS.sadWalk)
@@ -105,16 +91,25 @@ export default function PlayerModel() {
   const fbxDefense = useFBX(BASE + ANIMS.defense)
   const fbxHurt = useFBX(BASE + ANIMS.hurt)
 
-  // Prépare les clips : renommés + sans "root motion" (on gère le déplacement nous-mêmes).
   const clips = useMemo(() => {
     const clip = (fbx: THREE.Group, name: string) => {
       const c = fbx.animations[0].clone()
       c.name = name
       c.tracks = c.tracks.filter(
-        (t) => !(t.name.toLowerCase().includes('hips') && t.name.endsWith('.position')),
+        (track) => !(track.name.toLowerCase().includes('hips') && track.name.endsWith('.position')),
       )
       return c
     }
+
+    const upperClip = (fbx: THREE.Group, name: string) => {
+      const c = clip(fbx, name)
+      c.tracks = c.tracks.filter((track) => {
+        const lower = track.name.toLowerCase()
+        return UPPER_BODY_TRACK_PARTS.some((part) => lower.includes(part))
+      })
+      return c
+    }
+
     return [
       clip(character, 'idle'),
       clip(fbxWalk, 'walk'),
@@ -131,6 +126,9 @@ export default function PlayerModel() {
       clip(fbxPunch1, 'punch1'),
       clip(fbxPunch2, 'punch2'),
       clip(fbxPunch3, 'punch3'),
+      upperClip(fbxPunch1, 'punch1Upper'),
+      upperClip(fbxPunch2, 'punch2Upper'),
+      upperClip(fbxPunch3, 'punch3Upper'),
       clip(fbxDefense, 'defense'),
       clip(fbxHurt, 'hurt'),
     ]
@@ -140,11 +138,6 @@ export default function PlayerModel() {
   const group = useRef<THREE.Group>(null)
   const { actions } = useAnimations(clips, group)
 
-  // Le mesh du perso projette une ombre, et on DÉSACTIVE le frustum culling :
-  // les SkinnedMesh animés ont souvent une boîte englobante mal calculée → sinon
-  // three les masque à tort (perso invisible).
-  //
-  // On en profite pour REPRENDRE LES MATÉRIAUX du FBX : voir `toonFromImported`.
   useEffect(() => {
     character.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -157,65 +150,54 @@ export default function PlayerModel() {
     })
   }, [character])
 
-  // Échelle AUTO : on mesure le modèle et on le met à TARGET_HEIGHT, pieds au sol.
-  // (Évite de deviner si le FBX est en cm ou en mètres.)
   const fit = useMemo(() => {
     const box = new THREE.Box3().setFromObject(character)
     const h = Math.max(0.001, box.max.y - box.min.y)
     const scale = TARGET_HEIGHT / h
-    console.info('[Pierrot] taille brute:', box.getSize(new THREE.Vector3()).toArray().map((v) => v.toFixed(2)), '→ échelle', scale.toFixed(3))
-    // Pieds (box.min.y) posés à -BODY_HEIGHT (le sol, sous le centre du groupe joueur).
+    console.info('[Pierrot] taille brute:', box.getSize(new THREE.Vector3()).toArray().map((v) => v.toFixed(2)), '-> echelle', scale.toFixed(3))
     const y = -playerTuning.BODY_HEIGHT - box.min.y * scale
     return { scale, y }
   }, [character, playerTuning.BODY_HEIGHT])
 
-  // Anime selon l'etat du jeu (ou "drive" quand on conduit un vehicule).
   const action = usePlayerStore((s) => s.action)
+  const locomotionAction = usePlayerStore((s) => s.locomotionAction)
   const attackMove = usePlayerStore((s) => s.attackMove)
   const attackToken = usePlayerStore((s) => s.attackToken)
   const hurtToken = usePlayerStore((s) => s.hurtToken)
+  const isRagdoll = usePlayerStore((s) => s.isRagdoll)
   const ridingScooter = useScooterStore((s) => s.riding)
   const ridingCar = useCarStore((s) => s.riding)
   const riding = ridingScooter || ridingCar
-  // Clé de l'anim en cours. Pour les coups on y colle le "token" du store :
-  // deux coups identiques d'affilée ont des clés différentes → l'anim se relance.
+
   const current = useRef('')
   const currentName = useRef('')
+  const currentUpper = useRef('')
+  const currentUpperName = useRef('')
+
   useEffect(() => {
-    // 1. Quel clip jouer ?
     let name: string
     let oneShotDuration = 0
     if (riding) {
       name = 'drive'
-    } else if (action === 'attack') {
-      const move = attackMove ?? 'punch1'
-      name = ATTACK_TO_ANIM[move]
-      oneShotDuration = getAttackDuration(move, playerTuning)
+    } else if (isRagdoll) {
+      name = 'idle'
     } else if (action === 'hurt') {
       name = 'hurt'
       oneShotDuration = playerTuning.HURT_DURATION
     } else {
-      name = ACTION_TO_ANIM[action] ?? 'idle'
+      const baseAction = action === 'attack' ? locomotionAction : action
+      name = ACTION_TO_ANIM[baseAction] ?? 'idle'
     }
 
-    // 2. Clé unique : les coups/dégâts doivent pouvoir se rejouer à l'identique.
-    const key =
-      oneShotDuration === 0
-        ? name
-        : action === 'attack'
-          ? `${name}#${attackToken}`
-          : `${name}#${hurtToken}`
+    const key = oneShotDuration === 0 ? name : `${name}#${hurtToken}`
     if (key === current.current) return
     const next = actions[name]
     if (!next) return
 
-    // 3. Transition : coupe rapide pour les coups (nerveux), douce sinon.
     const fade = oneShotDuration > 0 ? 0.08 : 0.2
     actions[currentName.current]?.fadeOut(fade)
     next.reset()
     if (oneShotDuration > 0) {
-      // Joue UNE fois, se fige sur la dernière image, et dure exactement le temps
-      // prévu par le gameplay (setDuration ajuste la vitesse de lecture).
       next.setLoop(THREE.LoopOnce, 1)
       next.clampWhenFinished = true
       next.setDuration(oneShotDuration)
@@ -227,10 +209,35 @@ export default function PlayerModel() {
     next.fadeIn(fade).play()
     current.current = key
     currentName.current = name
-  }, [action, attackMove, attackToken, hurtToken, riding, actions, playerTuning])
+  }, [action, locomotionAction, hurtToken, riding, isRagdoll, actions, playerTuning])
+
+  useEffect(() => {
+    if (riding || isRagdoll || action === 'hurt' || !attackMove) {
+      actions[currentUpperName.current]?.fadeOut(0.08)
+      currentUpper.current = ''
+      currentUpperName.current = ''
+      return
+    }
+
+    const baseName = ATTACK_TO_ANIM[attackMove]
+    const name = `${baseName}Upper`
+    const key = `${name}#${attackToken}`
+    if (key === currentUpper.current) return
+    const next = actions[name]
+    if (!next) return
+
+    actions[currentUpperName.current]?.fadeOut(0.05)
+    next.reset()
+    next.setLoop(THREE.LoopOnce, 1)
+    next.clampWhenFinished = true
+    next.setDuration(getAttackDuration(attackMove, playerTuning))
+    next.fadeIn(0.05).play()
+    currentUpper.current = key
+    currentUpperName.current = name
+  }, [action, attackMove, attackToken, riding, isRagdoll, actions, playerTuning])
 
   return (
-    <group ref={group} visible={!ridingCar} rotation={[0, FACING, 0]} position={[0, fit.y, 0]} scale={fit.scale}>
+    <group ref={group} visible={!ridingCar && !isRagdoll} rotation={[0, FACING, 0]} position={[0, fit.y, 0]} scale={fit.scale}>
       <primitive object={character} />
     </group>
   )

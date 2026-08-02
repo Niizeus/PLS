@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef } from 'react'
+import { CapsuleCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import { useKeyboard } from '../../gameplay/input/useKeyboard'
 import { useMouse } from '../../gameplay/input/useMouse'
@@ -9,6 +10,9 @@ import { SPAWN } from '../../world/beauvais/cityData'
 import { groundHeight } from '../../world/beauvais/roadway'
 import PlayerModel from './PlayerModel'
 import { getPlayerTuning } from '../../devtools/devTuningStore'
+import { PHYSICS_GROUPS } from '../../gameplay/physics/physicsConfig'
+import PlayerRagdoll from './PlayerRagdoll'
+import { useCollisionDebugStore } from '../../devtools/collisionDebugStore'
 
 /**
  * Le joueur (Pierrot).
@@ -20,12 +24,18 @@ import { getPlayerTuning } from '../../devtools/devTuningStore'
  * - L'animation jouée suit l'"action" du store (idle/walk/run/...) — gérée dans PlayerModel.
  */
 export default function Player() {
-  const groupRef = useRef<THREE.Group>(null)
+  const targetRef = useRef<THREE.Group>(null)
+  const bodyRef = useRef<RapierRigidBody>(null)
+  const playerTuning = getPlayerTuning()
+  const spawnY = groundHeight(SPAWN.x, SPAWN.z) + playerTuning.BODY_HEIGHT
+  const capsuleHalfHeight = Math.max(0.1, playerTuning.BODY_HEIGHT - playerTuning.BODY_RADIUS)
+  const isRagdoll = usePlayerStore((s) => s.isRagdoll)
+  const collisionDebugEnabled = useCollisionDebugStore((s) => s.enabled)
 
   // Publie le perso dans le store à son montage (retiré au démontage).
   const setPlayerObject = usePlayerStore((s) => s.setPlayerObject)
   useEffect(() => {
-    setPlayerObject(groupRef.current)
+    setPlayerObject(targetRef.current)
     return () => setPlayerObject(null)
   }, [setPlayerObject])
 
@@ -50,13 +60,83 @@ export default function Player() {
   // met à jour l'action dans le store).
   const keys = useKeyboard()
   const mouse = useMouse()
-  usePlayerMovement(groupRef, keys, mouse)
+  usePlayerMovement(targetRef, bodyRef, keys, mouse)
 
   return (
-    <group ref={groupRef} position={[SPAWN.x, groundHeight(SPAWN.x, SPAWN.z) + getPlayerTuning().BODY_HEIGHT, SPAWN.z]}>
-      <Suspense fallback={null}>
-        <PlayerModel />
-      </Suspense>
-    </group>
+    <>
+      <group ref={targetRef} position={[SPAWN.x, spawnY, SPAWN.z]} />
+      <RigidBody
+        ref={bodyRef}
+        type="kinematicPosition"
+        colliders={false}
+        position={[SPAWN.x, spawnY, SPAWN.z]}
+        canSleep={false}
+        ccd
+        dominanceGroup={2}
+      >
+        <CapsuleCollider
+          args={[capsuleHalfHeight, playerTuning.BODY_RADIUS]}
+          friction={0.8}
+          restitution={0}
+          collisionGroups={PHYSICS_GROUPS.player}
+          solverGroups={PHYSICS_GROUPS.player}
+        />
+        <Suspense fallback={null}>
+          <PlayerModel />
+        </Suspense>
+      </RigidBody>
+      {import.meta.env.DEV && collisionDebugEnabled ? (
+        <PlayerPhysicsDebugVisual bodyHeight={playerTuning.BODY_HEIGHT} radius={playerTuning.BODY_RADIUS} />
+      ) : null}
+      {isRagdoll ? (
+        <Suspense fallback={null}>
+          <PlayerRagdoll />
+        </Suspense>
+      ) : null}
+    </>
+  )
+}
+
+function PlayerPhysicsDebugVisual({ bodyHeight, radius }: { bodyHeight: number; radius: number }) {
+  const debug = usePlayerStore((s) => s.physicsDebug)
+  const color = debug.mode === 'unstucking' ? '#f97316' : debug.mode === 'sliding' ? '#facc15' : debug.grounded ? '#22c55e' : '#38bdf8'
+  const linePositions = debug.hitPoint && debug.hitNormal
+    ? new Float32Array([
+        debug.hitPoint.x,
+        debug.hitPoint.y,
+        debug.hitPoint.z,
+        debug.hitPoint.x + debug.hitNormal.x * 0.85,
+        debug.hitPoint.y + debug.hitNormal.y * 0.85,
+        debug.hitPoint.z + debug.hitNormal.z * 0.85,
+      ])
+    : null
+
+  return (
+    <>
+      <mesh position={[debug.position.x, debug.position.y, debug.position.z]}>
+        <cylinderGeometry args={[radius, radius, bodyHeight * 2, 18, 1, true]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={0.62} depthWrite={false} />
+      </mesh>
+      {debug.groundY !== null ? (
+        <mesh position={[debug.position.x, debug.groundY, debug.position.z]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[radius * 1.25, 0.025, 6, 28]} />
+          <meshBasicMaterial color="#67e8f9" transparent opacity={0.78} depthWrite={false} />
+        </mesh>
+      ) : null}
+      {debug.hitPoint ? (
+        <mesh position={[debug.hitPoint.x, debug.hitPoint.y, debug.hitPoint.z]}>
+          <sphereGeometry args={[0.11, 10, 8]} />
+          <meshBasicMaterial color="#fb923c" depthWrite={false} />
+        </mesh>
+      ) : null}
+      {linePositions ? (
+        <line>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[linePositions, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial color="#f97316" transparent opacity={0.92} depthWrite={false} />
+        </line>
+      ) : null}
+    </>
   )
 }

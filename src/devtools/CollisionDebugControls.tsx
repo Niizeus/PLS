@@ -31,6 +31,10 @@ export default function CollisionDebugControls() {
       <div>
         <span style={{ color: '#fb923c' }}>orange</span> murs/batiments
       </div>
+      <div>
+        <span style={{ color: '#facc15' }}>jaune</span> joueur: slide / hit normal
+      </div>
+      <div>F4 replace le joueur au dernier sol fiable</div>
     </div>
   )
 }

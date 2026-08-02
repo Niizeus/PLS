@@ -10,6 +10,7 @@ import { toonGradient } from '../../shaders/toonGradient'
 import { isBlocked } from '../../world/beauvais/collision'
 import { SPAWN } from '../../world/beauvais/cityData'
 import { groundHeight } from '../../world/beauvais/roadway'
+import { isFlatTestLevelEnabled } from '../../gameplay/testLevel/testLevelMode'
 
 const PICKUP_RANGE = 3
 
@@ -29,14 +30,6 @@ const placePickup = (id: string, itemId: string, quantity: number, dx: number, d
 
   return { id, itemId, quantity, x: SPAWN.x, z: SPAWN.z - 6 }
 }
-
-const STATIC_PICKUPS: WorldPickup[] = [
-  placePickup('spawn-kebab', 'kebab-chef', 1, -4, 1.5),
-  placePickup('spawn-soda', 'soda-market', 1, -4.8, -4.5),
-  placePickup('spawn-doliprane', 'doliprane', 1, -6.5, -2),
-  placePickup('spawn-cendrier', 'cendrier', 2, 0.5, 5.2),
-  placePickup('spawn-gilet', 'gilet-fluo', 1, -8.2, 4),
-]
 
 const TEST_PICKUP_COLS = 6
 const TEST_PICKUP_SPACING = 2.6
@@ -74,18 +67,17 @@ const PICKUP_COLOR: Record<ItemCategory, string> = {
 }
 
 export default function ItemPickups() {
-  const collectedIds = usePickupStore((s) => s.collectedIds)
+  const flatTestLevel = isFlatTestLevelEnabled()
   const droppedPickups = usePickupStore((s) => s.droppedPickups)
   const setNearbyPickup = usePickupStore((s) => s.setNearbyPickup)
   const collectPickup = usePickupStore((s) => s.collectPickup)
 
   const activePickups = useMemo(
     () => [
-      ...STATIC_PICKUPS.filter((pickup) => !collectedIds.includes(pickup.id)),
-      ...TEST_PICKUPS,
+      ...(flatTestLevel ? TEST_PICKUPS : []),
       ...droppedPickups,
     ],
-    [collectedIds, droppedPickups],
+    [droppedPickups, flatTestLevel],
   )
 
   useFrame(({ clock }) => {

@@ -1,9 +1,8 @@
 import ItemPickups from './items/ItemPickups'
-import MapMarkerEntities from './map/MapMarkerEntities'
 import Player from './player/Player'
 import Scooter from './vehicles/Scooter'
 import Car from './vehicles/Car'
-import SandboxPhysicsProps from '../gameplay/physics/SandboxPhysicsProps'
+import { isFlatTestLevelEnabled } from '../gameplay/testLevel/testLevelMode'
 
 /**
  * LES PERSONNAGES & VÉHICULES : le joueur (Chibrux), le scooter, et plus tard les PNJ.
@@ -15,14 +14,14 @@ import SandboxPhysicsProps from '../gameplay/physics/SandboxPhysicsProps'
  * n'éditent jamais le même fichier → pas de conflit Git.
  */
 export default function Characters() {
+  const flatTestLevel = isFlatTestLevelEnabled()
+
   return (
     <>
       <Player />
-      <Scooter />
+      {flatTestLevel && <Scooter />}
       <Car />
-      <MapMarkerEntities />
-      <ItemPickups />
-      <SandboxPhysicsProps />
+      {flatTestLevel && <ItemPickups />}
     </>
   )
 }

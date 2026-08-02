@@ -59,14 +59,22 @@ export default function World({ mode = 'game' }: WorldProps) {
   return (
     <>
       <Ground mode={mode} />
-      <GreenAreas />
-      <Water />
-      <Roads mode={mode} />
+      {mode === 'editor' && (
+        <>
+          <GreenAreas />
+          <Water />
+          <Roads mode={mode} />
+        </>
+      )}
       <Beauvais mode={mode} />
       <Cathedral />
-      <Trees />
-      <Lamps />
-      <ScaleReferences />
+      {mode === 'editor' && (
+        <>
+          <Trees />
+          <Lamps />
+          <ScaleReferences />
+        </>
+      )}
     </>
   )
 }
